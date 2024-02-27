@@ -9,7 +9,7 @@
 @Desc    :   March Madness Bracket Pool Simulator
 '''
 
-import wn_cbb_elo as cbb
+from . import wn_cbb_elo as cbb
 import pandas as pd
 import numpy as np
 from datetime import datetime
