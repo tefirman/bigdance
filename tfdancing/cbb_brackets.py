@@ -238,7 +238,7 @@ def main():
         "--entries",
         action="store",
         type="int",
-        dest="entires",
+        dest="entries",
         default=10,
         help="number of bracket entries in each simulated pool"
     )
@@ -254,7 +254,7 @@ def main():
         "--payouts",
         action="store",
         type="str",
-        dest="sims",
+        dest="payouts",
         default="100",
         help="comma separated list of payouts for the top entries"
     )
@@ -275,7 +275,7 @@ def main():
     # Pulling dummy seeding for the requested season
     dancing = dummy_dancing(options.season, options.women)
     # Simulating bracket pools as requested and printing the results
-    sim = Simulation(dancing, options.entries, options.payouts, options.num_sims)
+    sim = Simulation(dancing, options.entries, options.payouts, options.sims)
     print(sim.pick_probs.to_string(index=False, na_rep=""))
     # Saving as csv's if requested
     if options.output is not None:
