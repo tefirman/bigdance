@@ -146,7 +146,7 @@ class Pool:
         self.reality = Bracket(dancing)
         self.entries = [Bracket(dancing, winner, ship, final4, elite8, sweet16, roundof32)]
         self.entries[0].Name = "Me"
-        for entry in range(num_entries):
+        for entry in range(1,num_entries):
             self.entries.append(Bracket(dancing))
             self.entries[-1].Name = f"Entry #{entry + 1}"
         self.score_entries()
@@ -327,6 +327,9 @@ def main():
     # Simulating bracket pools as requested and printing the results
     sim = Simulation(dancing, options.winner, options.championship, options.final4, options.elite8, \
     options.sweet16, options.roundof32, options.entries, options.payouts, options.sims)
+    my_win_pct = round(100*len([entry for entry in sim.winners if entry.Name == "Me"])/len(sim.winners),1)
+    print(f"My Win Percentage: {my_win_pct}%")
+    print("Overall Winner Pick Breakdown:")
     print(sim.pick_probs.to_string(index=False, na_rep=""))
     # Saving as csv if requested
     if options.output is not None:
