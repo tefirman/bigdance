@@ -9,7 +9,7 @@
 @Desc    :   March Madness Bracket Pool Simulator
 '''
 
-from . import wn_cbb_elo as cbb
+from . import wn_cbb_elo as wn
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -57,7 +57,7 @@ class Bracket:
         .rename(columns={col:col + "1" for col in self.dancing.columns}),\
         self.dancing.iloc[self.dancing.shape[0]//2:].iloc[::-1].reset_index(drop=True)\
         .rename(columns={col:col + "2" for col in self.dancing.columns})],axis=1)
-        self.matchups["elo_prob1"] = self.matchups.apply(lambda x: cbb.elo_prob(x['ELO1'], x['ELO2'], 1.0, 0.0),axis=1)
+        self.matchups["elo_prob1"] = self.matchups.apply(lambda x: wn.elo_prob(x['ELO1'], x['ELO2'], 1.0, 0.0),axis=1)
         self.matchups["elo_prob2"] = 1 - self.matchups["elo_prob1"]
     
     def make_picks(self, fixed: list = []):
@@ -108,7 +108,7 @@ def dummy_dancing(season: int = datetime.now().year, women: bool = False):
     Returns:
         pd.DataFrame: dataframe specifying the seeding and elo ratings of all teams in the tournament.  
     """
-    s = cbb.Standings(season, women=women)
+    s = wn.Standings(season, women=women)
     conf_winners = s.elo.loc[s.elo.Conference != "Independent"].drop_duplicates(subset="Conference",keep="first")
     at_large = s.elo.loc[~s.elo.Team.isin(conf_winners.Team.tolist())].iloc[:64 - conf_winners.shape[0]]
     dancing = pd.concat([conf_winners,at_large],ignore_index=True).sort_values(by="ELO",ascending=False,ignore_index=True)
@@ -125,18 +125,27 @@ class Pool:
         reality: Bracket object representing what actually happened during the tournament  
         payouts: list of payouts for the top placing entries  
     """
-    def __init__(self, dancing: pd.DataFrame, num_entries: int = 10, payouts: list = [100.0]):
+    def __init__(self, dancing: pd.DataFrame, winner: str = None, ship: list = [], \
+    final4: list = [], elite8: list = [], sweet16: list = [], roundof32: list = [], \
+    num_entries: int = 10, payouts: list = [100.0]):
         """
         Initializes a Pool object using the parameters provided and class functions defined below.
 
         Args:
             dancing (pd.DataFrame): dataframe specifying the seeding and elo ratings of all teams in the tournament.  
-            num_entries (int, optional): number of contestants in the pool, defaults to 10.
+            winner (str, optional): team picked to win the entire tournament, defaults to None.  
+            ship (list, optional): list of teams picked to make the championship, defaults to [].  
+            final4 (list, optional): list of teams picked to make the Final 4, defaults to [].  
+            elite8 (list, optional): list of teams picked to make the Elite 8, defaults to [].  
+            sweet16 (list, optional): list of teams picked to make the Sweet 16, defaults to [].  
+            roundof32 (list, optional): list of teams picked to make the Round of 32, defaults to [].  
+            num_entries (int, optional): number of contestants in the pool, defaults to 10.  
             payouts (list, optional): list of payouts for the top placing entries, defaults to $100 winner-take-all.  
         """
         self.payouts = payouts
         self.reality = Bracket(dancing)
-        self.entries = []
+        self.entries = [Bracket(dancing, winner, ship, final4, elite8, sweet16, roundof32)]
+        self.entries[0].Name = "Me"
         for entry in range(num_entries):
             self.entries.append(Bracket(dancing))
             self.entries[-1].Name = f"Entry #{entry + 1}"
@@ -174,12 +183,20 @@ class Simulation:
         picks: dataframe of picks made be the winning entries  
         pick_probs: dataframe containing probabilities of each team being picked in each round in a winning entry  
     """
-    def __init__(self, dancing: pd.DataFrame, num_entries: int = 10, payouts: list = [100.0], num_sims: int = 1000):
+    def __init__(self, dancing: pd.DataFrame, winner: str = None, ship: list = [], \
+    final4: list = [], elite8: list = [], sweet16: list = [], roundof32: list = [], \
+    num_entries: int = 10, payouts: list = [100.0], num_sims: int = 1000):
         """
         Initializes a Simulation object using the parameters provided and class functions defined below.
 
         Args:
             dancing (pd.DataFrame): dataframe specifying the seeding and elo ratings of all teams in the tournament.  
+            winner (str, optional): team picked to win the entire tournament, defaults to None.  
+            ship (list, optional): list of teams picked to make the championship, defaults to [].  
+            final4 (list, optional): list of teams picked to make the Final 4, defaults to [].  
+            elite8 (list, optional): list of teams picked to make the Elite 8, defaults to [].  
+            sweet16 (list, optional): list of teams picked to make the Sweet 16, defaults to [].  
+            roundof32 (list, optional): list of teams picked to make the Round of 32, defaults to [].  
             num_entries (int, optional): number of contestants in the pool, defaults to 10.
             payouts (list, optional): list of payouts for the top placing entries, defaults to $100 winner-take-all.  
             num_sims (int, optional): number of simulations to run, defaults to 1000.
@@ -188,7 +205,7 @@ class Simulation:
         for pool in range(num_sims):
             if (pool + 1)%100 == 0:
                 print(f"Simulation {pool + 1} out of {num_sims}, {datetime.now()}")
-            self.pools.append(Pool(dancing, num_entries, payouts))
+            self.pools.append(Pool(dancing, winner, ship, final4, elite8, sweet16, roundof32, num_entries, payouts))
         self.winners = [pool.entries[0] for pool in self.pools]
         self.amass_winner_picks()
         self.analyze_winner_picks()
@@ -211,7 +228,7 @@ class Simulation:
         Analyzes the probability of each team being picked in each round in a winning entry.
         """
         self.pick_probs = self.picks.groupby(["Pick","Round"]).size().unstack().fillna(0.0)
-        round_names = ["Round of 32", "Sweet 16", "Elite 8", "Final 4", "Ship", "Winner"]
+        round_names = ["Round of 32", "Sweet 16", "Elite 8", "Final 4", "Championship", "Winner"]
         self.pick_probs = self.pick_probs.rename(columns={ind:round_names[ind] for ind in range(len(round_names))})
         for col in self.pick_probs.columns:
             self.pick_probs[col] /= len(self.pools)
@@ -219,6 +236,7 @@ class Simulation:
 
 def main():
     # Initializing command line inputs
+    round_names = ["Round of 32", "Sweet 16", "Elite 8", "Final 4", "Championship"]
     parser = optparse.OptionParser()
     parser.add_option(
         "--season",
@@ -259,11 +277,26 @@ def main():
         help="comma separated list of payouts for the top entries"
     )
     parser.add_option(
+        "--winner",
+        action="store",
+        type="str",
+        dest="winner",
+        help="name of the team you're picking to win the entire tournament"
+    )
+    for name in round_names:
+        parser.add_option(
+            "--" + name.replace(" ","").lower(),
+            action="store",
+            type="str",
+            dest=name.replace(" ","").lower(),
+            help=f"comma separated list of teams you're picking to make the {name}"
+        )
+    parser.add_option(
         "--output",
         action="store",
         type="str",
         dest="output",
-        help="where to save the Standings and Matchups data in the form of csv's"
+        help="where to save the pick percentage data in the form of a csv"
     )
     options = parser.parse_args()[0]
     try:
@@ -274,10 +307,28 @@ def main():
 
     # Pulling dummy seeding for the requested season
     dancing = dummy_dancing(options.season, options.women)
+
+    # Sanity-checking all provided picks
+    if options.winner is not None and options.winner not in dancing.Team.tolist():
+        print("Invalid value for winner pick, ignoring it...")
+        options.winner = None
+    for name in round_names:
+        teams = getattr(options, name.replace(" ","").lower())
+        if teams is not None:
+            fixed = [team.strip() for team in teams.split(",")]
+            bad = [team for team in fixed if team not in dancing.Team.tolist()]
+            if len(bad) > 0:
+                print("Ignoring the following {} picks: {}".format(name,", ".join(bad)))
+            fixed = [team for team in fixed if team in dancing.Team.tolist()]
+        else:
+            fixed = []
+        setattr(options, name.replace(" ","").lower(), fixed)
+
     # Simulating bracket pools as requested and printing the results
-    sim = Simulation(dancing, options.entries, options.payouts, options.sims)
+    sim = Simulation(dancing, options.winner, options.championship, options.final4, options.elite8, \
+    options.sweet16, options.roundof32, options.entries, options.payouts, options.sims)
     print(sim.pick_probs.to_string(index=False, na_rep=""))
-    # Saving as csv's if requested
+    # Saving as csv if requested
     if options.output is not None:
         sim.to_csv("{}WinningPickPcts_{}.csv".format(options.output,datetime.now().strftime("%m%d%y")))
 
