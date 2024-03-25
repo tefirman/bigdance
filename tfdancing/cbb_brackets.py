@@ -22,7 +22,7 @@ import os
 import shutil
 import time
 
-corrections = pd.read_csv("name_corrections.csv")
+corrections = pd.read_csv("https://raw.githubusercontent.com/tefirman/tfdancing/main/tfdancing/name_corrections.csv")
 round_names = ["Round of 32", "Sweet 16", "Elite 8", "Final 4", "Championship", "Winner"]
 
 def sel_get(url: str, delay: float = 3.0):
