@@ -12,5 +12,5 @@ LABEL org.opencontainers.image.source=https://github.com/tefirman/dancing
 LABEL org.opencontainers.image.licenses=MIT
 
 # Installing prerequisite python modules via pip
-RUN pip install numpy pandas beautifulsoup4 requests lxml
+RUN pip install numpy pandas beautifulsoup4 requests lxml selenium XlsxWriter
 
