@@ -277,7 +277,7 @@ class Pool:
         entry_deets = self.group_soup.find_all("div", attrs={"class":"EntryLink-nameContainer EntryLink-nameContainer--vertical"})
         self.entries = []
         for entry in entry_deets:
-            if entry.text == "a42many42's Picks 1":
+            if entry.find_all("span")[0].text == "a42many42":
                 continue
             entry_id = entry.find_all("a")[0].attrs["href"].split("/bracket?id=")[-1]
             self.entries.append(Bracket(s, entry_id, False))
