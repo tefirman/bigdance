@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 import copy
 from bs4 import BeautifulSoup
 import json
@@ -25,7 +26,7 @@ import time
 corrections = pd.read_csv("https://raw.githubusercontent.com/tefirman/tfdancing/main/tfdancing/name_corrections.csv")
 round_names = ["Round of 32", "Sweet 16", "Elite 8", "Final 4", "Championship", "Winner"]
 
-def sel_get(url: str, delay: float = 3.0):
+def sel_get(url: str, delay: float = 3.0, all_pages: bool = False):
     """
     Pulls the full html of a page using Selenium.
 
@@ -40,6 +41,15 @@ def sel_get(url: str, delay: float = 3.0):
     browser.get(url)
     time.sleep(delay)
     html = browser.page_source
+    if all_pages:
+        soup = BeautifulSoup(html, features="lxml")
+        num_pages = int(soup.find_all("li",attrs={"class":"Pagination__list__item"})[-1].text)
+        for page in range(2,num_pages + 1):
+            button = browser.find_element(By.CLASS_NAME, "Pagination__Button--next")
+            browser.execute_script("arguments[0].click();", button)
+            time.sleep(delay)
+            html += "\n" + browser.page_source
+            page += 1
     browser.close()
     return html
 
@@ -78,7 +88,7 @@ class Picks:
         for ind in range(len(round_names)):
             picks.append([])
             for round_name in round_names[ind:]:
-                picks[ind].append(getattr(self,round_name.replace(" ","").lower()))
+                picks[ind].extend(getattr(self,round_name.replace(" ","").lower()))
         return picks
 
 class Bracket:
@@ -93,7 +103,7 @@ class Bracket:
         points: float specifying the number of points earned by a bracket entry  
         earnings: float specifying the amount of money earned by a bracket entry  
     """
-    def __init__(self, s: wn.Standings, bracket_id: str = None, randomize: bool = False, picks: Picks = Picks()):
+    def __init__(self, s: wn.Standings, bracket_id: str = None, randomize: bool = False, picks: Picks = Picks(), second_chance=False):
         """
         Initializes a Bracket object using the parameters provided and class functions defined below.
 
@@ -104,7 +114,8 @@ class Bracket:
             picks (Picks, optional): teams picked to make each round, defaults to no preferred picks.  
         """
         self.gender = "-women" if s.gender == "w" else ""
-        self.base_url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender}-{s.season}"
+        self.second_chance = "second-chance-" if second_chance else ""
+        self.base_url = f"https://fantasy.espn.com/games/tournament-challenge{self.second_chance}-bracket{self.gender}-{s.season}"
         if bracket_id is not None:
             self.pull_bracket(bracket_id)
             self.extract_seeding(s)
@@ -168,7 +179,10 @@ class Bracket:
         for ind in range(2,7):
             self.picks.append(num_picks.loc[num_picks.freq >= ind,'Team'].tolist())
         champ = self.bracket_soup.find_all("span", attrs={"class": "PrintChampionshipPickBody-outcomeName"})
-        self.picks.append(self.rankings.loc[self.rankings.description == champ[0].text,"Team"].tolist())
+        if len(champ) > 0:
+            self.picks.append(self.rankings.loc[self.rankings.description == champ[0].text,"Team"].tolist())
+        else:
+            self.picks.append([])
 
     def infer_matchups(self):
         """
@@ -266,15 +280,19 @@ class Pool:
             self.group_html = tempData.read()
             tempData.close()
         else:
-            self.group_html = sel_get(f"{self.base_url}/group?id={self.group_id}")
+            self.group_html = sel_get(f"{self.base_url}/group?id={self.group_id}", all_pages=True)
             tempData = open(cache_loc + "/" + self.group_id,"w")
             tempData.write(self.group_html)
             tempData.close()
-        self.group_soup = BeautifulSoup(self.group_html, features="lxml")
+        self.group_soup = []
+        for page in self.group_html.split("</html>")[:-1]:
+            self.group_soup.append(BeautifulSoup(page + '</html>', features="lxml"))
     
     def parse_group_entries(self, s: wn.Standings):
-        self.group_name = self.group_soup.find_all("div", attrs={"class": "GroupCard-titleContainer"})[0].text
-        entry_deets = self.group_soup.find_all("div", attrs={"class":"EntryLink-nameContainer EntryLink-nameContainer--vertical"})
+        self.group_name = self.group_soup[0].find_all("div", attrs={"class": "GroupCard-titleContainer"})[0].text
+        entry_deets = []
+        for page in self.group_soup:
+            entry_deets.extend(page.find_all("div", attrs={"class":"EntryLink-nameContainer EntryLink-nameContainer--vertical"}))
         self.entries = []
         for entry in entry_deets:
             if entry.find_all("span")[0].text == "a42many42":
