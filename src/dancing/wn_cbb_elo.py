@@ -4,7 +4,7 @@
 @File    :   wn_cbb_elo.py
 @Time    :   2024/02/22 10:58:06
 @Author  :   Taylor Firman
-@Version :   1.0
+@Version :   0.1.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Elo ratings parser for the Warren Nolan college sports website (no affiliation)
 '''
