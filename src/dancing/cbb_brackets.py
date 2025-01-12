@@ -133,28 +133,26 @@ class Bracket:
         Returns:
             Dictionary mapping round names to lists of advancing teams
         """
-        current_games = self.games.copy()  # Start with first round games
-        results = {
-            "First Round": [g.winner for g in current_games] if all(g.winner for g in current_games)
-            else [self.simulate_game(g) for g in current_games]
-        }
+        results = {}
+        games_by_round = {}
         
-        round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship", "Champion"]
+        # First round
+        games_by_round[1] = self.games.copy()
+        for game in games_by_round[1]:
+            if not game.winner:
+                game.winner = self.simulate_game(game)
+        results["First Round"] = [g.winner for g in games_by_round[1]]
+        
+        # Subsequent rounds
+        round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]#, "Champion"]
+        current_round = 1
         
         for round_name in round_names:
-            print(len(current_games))
-
-            current_games = self.advance_round(current_games)
-
-            print(len(current_games))
-
-            if round_name == "Champion":
-                results[round_name] = [current_games[0].winner]
-            else:
-                results[round_name] = [g.winner for g in current_games]
-            
-            print(results)
-                
+            current_round += 1
+            # Advance winners from previous round into new matchups
+            games_by_round[current_round] = self.advance_round(games_by_round[current_round-1])
+            results[round_name] = [g.winner for g in games_by_round[current_round-1]]
+        results["Champion"] = self.simulate_game(games_by_round[current_round][0])
         return results
 
 class Pool:
