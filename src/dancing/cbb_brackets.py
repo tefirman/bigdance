@@ -144,7 +144,7 @@ class Bracket:
         results["First Round"] = [g.winner for g in games_by_round[1]]
         
         # Subsequent rounds
-        round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]#, "Champion"]
+        round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
         current_round = 1
         
         for round_name in round_names:
@@ -212,10 +212,18 @@ class Pool:
         """
         results = []
         
+        # Store teams for creating fresh brackets each time
+        teams = self.actual_results.teams
+        
         for _ in range(num_sims):
+            # Create fresh actual results bracket for this simulation
+            self.actual_results = Bracket(teams)
+            
             scores = []
-            for name, bracket in self.entries:
-                score = self.score_bracket(bracket)
+            for name, _ in self.entries:  # Original bracket not used
+                # Create fresh entry bracket for this simulation
+                entry_bracket = Bracket(teams)
+                score = self.score_bracket(entry_bracket)
                 scores.append({"name": name, "score": score})
                 
             # Find winner(s)
