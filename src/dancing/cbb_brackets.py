@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-coding:utf-8 -*-
 '''
-@File    :   march_madness.py
+@File    :   cbb_brackets.py
 @Time    :   2024/01/11
 @Author  :   Taylor Firman
 @Version :   0.1.0
