@@ -290,7 +290,7 @@ class Matchups(BaseScraper):
         url = f"{self.base_url}/predict-winners?type1={date1}&type2={gamestr}&date={date2}"
         logging.debug(f"Requesting URL: {url}")
         
-        cache_key = f"matchups_{self.date.strftime('%Y%m%d')}_{self.gameset.replace(" ","")}"
+        cache_key = f"matchups_{self.date.strftime('%Y%m%d')}_{self.gameset.replace(' ','')}"
         self.response = self.courteous_get(url, cache_key=cache_key)
         logging.debug(f"Response length: {len(self.response)}")
         
