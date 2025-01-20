@@ -44,3 +44,20 @@ Homepage = "https://taylorfirman.com"
 Repository = "https://github.com/tefirman/dancing.git"
 "Bug Tracker" = "https://github.com/tefirman/dancing/issues"
 
+[tool.pytest.ini_options]
+addopts = "--cov=src/dancing --cov-report=term-missing"
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+]
