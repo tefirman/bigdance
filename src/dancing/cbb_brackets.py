@@ -17,12 +17,41 @@ from datetime import datetime
 
 @dataclass
 class Team:
-    """Represents a tournament team with relevant attributes"""
+    """
+    Represents a tournament team with relevant attributes.
+    
+    Attributes:
+        name: Team name
+        seed: Tournament seed (1-16) 
+        region: Tournament region
+        rating: Team rating (e.g. Elo, KenPom)
+        conference: Conference name
+        
+    Raises:
+        ValueError: If seed is not between 1 and 16
+    """
     name: str
     seed: int
     region: str
     rating: float  # Any rating system (Elo, KenPom, etc.)
     conference: str
+
+    def __post_init__(self):
+        """Validate team attributes after initialization"""
+        if not isinstance(self.seed, int) or self.seed < 1 or self.seed > 16:
+            raise ValueError(f"Seed must be an integer between 1 and 16, got {self.seed}")
+        
+        if not self.name or not isinstance(self.name, str):
+            raise ValueError("Team name must be a non-empty string")
+            
+        if not self.region or not isinstance(self.region, str):
+            raise ValueError("Region must be a non-empty string")
+            
+        if not isinstance(self.rating, (int, float)):
+            raise ValueError("Rating must be a numeric value")
+            
+        if not self.conference or not isinstance(self.conference, str):
+            raise ValueError("Conference must be a non-empty string")
 
 @dataclass
 class Game:
@@ -62,16 +91,29 @@ class Bracket:
             raise ValueError("Tournament must have exactly 4 regions")
 
     def _create_initial_games(self):
-        """Create first round matchups based on seeding"""
-        for region in set(team.region for team in self.teams):
-            region_teams = [t for t in self.teams if t.region == region]
-            region_teams.sort(key=lambda x: x.seed)
+        """Create first round matchups based on NCAA tournament seeding pattern"""
+        if not self.teams:
+            return
             
-            # Create 1v16, 2v15, etc. matchups
-            for i in range(8):
+        # Define first round matchup pattern [(seed1, seed2), ...]
+        seed_matchups = [
+            (1, 16), (8, 9), (5, 12), (4, 13),
+            (6, 11), (3, 14), (7, 10), (2, 15)
+        ]
+        
+        # Create games for each region
+        for region in ["East", "West", "South", "Midwest"]:
+            # Get teams in this region
+            region_teams = {t.seed: t for t in self.teams if t.region == region}
+            
+            # Create games following seed matchup pattern
+            for seed1, seed2 in seed_matchups:
+                if seed1 not in region_teams or seed2 not in region_teams:
+                    raise ValueError(f"Missing seed {seed1} or {seed2} in {region} region")
+                    
                 self.games.append(Game(
-                    team1=region_teams[i],
-                    team2=region_teams[15-i],
+                    team1=region_teams[seed1],
+                    team2=region_teams[seed2],
                     round=1,
                     region=region
                 ))
@@ -108,14 +150,14 @@ class Bracket:
         next_games = []
         winners = []
         
-        # Simulate current round's games
+        # Simulate current round's games and collect winners
         for game in games:
-            if not game.winner:  # Don't re-simulate if winner already set
+            if not game.winner:  # Only simulate if winner not already set
                 game.winner = self.simulate_game(game)
             winners.append(game.winner)
         
         # Create next round matchups
-        if len(games) > 1:  # Not championship game
+        if len(winners) > 1:  # Not championship game
             for i in range(0, len(winners), 2):
                 next_games.append(Game(
                     team1=winners[i],
@@ -134,25 +176,32 @@ class Bracket:
             Dictionary mapping round names to lists of advancing teams
         """
         results = {}
-        games_by_round = {}
+        current_games = self.games.copy()  # Start with first round games
         
         # First round
-        games_by_round[1] = self.games.copy()
-        for game in games_by_round[1]:
-            if not game.winner:
-                game.winner = self.simulate_game(game)
-        results["First Round"] = [g.winner for g in games_by_round[1]]
+        for game in current_games:
+            game.winner = self.simulate_game(game)  # Ensure winner is set
+        results["First Round"] = [g.winner for g in current_games]
         
         # Subsequent rounds
         round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
-        current_round = 1
         
         for round_name in round_names:
-            current_round += 1
-            # Advance winners from previous round into new matchups
-            games_by_round[current_round] = self.advance_round(games_by_round[current_round-1])
-            results[round_name] = [g.winner for g in games_by_round[current_round-1]]
-        results["Champion"] = self.simulate_game(games_by_round[current_round][0])
+            # Get next round's matchups
+            current_games = self.advance_round(current_games)
+            
+            # Ensure each game gets a winner
+            for game in current_games:
+                if not game.winner:  # Only simulate if winner not already set
+                    game.winner = self.simulate_game(game)
+                    
+            # Store results appropriately
+            if round_name == "Championship":
+                results[round_name] = [current_games[0].winner]  # List with one winner
+                results["Champion"] = current_games[0].winner    # Single Team object
+            else:
+                results[round_name] = [g.winner for g in current_games]
+        
         return results
 
 class Pool:
@@ -194,10 +243,11 @@ class Pool:
         actual_results = self.actual_results.simulate_tournament()
         
         for round_name, value in round_values.items():
-            bracket_winners = set(t.name for t in bracket_results[round_name])
-            actual_winners = set(t.name for t in actual_results[round_name])
-            points += len(bracket_winners & actual_winners) * value
-            
+            if bracket_results[round_name] and actual_results[round_name]:  # Check for non-empty results
+                bracket_winners = set(t.name for t in bracket_results[round_name] if t)  # Filter out None
+                actual_winners = set(t.name for t in actual_results[round_name] if t)    # Filter out None
+                points += len(bracket_winners & actual_winners) * value
+                
         return points
         
     def simulate_pool(self, num_sims: int = 1000) -> pd.DataFrame:
