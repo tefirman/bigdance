@@ -239,7 +239,14 @@ class Standings(BaseScraper):
         """
         self.rank_table = self.rank_soup.find_all("table", attrs={"class": "normal-grid alternating-rows stats-table"})
         self.ranks = pd.read_html(StringIO(str(self.rank_table)))[0]
-        self.ranks = self.ranks[self.ranks.columns[0][0]].iloc[:,:3]
+        
+        # Modify this line to handle different DataFrame structures
+        if isinstance(self.ranks.columns[0], tuple):
+            # Handle multi-index columns
+            self.ranks.columns = self.ranks.columns.get_level_values(-1)
+        
+        # Select first three columns and clean up team names
+        self.ranks = self.ranks.iloc[:,:3]
         self.ranks = self.ranks.loc[~self.ranks.Team.isnull()].reset_index(drop=True)
         self.ranks.Team = self.ranks.Team.str.split(r"  \(").str[0]
 
