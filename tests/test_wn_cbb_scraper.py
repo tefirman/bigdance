@@ -20,8 +20,8 @@ SAMPLE_ELO_HTML = """
         <tr>
             <td class="data-cell data-medium">
                 <div class="logo-name-container">
-                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Team-A" href="/basketball/2025/schedule/Team-A"></a></li></ul></div>
-                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Team-A">Team A</a></div>
+                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Duke" href="/basketball/2025/schedule/Duke"></a></li></ul></div>
+                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Duke">Duke</a></div>
                 </div>
             </td>
             <td class="data-cell data-center data-medium">15-2</td>
@@ -32,8 +32,8 @@ SAMPLE_ELO_HTML = """
         <tr>
             <td class="data-cell data-medium">
                 <div class="logo-name-container">
-                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Team-B" href="/basketball/2025/schedule/Team-B"></a></li></ul></div>
-                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Team-B">Team B</a></div>
+                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="North-Carolina" href="/basketball/2025/schedule/North-Carolina"></a></li></ul></div>
+                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/North-Carolina">North Carolina</a></div>
                 </div>
             </td>
             <td class="data-cell data-center data-medium">14-3</td>
@@ -60,8 +60,8 @@ SAMPLE_RANKS_HTML = """
             <td class="data-cell data-center data-medium">1</td>
             <td class="data-cell data-medium">
                 <div class="logo-name-container">
-                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Team-A" href="/basketball/2025/schedule/Team-A"></a></li></ul></div>
-                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Team-A">Team A</a>&nbsp;&nbsp;(62)</div>
+                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Duke" href="/basketball/2025/schedule/Duke"></a></li></ul></div>
+                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Duke">Duke</a>&nbsp;&nbsp;(62)</div>
                 </div>
             </td>
             <td class="data-cell data-center data-medium">15-2</td>
@@ -71,8 +71,8 @@ SAMPLE_RANKS_HTML = """
             <td class="data-cell data-center data-medium">2</td>
             <td class="data-cell data-medium">
                 <div class="logo-name-container">
-                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Team-B" href="/basketball/2025/schedule/Team-B"></a></li></ul></div>
-                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Team-B">Team B</a></div>
+                    <div class="logo-subcontainer"><ul class="team-logo"><li><a class="North-Carolina" href="/basketball/2025/schedule/North-Carolina"></a></li></ul></div>
+                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/North-Carolina">North Carolina</a></div>
                 </div>
             </td>
             <td class="data-cell data-center data-medium">14-3</td>
@@ -82,7 +82,7 @@ SAMPLE_RANKS_HTML = """
 </table>
 """
 
-SAMPLE_MATCHUPS_HTML = '''
+SAMPLE_MATCHUPS_HTML = """
 <div id="20635" class="pbox">
     <div class="pbox__header"></div>
     <div class="pbox__info">
@@ -143,7 +143,68 @@ SAMPLE_MATCHUPS_HTML = '''
     </div>
     <div class="pbox__footer"></div>
 </div>
-'''
+"""
+
+SAMPLE_CONFERENCES_HTML = """
+<div class="conferences-list__container conf-height--33-teams">
+    <div class="conferences-list__info-block">
+        <div class="logo-name-container">
+            <div class="logo-subcontainer"><ul class="conf-logo"><li><a class="ACC" href="/basketball/2025/conference/ACC"></a></li></ul></div>
+            <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/conference/ACC">ACC</a></div>
+        </div>
+        <div class="conferences-list__links">
+            <a class="lt-blue-black" href="/basketball/2025/conference/ACC">Standings</a> |
+            <a class="lt-blue-black" href="/basketball/2025/conf-schedule?conference=ACC">Schedule</a> |
+            <a class="lt-blue-black" href="/basketball/2025/conf-prediction?conference=ACC">Prediction</a>
+        </div>
+    </div>
+
+    <div class="conferences-list__info-block">
+        <div class="logo-name-container">
+            <div class="logo-subcontainer"><ul class="conf-logo"><li><a class="Big-12" href="/basketball/2025/conference/Big-12"></a></li></ul></div>
+            <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/conference/Big-12">Big 12</a></div>
+        </div>
+        <div class="conferences-list__links">
+            <a class="lt-blue-black" href="/basketball/2025/conference/Big-12">Standings</a> |
+            <a class="lt-blue-black" href="/basketball/2025/conf-schedule?conference=Big-12">Schedule</a> |
+            <a class="lt-blue-black" href="/basketball/2025/conf-prediction?conference=Big-12">Prediction</a>
+        </div>
+    </div>
+</div>
+"""
+
+SAMPLE_CONFERENCE_HTML = """
+<div class="main-body-row-flex-scroll">
+    <div class="full-width-box-x">
+        <table class="normal-grid alternating-rows stats-table">
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Duke" href="/basketball/2025/schedule/Duke"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Duke">Duke</a></div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="North-Carolina" href="/basketball/2025/schedule/North-Carolina"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/North-Carolina">North Carolina</a></div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Louisville" href="/basketball/2025/schedule/Louisville"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Louisville">Louisville</a></div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+"""
 
 @pytest.fixture
 def mock_session():
@@ -264,15 +325,60 @@ class TestStandings:
             mock_session.return_value.get.return_value = MagicMock(text=SAMPLE_ELO_HTML)
             standings = Standings(season=2024)
             assert len(standings.elo) == 2
-            assert standings.elo.iloc[0]['Team'] == 'Team A'
+            assert standings.elo.iloc[0]['Team'] == 'Duke'
             assert float(standings.elo.iloc[0]['ELO']) == 1750.50
+    
+    def test_full_conference_list(self, mock_session):
+        """Test parsing of full conference list"""
+        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
+            # Configure mock response
+            mock_response = MagicMock()
+            mock_response.text = SAMPLE_CONFERENCES_HTML 
+            mock_session.return_value.get.return_value = mock_response
+            
+            standings = Standings(season=2024)
+            
+            # Test that both conferences are found
+            assert len(standings.conferences) == 2
+            assert "ACC" in standings.conferences
+            assert "Big 12" in standings.conferences
 
-    def test_conference_filtering(self, mock_elo_response):
-        """Test conference-specific standings"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session', return_value=mock_elo_response):
-            standings = Standings(season=2024, conference="Conf 1")
-            standing_teams = set(standings.elo['Team'])
-            assert 'Team A' in standing_teams or 'Team B' in standing_teams
+    def test_conference_teams_parsing(self, mock_session):
+        """Test parsing teams within a conference"""
+        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
+            # Configure mock to return different responses for different URLs
+            def mock_get(url):
+                if '/conference/ACC' in url:
+                    return MagicMock(text=SAMPLE_CONFERENCE_HTML)
+                return MagicMock(text=SAMPLE_CONFERENCES_HTML)
+                
+            mock_session.return_value.get = MagicMock(side_effect=mock_get)
+            
+            standings = Standings(season=2024)
+            teams = standings.pull_conference_teams("ACC")
+            
+            # Verify expected teams are found
+            assert len(teams) == 3
+            assert "Duke" in teams
+            assert "North Carolina" in teams
+            assert "Louisville" in teams
+
+    def test_conference_filtering(self, mock_session):
+        """Test filtering standings by conference"""
+        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
+            def mock_get(url):
+                if '/conference/ACC' in url:
+                    return MagicMock(text=SAMPLE_CONFERENCE_HTML)
+                return MagicMock(text=SAMPLE_CONFERENCES_HTML)
+                
+            mock_session.return_value.get = MagicMock(side_effect=mock_get)
+            
+            # Initialize standings with conference filter
+            standings = Standings(season=2024, conference="ACC")
+            
+            # Verify only ACC teams are included
+            for _, row in standings.elo.iterrows():
+                assert row['Conference'] == 'ACC'
 
     def test_women_parameter(self, mock_elo_response):
         """Test women's basketball parameter"""
@@ -291,19 +397,22 @@ class TestMatchups:
     def test_matchups_parsing(self, mock_matchups_response):
         """Test parsing of matchups data"""
         with patch('dancing.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
-            matchups = Matchups(date=datetime.now())
+            # Initialize without ELO calculations
+            matchups = Matchups(date=datetime.now(), elos=False)
             assert len(matchups.matchups) == 1
-            assert matchups.matchups.iloc[0]['team1'] == 'Team A'
-            assert matchups.matchups.iloc[0]['score1'] == 75
+            assert matchups.matchups.iloc[0]['team1'] == 'Central Arkansas'  # Update expected team name
+            assert matchups.matchups.iloc[0]['score1'] == 65  # Update expected score
 
     def test_elo_addition(self, mock_matchups_response):
         """Test adding ELO ratings to matchups"""
         with patch('dancing.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
-            matchups = Matchups(date=datetime.now())
+            # Create matchups without initial ELO calculation
+            matchups = Matchups(date=datetime.now(), elos=False)
             
+            # Create mock standings with matching team names
             mock_standings = MagicMock()
             mock_standings.elo = pd.DataFrame({
-                'Team': ['Team A', 'Team B'],
+                'Team': ['Central Arkansas', 'North Alabama'],  # Update team names
                 'ELO': [1600, 1550]
             })
             
@@ -339,8 +448,11 @@ class TestSchedule:
         with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
-            schedule = Schedule(start=start.strftime('%Y-%m-%d'), 
-                             stop=stop.strftime('%Y-%m-%d'))
+            schedule = Schedule(
+                start=start.strftime('%Y-%m-%d'),
+                stop=stop.strftime('%Y-%m-%d'),
+                elos=False  # Disable ELO calculations
+            )
             assert hasattr(schedule, 'games_per_day')
 
     def test_women_parameter(self, mock_session):
@@ -348,7 +460,10 @@ class TestSchedule:
         with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
-            schedule = Schedule(start=start.strftime('%Y-%m-%d'), 
-                             stop=stop.strftime('%Y-%m-%d'),
-                             women=True)
+            schedule = Schedule(
+                start=start.strftime('%Y-%m-%d'),
+                stop=stop.strftime('%Y-%m-%d'),
+                women=True,
+                elos=False  # Disable ELO calculations
+            )
             assert schedule.gender == "w"
