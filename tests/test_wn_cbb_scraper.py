@@ -61,7 +61,7 @@ SAMPLE_RANKS_HTML = """
             <td class="data-cell data-medium">
                 <div class="logo-name-container">
                     <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Duke" href="/basketball/2025/schedule/Duke"></a></li></ul></div>
-                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Duke">Duke</a>&nbsp;&nbsp;(62)</div>
+                    <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Duke">Duke</a></div>
                 </div>
             </td>
             <td class="data-cell data-center data-medium">15-2</td>
@@ -173,7 +173,7 @@ SAMPLE_CONFERENCES_HTML = """
 </div>
 """
 
-SAMPLE_CONFERENCE_HTML = """
+SAMPLE_ACC_HTML = """
 <div class="main-body-row-flex-scroll">
     <div class="full-width-box-x">
         <table class="normal-grid alternating-rows stats-table">
@@ -198,6 +198,39 @@ SAMPLE_CONFERENCE_HTML = """
                     <div class="logo-name-container">
                         <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Louisville" href="/basketball/2025/schedule/Louisville"></a></li></ul></div>
                         <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Louisville">Louisville</a></div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+"""
+
+SAMPLE_BIG12_HTML = """
+<div class="main-body-row-flex-scroll">
+    <div class="full-width-box-x">
+        <table class="normal-grid alternating-rows stats-table">
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Kansas" href="/basketball/2025/schedule/Kansas"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Kansas">Kansas</a></div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Houston" href="/basketball/2025/schedule/Houston"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Houston">Houston</a></div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="data-cell data-medium">
+                    <div class="logo-name-container">
+                        <div class="logo-subcontainer"><ul class="team-logo"><li><a class="Texas" href="/basketball/2025/schedule/Texas"></a></li></ul></div>
+                        <div class="name-subcontainer"><a class="blue-black" href="/basketball/2025/schedule/Texas">Texas</a></div>
                     </div>
                 </td>
             </tr>
@@ -245,6 +278,39 @@ def mock_matchups_response():
         response.text = SAMPLE_MATCHUPS_HTML 
         session.get.return_value = response
         yield session
+
+@pytest.fixture
+def mock_standings_responses():
+    """Fixture providing mock responses for all Standings HTML requests"""
+    mock = MagicMock()
+    
+    def mock_get(url, **kwargs):
+        print(f"Mock received request for URL: {url}")  # Debug URL
+        
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        
+        if 'elo' in url:
+            response.text = SAMPLE_ELO_HTML
+        elif '/conferences' in url:
+            response.text = SAMPLE_CONFERENCES_HTML
+        elif '/conference/ACC' in url:
+            response.text = SAMPLE_ACC_HTML
+        elif '/conference/Big-12' in url:
+            response.text = SAMPLE_BIG12_HTML
+        elif '/polls-expanded' in url:
+            response.text = SAMPLE_RANKS_HTML
+        else:
+            response.text = ""
+            print(f"WARNING: No mock response for URL: {url}")
+            
+        return response
+    
+    mock.get = MagicMock(side_effect=mock_get)
+    mock.mount = MagicMock()
+    mock.adapters = {}
+    
+    return mock
 
 @pytest.fixture
 def clean_cache():
@@ -328,54 +394,59 @@ class TestStandings:
             assert standings.elo.iloc[0]['Team'] == 'Duke'
             assert float(standings.elo.iloc[0]['ELO']) == 1750.50
     
-    def test_full_conference_list(self, mock_session):
+    def test_full_conference_list(self, mock_standings_responses):
         """Test parsing of full conference list"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
-            # Configure mock response
-            mock_response = MagicMock()
-            mock_response.text = SAMPLE_CONFERENCES_HTML 
-            mock_session.return_value.get.return_value = mock_response
+        with patch('requests.Session', autospec=True) as mock_session_class:
+            # Configure the mock session to return our mock_standings_responses
+            mock_session_class.return_value = mock_standings_responses
+
+            # Add debug logging
+            print("Mock session configured")
             
             standings = Standings(season=2024)
             
-            # Test that both conferences are found
-            assert len(standings.conferences) == 2
+            # Add more debug logging
+            print(f"Mock get calls: {mock_standings_responses.get.call_args_list}")
+            
+            # Test that both conferences are found (from our sample HTML)
+            assert len(standings.conferences) == 2, f"Found conferences: {standings.conferences}"
             assert "ACC" in standings.conferences
             assert "Big 12" in standings.conferences
 
-    def test_conference_teams_parsing(self, mock_session):
+    def test_conference_teams_parsing(self, mock_standings_responses):
         """Test parsing teams within a conference"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
-            # Configure mock to return different responses for different URLs
-            def mock_get(url):
-                if '/conference/ACC' in url:
-                    return MagicMock(text=SAMPLE_CONFERENCE_HTML)
-                return MagicMock(text=SAMPLE_CONFERENCES_HTML)
-                
-            mock_session.return_value.get = MagicMock(side_effect=mock_get)
-            
+        with patch('requests.Session', autospec=True) as mock_session_class:
+            # Configure the mock session to return our mock_standings_responses
+            mock_session_class.return_value = mock_standings_responses
+
             standings = Standings(season=2024)
             teams = standings.pull_conference_teams("ACC")
             
+            # Debug logging
+            print(f"Mock get calls: {mock_standings_responses.get.call_args_list}")
+            print(f"Found teams: {teams}")
+            
             # Verify expected teams are found
-            assert len(teams) == 3
+            assert len(teams) == 3, f"Found teams: {teams}"
             assert "Duke" in teams
             assert "North Carolina" in teams
             assert "Louisville" in teams
 
-    def test_conference_filtering(self, mock_session):
+    def test_conference_filtering(self, mock_standings_responses):
         """Test filtering standings by conference"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
-            def mock_get(url):
-                if '/conference/ACC' in url:
-                    return MagicMock(text=SAMPLE_CONFERENCE_HTML)
-                return MagicMock(text=SAMPLE_CONFERENCES_HTML)
-                
-            mock_session.return_value.get = MagicMock(side_effect=mock_get)
+        with patch('requests.Session', autospec=True) as mock_session_class:
+            # Configure the mock session to return our mock_standings_responses
+            mock_session_class.return_value = mock_standings_responses
             
-            # Initialize standings with conference filter
+            # Add debug print to see initial data
             standings = Standings(season=2024, conference="ACC")
+            print("\nInitial ELO data:")
+            print("Number of teams:", len(standings.elo))
+            print("First few rows:")
+            print(standings.elo)
             
+            # Should only show the teams from our SAMPLE_ELO_HTML
+            assert len(standings.elo) == 2, "Should only have Duke and UNC from sample data"
             # Verify only ACC teams are included
             for _, row in standings.elo.iterrows():
                 assert row['Conference'] == 'ACC'
