@@ -150,8 +150,10 @@ def mock_session():
     """Fixture providing a mock requests session"""
     with patch('requests.Session') as mock:
         session = mock.return_value
-        session.get.return_value.text = "<html>Mock HTML</html>"
-        session.get.return_value.raise_for_status = MagicMock()
+        response = MagicMock()
+        response.text = SAMPLE_MATCHUPS_HTML
+        response.raise_for_status = MagicMock()
+        session.get.return_value = response
         yield session
 
 @pytest.fixture
@@ -316,10 +318,13 @@ class TestSchedule:
         with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
-            schedule = Schedule(start=start.strftime('%Y-%m-%d'), 
-                             stop=stop.strftime('%Y-%m-%d'))
-            assert schedule.start == pd.to_datetime(start)
-            assert schedule.stop == pd.to_datetime(stop)
+            schedule = Schedule(
+                start=start.strftime('%Y-%m-%d'),
+                stop=stop.strftime('%Y-%m-%d'),
+                elos=False  # Disable ELO calculations during testing
+            )
+            assert schedule.start == pd.to_datetime(start.strftime('%Y-%m-%d'))
+            assert schedule.stop == pd.to_datetime(stop.strftime('%Y-%m-%d'))
 
     def test_date_validation(self):
         """Test date range validation"""

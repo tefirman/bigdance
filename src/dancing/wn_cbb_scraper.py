@@ -115,7 +115,6 @@ class Schedule(BaseScraper):
         
         self.max_workers = max_workers
         self.pull_games(elos)
-        self.flatten_schedule()
 
     def _validate_dates(self):
         """Validate date range."""
