@@ -11,8 +11,8 @@
 
 from typing import List, Dict, Optional
 import pandas as pd
-from .wn_cbb_scraper import Standings
-from .cbb_brackets import Team, Bracket, Pool
+from dancing.wn_cbb_scraper import Standings
+from dancing.cbb_brackets import Team, Bracket, Pool
 
 def create_teams_from_standings(standings: Standings, 
                               regions: Optional[Dict[str, str]] = None) -> List[Team]:
@@ -30,19 +30,20 @@ def create_teams_from_standings(standings: Standings,
         List of Team objects ready for bracket simulation
     """
     TOURNAMENT_REGIONS = ['East', 'West', 'South', 'Midwest']
-    
+    regions = regions or {}
+
     # First, get the highest rated team from each conference (auto bids)
     auto_bids = (standings.elo.sort_values('ELO', ascending=False)
                  .groupby('Conference').first()
                  .reset_index())
-    
+
     # Get remaining spots after auto bids
     remaining_spots = 64 - len(auto_bids)
-    
+
     # Get highest rated teams not already in auto bids
     at_large_pool = standings.elo[~standings.elo['Team'].isin(auto_bids['Team'])]
     at_large_bids = at_large_pool.sort_values('ELO', ascending=False).head(remaining_spots)
-    
+
     # Combine auto bids and at-large bids
     tournament_teams = pd.concat([auto_bids, at_large_bids], ignore_index=True)
     tournament_teams = tournament_teams.sort_values('ELO', ascending=False)
@@ -53,24 +54,42 @@ def create_teams_from_standings(standings: Standings,
         seed_group = tournament_teams.iloc[(seed_num-1)*4:seed_num*4]
         for _, team in seed_group.iterrows():
             seeds[team['Team']] = seed_num
-    
-    # If regions not provided, distribute teams across regions
-    if regions is None:
-        regions = {}
-        # For each seed line (1-16), distribute teams across regions
-        for seed_num in range(1, 17):
-            seed_teams = tournament_teams[tournament_teams['Team'].map(seeds) == seed_num]
-            seed_teams = seed_teams.sort_values('ELO', ascending=False)
-            for i, (_, team) in enumerate(seed_teams.iterrows()):
-                regions[team['Team']] = TOURNAMENT_REGIONS[i]
-    
+
+    # Track region assignments and counts
+    region_seed_counts = {region: {seed: 0 for seed in range(1, 17)} for region in TOURNAMENT_REGIONS}
+    team_regions = regions.copy()  # Start with provided regions
+
+    # For each seed line (1-16), distribute remaining teams across regions
+    for seed_num in range(1, 17):
+        seed_teams = tournament_teams[tournament_teams['Team'].map(seeds) == seed_num]
+        
+        # First, count teams already assigned to regions
+        for team_name in seed_teams['Team']:
+            if team_name in team_regions:
+                region = team_regions[team_name]
+                region_seed_counts[region][seed_num] += 1
+
+        # Then assign remaining teams to maintain balance
+        for _, team in seed_teams.iterrows():
+            if team['Team'] not in team_regions:
+                # Find region with fewest teams of this seed
+                available_regions = [
+                    r for r in TOURNAMENT_REGIONS 
+                    if region_seed_counts[r][seed_num] < 1
+                ]
+                if not available_regions:
+                    raise ValueError(f"Cannot find valid region for seed {seed_num}")
+                chosen_region = available_regions[0]
+                team_regions[team['Team']] = chosen_region
+                region_seed_counts[chosen_region][seed_num] += 1
+
     # Create Team objects with proper seeds and regions
     teams = []
     for _, row in tournament_teams.iterrows():
         teams.append(Team(
             name=row['Team'],
-            seed=seeds.get(row['Team'], 16),  # Default to 16 seed if not found
-            region=regions.get(row['Team'], 'East'),  # Default to East if not found
+            seed=seeds[row['Team']],
+            region=team_regions[row['Team']],
             rating=row['ELO'],
             conference=row['Conference']
         ))
