@@ -9,244 +9,198 @@
 @Desc    :   Optimization and analysis tools for March Madness brackets
 '''
 
-from typing import List, Dict, Optional, Tuple
+from typing import List
 import pandas as pd
-import numpy as np
-from dancing.cbb_brackets import Bracket, Pool
 from dancing.wn_cbb_scraper import Standings
-from dancing.dancing_integration import create_teams_from_standings
-from dataclasses import dataclass
-from scipy.optimize import differential_evolution
-
-@dataclass
-class BracketStats:
-    """Statistics about a bracket's picks"""
-    num_upsets: int
-    upset_by_round: Dict[str, int]
-    chalk_score: float  # How closely picks follow seeds
-    region_winners: List[str]
-    final_four: List[str]
-    champion: str
-    avg_seed_by_round: Dict[str, float]
-
-def analyze_bracket(bracket: Bracket) -> BracketStats:
-    """
-    Analyze a bracket's picks for various statistics
-    
-    Args:
-        bracket: Completed bracket with winners selected
-        
-    Returns:
-        BracketStats object containing various metrics
-    """
-    results = bracket.simulate_tournament()
-    
-    # Track upsets by round
-    upsets = {
-        "First Round": 0,
-        "Second Round": 0,
-        "Sweet 16": 0,
-        "Elite 8": 0,
-        "Final Four": 0,
-        "Championship": 0
-    }
-    
-    # Track average seed by round
-    avg_seeds = {
-        "First Round": [],
-        "Second Round": [],
-        "Sweet 16": [],
-        "Elite 8": [], 
-        "Final Four": [],
-        "Championship": []
-    }
-    
-    # Analyze each round
-    for round_name in upsets.keys():
-        round_teams = results[round_name]
-        for team in round_teams:
-            avg_seeds[round_name].append(team.seed)
-            if round_name != "First Round":  # First round has no upsets yet
-                prev_round = list(upsets.keys())[list(upsets.keys()).index(round_name)-1]
-                prev_teams = results[prev_round]
-                # Check if this team beat a better seed
-                opponents = [t for t in prev_teams if t.region == team.region and t != team]
-                if opponents and min(t.seed for t in opponents) < team.seed:
-                    upsets[round_name] += 1
-                    
-    # Calculate average seeds
-    avg_seeds = {k: np.mean(v) if v else 0 for k, v in avg_seeds.items()}
-    
-    # Calculate chalk score (how closely picks follow seeds)
-    # Lower score means more chalk (following seeds)
-    chalk_score = sum(
-        sum(team.seed for team in results[round_name]) 
-        for round_name in results 
-        if round_name != "Champion"
-    ) / len(results)
-    
-    return BracketStats(
-        num_upsets=sum(upsets.values()),
-        upset_by_round=upsets,
-        chalk_score=chalk_score,
-        region_winners=[t.name for t in results["Elite 8"] if t],
-        final_four=[t.name for t in results["Final Four"] if t],
-        champion=results["Champion"].name if results["Champion"] else None,
-        avg_seed_by_round=avg_seeds
-    )
+from dancing.cbb_brackets import Bracket
 
 class BracketOptimizer:
-    """Class to handle bracket optimization with progress tracking"""
+    """
+    Optimizer class that finds the best bracket picks based on simulation results and optimization criteria.
     
-    def __init__(self, standings: Standings, pool_size: int, num_sims: int = 1000, 
-                 target_chalk: Optional[float] = None, verbose: bool = True):
-        self.standings = standings
-        self.pool_size = pool_size
+    Key features:
+    - Simulates many possible brackets to identify winning strategies
+    - Uses ELO ratings and seed matchups to estimate win probabilities 
+    - Considers both likelihood of outcomes and potential bracket points
+    - Can optimize for different pool sizes and scoring systems
+    - Provides confidence levels for each pick
+    
+    Attributes:
+        dancing: DataFrame of tournament teams with seeds and ratings
+        num_sims: Number of simulations to run
+        scoring_weights: Points awarded for each round
+        risk_factor: How much to favor upsets vs. chalk (0-1)
+        optimal_picks: DataFrame of optimized picks for each round
+        pick_confidence: Confidence scores for each optimized pick
+    """
+    
+    def __init__(self, dancing: pd.DataFrame, num_sims: int = 10000,
+                 scoring_weights: List[float] = None, risk_factor: float = 0.5):
+        """
+        Initialize optimizer with tournament field and parameters.
+        
+        Args:
+            dancing: DataFrame with team seeds and ratings
+            num_sims: Number of simulations to run
+            scoring_weights: Points per round, defaults to [10,20,40,80,160,320]
+            risk_factor: How much to favor upsets (0-1), defaults to 0.5
+        """
+        self.dancing = dancing
         self.num_sims = num_sims
-        self.target_chalk = target_chalk
-        self.verbose = verbose
-        self.iteration = 0
+        self.scoring_weights = scoring_weights or [10, 20, 40, 80, 160, 320]
+        self.risk_factor = min(max(risk_factor, 0), 1)  # Bound between 0-1
         
-        # Create base bracket
-        self.base_bracket = create_teams_from_standings(standings)
-
-    def objective(self, x: np.ndarray) -> float:
-        """Objective function for optimization"""
-        # Create pool with random entries
-        pool = Pool(self.base_bracket)
+        # Initialize storage for optimization results
+        self.optimal_picks = pd.DataFrame()
+        self.pick_confidence = pd.DataFrame()
         
-        # Add optimized entry
-        opt_bracket = create_teams_from_standings(self.standings)
-        pool.add_entry("Optimized", opt_bracket)
+        # Run initial optimization
+        self._simulate_tournament()
+        self._optimize_picks()
         
-        # Add random entries
-        for i in range(self.pool_size - 1):
-            entry = create_teams_from_standings(self.standings)
-            pool.add_entry(f"Entry_{i+1}", entry)
+    def _simulate_tournament(self):
+        """Run many tournament simulations to gather outcome probabilities."""
+        self.sim_results = []
+        
+        for _ in range(self.num_sims):
+            # Create new bracket for this simulation
+            bracket = Bracket(self.dancing.copy())
             
-        # Simulate pool
-        results = pool.simulate_pool(num_sims=self.num_sims)
-        
-        # Get stats for optimized bracket
-        stats = analyze_bracket(opt_bracket)
-        
-        # Calculate objective value
-        obj_val = -results.loc[results['name'] == 'Optimized', 'win_pct'].values[0]
-        
-        # Add penalty if chalk score doesn't match target
-        if self.target_chalk is not None:
-            chalk_penalty = abs(stats.chalk_score - self.target_chalk)
-            obj_val += chalk_penalty
+            # Store results
+            round_results = []
+            for round_num, round_games in enumerate(bracket.rounds):
+                round_results.append({
+                    'round': round_num,
+                    'winners': round_games.pick.tolist(),
+                    'win_probs': round_games[['elo_prob1', 'elo_prob2']].values.tolist()
+                })
+            self.sim_results.append(round_results)
             
-        return obj_val
+    def _optimize_picks(self):
+        """Analyze simulation results to determine optimal picks."""
+        rounds = ['Round of 64', 'Round of 32', 'Sweet 16', 'Elite 8', 'Final 4', 'Championship']
         
-    def callback(self, xk, convergence):
-        """Callback to monitor optimization progress"""
-        self.iteration += 1
-        if self.verbose and self.iteration % 10 == 0:  # Print every 10 iterations
-            print(f"Iteration {self.iteration}: Best objective = {self.objective(xk):.4f}")
-        return False  # Don't stop optimization
-    
-def optimize_bracket(standings: Standings,
-                    pool_size: int,
-                    num_sims: int = 1000,
-                    target_chalk: Optional[float] = None,
-                    verbose: bool = True) -> Tuple[Bracket, float]:
-    """
-    Optimize bracket picks using differential evolution
-    
-    Args:
-        standings: Current team standings/ratings
-        pool_size: Number of entries in the pool
-        num_sims: Number of simulations per evaluation
-        target_chalk: Optional target chalk score (None for pure optimization)
-        verbose: Whether to print progress updates
+        optimal_picks = []
+        pick_confidence = []
         
-    Returns:
-        Tuple of (optimized bracket, expected value)
-    """
-    optimizer = BracketOptimizer(standings, pool_size, num_sims, target_chalk, verbose)
-    
-    # Define parameter bounds (upset factors for each round)
-    bounds = [(0.0, 0.5)] * 6  # One factor per round
-    
-    # Run optimization
-    result = differential_evolution(
-        optimizer.objective,
-        bounds,
-        maxiter=50,
-        popsize=20,
-        seed=42,
-        callback=optimizer.callback,
-        updating='deferred',  # More stable convergence
-    )
-    
-    # Create final optimized bracket
-    final_bracket = create_teams_from_standings(standings)
-    
-    return final_bracket, -result.fun
-
-def pool_tendency_analysis(standings: Standings,
-                         pool_size: int,
-                         num_pools: int = 100) -> pd.DataFrame:
-    """
-    Analyze winning bracket tendencies across many simulated pools
-    
-    Args:
-        standings: Current team standings/ratings
-        pool_size: Number of entries in each pool
-        num_pools: Number of pools to simulate
-        
-    Returns:
-        DataFrame with winning bracket statistics
-    """
-    stats_list = []
-    
-    for i in range(num_pools):
-        # Create and simulate pool
-        pool = Pool(create_teams_from_standings(standings))
-        
-        # Add entries
-        for j in range(pool_size):
-            entry = create_teams_from_standings(standings)
-            pool.add_entry(f"Entry_{j+1}", entry)
+        # Analyze each round
+        for round_num in range(len(rounds)):
+            # Collect all winners from this round across simulations
+            round_winners = []
+            round_probs = []
+            for sim in self.sim_results:
+                if round_num < len(sim):
+                    round_winners.extend(sim[round_num]['winners'])
+                    round_probs.extend(sim[round_num]['win_probs'])
             
-        # Simulate pool
-        results = pool.simulate_pool(num_sims=100)
+            # Calculate win frequencies
+            win_counts = pd.Series(round_winners).value_counts()
+            win_probs = pd.DataFrame(round_probs).mean()
+            
+            # Calculate expected value for each team
+            exp_values = {}
+            for team in win_counts.index:
+                win_freq = win_counts[team] / len(round_winners)
+                
+                # Blend frequency with ELO probability using risk factor
+                elo_prob = win_probs[self.dancing.Team == team].iloc[0] \
+                    if team in self.dancing.Team.values else 0.5
+                blended_prob = (win_freq * (1 - self.risk_factor) + 
+                              elo_prob * self.risk_factor)
+                
+                # Calculate expected points
+                exp_value = blended_prob * self.scoring_weights[round_num]
+                exp_values[team] = exp_value
+            
+            # Select optimal picks maximizing expected value
+            best_picks = pd.Series(exp_values).sort_values(ascending=False)
+            optimal_picks.append(best_picks.index.tolist())
+            
+            # Calculate confidence scores (0-100)
+            confidence_scores = (best_picks / best_picks.max() * 100).round(1)
+            pick_confidence.append(confidence_scores.to_dict())
         
-        # Analyze winning bracket
-        winner_name = results.iloc[0]['name']
-        winner_bracket = next(entry for name, entry in pool.entries if name == winner_name)
-        stats = analyze_bracket(winner_bracket)
-        
-        # Add to list
-        stats_list.append({
-            'num_upsets': stats.num_upsets,
-            'chalk_score': stats.chalk_score,
-            'champion_seed': next(t.seed for t in winner_bracket.teams if t.name == stats.champion),
-            'avg_ff_seed': np.mean([next(t.seed for t in winner_bracket.teams if t.name == ff) 
-                                  for ff in stats.final_four])
+        # Store results
+        self.optimal_picks = pd.DataFrame({
+            'round': rounds,
+            'picks': optimal_picks
         })
         
-    return pd.DataFrame(stats_list).agg(['mean', 'std', 'min', 'max'])
+        self.pick_confidence = pd.DataFrame({
+            'round': rounds,
+            'confidence': pick_confidence
+        })
+    
+    def get_optimal_bracket(self) -> Bracket:
+        """
+        Generate a bracket using the optimized picks.
+        
+        Returns:
+            Bracket object with optimized picks
+        """
+        # Create new bracket starting with full field
+        bracket = Bracket(self.dancing.copy())
+        
+        # Apply optimal picks for each round
+        for round_num, round_picks in enumerate(self.optimal_picks['picks']):
+            if round_num < len(bracket.rounds):
+                matchups = bracket.rounds[round_num]
+                for game_idx, (team1, team2) in enumerate(zip(matchups.Team1, matchups.Team2)):
+                    # Pick winner based on optimization
+                    if team1 in round_picks:
+                        matchups.loc[game_idx, 'pick'] = team1
+                    else:
+                        matchups.loc[game_idx, 'pick'] = team2
+                        
+                # Update bracket state
+                bracket.update_standings()
+        
+        return bracket
+    
+    def get_pick_analysis(self) -> pd.DataFrame:
+        """
+        Get detailed analysis of optimized picks with confidence levels.
+        
+        Returns:
+            DataFrame with picks and confidence scores for each round
+        """
+        analysis = pd.DataFrame()
+        
+        for round_num in range(len(self.optimal_picks)):
+            round_name = self.optimal_picks.loc[round_num, 'round']
+            picks = self.optimal_picks.loc[round_num, 'picks']
+            confidence = self.pick_confidence.loc[round_num, 'confidence']
+            
+            round_analysis = pd.DataFrame({
+                'round': round_name,
+                'team': picks,
+                'confidence': [confidence[team] for team in picks],
+                'seed': [self.dancing[self.dancing.Team == team].tourney_seed.iloc[0] 
+                        for team in picks],
+                'elo': [self.dancing[self.dancing.Team == team].ELO.iloc[0]
+                       for team in picks]
+            })
+            
+            analysis = pd.concat([analysis, round_analysis])
+            
+        return analysis.reset_index(drop=True)
 
 def main():
-    # Example usage
-    standings = Standings()
-    
-    print("\nAnalyzing pool tendencies...")
-    tendencies = pool_tendency_analysis(standings, pool_size=10)
-    print(tendencies)
-    
-    print("\nOptimizing bracket...")
-    optimal_bracket, exp_value = optimize_bracket(standings, pool_size=10)
-    stats = analyze_bracket(optimal_bracket)
-    
-    print(f"\nOptimal bracket expected value: {exp_value:.3f}")
-    print(f"Number of upsets: {stats.num_upsets}")
-    print(f"Chalk score: {stats.chalk_score:.2f}")
-    print(f"Final Four: {stats.final_four}")
-    print(f"Champion: {stats.champion}")
+    # Get current standings
+    standings = Standings(women=False)  # Can use women=True for women's tournament
+
+    # Create optimizer
+    optimizer = BracketOptimizer(
+        standings=standings,
+        num_sims=10000,
+        risk_factor=0.5
+    )
+
+    # Get analysis
+    analysis = optimizer.get_pick_analysis()
+
+    # Print formatted bracket
+    optimizer.print_bracket()
 
 if __name__ == "__main__":
     main()
