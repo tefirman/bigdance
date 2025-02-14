@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 @dataclass
 class Team:

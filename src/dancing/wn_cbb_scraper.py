@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
