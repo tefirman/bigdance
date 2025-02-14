@@ -14,7 +14,7 @@ import pandas as pd
 from collections import defaultdict
 from dancing.wn_cbb_scraper import Standings
 from dancing.cbb_brackets import Bracket, Pool
-from dancing.dancing_integration import simulate_bracket_pool
+from dancing.dancing_integration import create_teams_from_standings
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -33,7 +33,7 @@ class BracketAnalysis:
         self.winning_brackets: List[Bracket] = []
         self.all_results = pd.DataFrame()
         
-    def simulate_pools(self, entries_per_pool: int = 100) -> None:
+    def simulate_pools(self, entries_per_pool: int = 10) -> None:
         """
         Simulate multiple bracket pools
         
@@ -41,14 +41,29 @@ class BracketAnalysis:
             entries_per_pool: Number of entries in each pool
         """
         for i in range(self.num_pools):
-            pool_results = simulate_bracket_pool(
-                self.standings,
-                num_entries=entries_per_pool
-            )
+            # Create actual bracket for this pool
+            actual_bracket = create_teams_from_standings(self.standings)
+            pool = Pool(actual_bracket)
+            
+            # Create entries with varying upset factors
+            upset_factors = [0.1 + (j/entries_per_pool)*0.3 for j in range(entries_per_pool)]
+            for j, upset_factor in enumerate(upset_factors):
+                entry_bracket = create_teams_from_standings(self.standings)
+                for game in entry_bracket.games:
+                    # Modify simulate_game method to use this entry's upset factor
+                    game.upset_factor = upset_factor
+                entry_name = f"Entry_{j+1}"
+                pool.add_entry(entry_name, entry_bracket)
+            
+            # Store pool
+            self.pools.append(pool)
+            
+            # Simulate and store results
+            pool_results = pool.simulate_pool(num_sims=1000)
             
             # Store winning bracket from this pool
             winning_entry = pool_results.iloc[0]['name']
-            winning_bracket = [entry[1] for entry in self.pools[-1].entries 
+            winning_bracket = [entry[1] for entry in pool.entries 
                              if entry[0] == winning_entry][0]
             self.winning_brackets.append(winning_bracket)
             
