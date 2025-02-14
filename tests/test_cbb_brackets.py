@@ -122,7 +122,7 @@ def test_game_simulation(sample_bracket):
     assert higher_seed_wins > 800  # Should win roughly 80-90% of the time
 
 def test_advance_round(sample_bracket):
-    """Test round advancement logic"""
+    """Test round advancement logic and validate second round seeding"""
     # Simulate first round
     first_round_games = sample_bracket.games.copy()
     second_round_games = sample_bracket.advance_round(first_round_games)
@@ -130,12 +130,43 @@ def test_advance_round(sample_bracket):
     # Check number of games
     assert len(second_round_games) == 16  # Second round should have 16 games
     
-    # Check region assignments
+    # Track matchups by region for debugging
+    region_matchups = {region: [] for region in ["East", "West", "South", "Midwest"]}
+    
+    # Check region assignments and seeding
     for game in second_round_games:
         assert game.round == 2
         # Teams in same region should play each other
         if game.region != "Final Four":
             assert game.team1.region == game.team2.region == game.region
+            
+            # Verify second round seeding patterns
+            seed1, seed2 = game.team1.seed, game.team2.seed
+            region_matchups[game.region].append((seed1, seed2))
+            
+            # Define valid second round matchups
+            valid_pairs = {
+                1: {8, 9}, 8: {1, 16}, 9: {1, 16}, 16:{8, 9},      # 1/16 winner vs 8/9 winner
+                4: {5, 12}, 5: {4, 13}, 12: {4, 13}, 13: (5, 12),    # 4/13 winner vs 5/12 winner
+                3: {6, 11}, 6: {3, 14}, 11: {3, 14}, 14: {6, 11},    # 3/14 winner vs 6/11 winner
+                2: {7, 10}, 7: {2, 15}, 10: {2, 15}, 15: {7, 10}     # 2/15 winner vs 7/10 winner
+            }
+            
+            # Check that seeds form a valid matchup
+            assert (seed1 in valid_pairs and seed2 in valid_pairs[seed1]) or \
+                   (seed2 in valid_pairs and seed1 in valid_pairs[seed2]), \
+                   f"Invalid second round matchup: {seed1} vs {seed2} in {game.region} region"
+    
+    # Print all matchups by region for debugging
+    print("\nSecond Round Matchups:")
+    for region, matchups in region_matchups.items():
+        print(f"\n{region} Region:")
+        for seed1, seed2 in sorted(matchups):
+            print(f"{seed1} seed vs {seed2} seed")
+            
+    # Verify each region has 4 games
+    for region, matchups in region_matchups.items():
+        assert len(matchups) == 4, f"{region} region has {len(matchups)} games (should be 4)"
 
 def test_tournament_simulation(sample_bracket):
     """Test full tournament simulation"""
