@@ -121,10 +121,10 @@ class BracketAnalysis:
     
     def find_common_upsets(self) -> pd.DataFrame:
         """
-        Identify most common specific upsets in winning brackets
+        Identify most common upset teams by round
         
         Returns:
-            DataFrame containing most frequent specific upsets
+            DataFrame containing most frequent upset teams, grouped by round
         """
         upset_counts = defaultdict(int)
         
@@ -136,27 +136,30 @@ class BracketAnalysis:
                     for team in teams:
                         # Find the game where this team won
                         game = next(g for g in bracket.games 
-                                  if g.winner == team)
+                                if g.winner == team)
                         
                         # Check if it was an upset
                         if game.winner.seed > game.team1.seed:
-                            key = (round_name, 
-                                  f"{game.winner.seed} {game.winner.name}",
-                                  f"{game.team1.seed} {game.team1.name}")
+                            key = (round_name, game.winner.seed, game.winner.name)
                             upset_counts[key] += 1
         
         # Convert to DataFrame
         upsets_df = pd.DataFrame([
             {
                 'round': round_name,
-                'winner': winner,
-                'loser': loser,
+                'seed': seed,
+                'team': team,
                 'frequency': count / self.num_pools
             }
-            for (round_name, winner, loser), count in upset_counts.items()
+            for (round_name, seed, team), count in upset_counts.items()
         ])
         
-        return upsets_df.sort_values('frequency', ascending=False)
+        # Sort chronologically by round, then by frequency within each round
+        upsets_df['round_order'] = upsets_df['round'].map({round_name: i for i, round_name in enumerate(self.ROUND_ORDER)})
+        upsets_df = upsets_df.sort_values(['round_order', 'frequency'], ascending=[True, False])
+        upsets_df = upsets_df.drop('round_order', axis=1)
+        
+        return upsets_df
     
     def analyze_champion_picks(self) -> pd.DataFrame:
         """
@@ -249,7 +252,7 @@ def main():
     print(analyzer.analyze_upsets())
     
     print("\nMost Common Upsets:")
-    print(analyzer.find_common_upsets().head(10))
+    print(analyzer.find_common_upsets().groupby("round").head(10))
     
     print("\nChampionship Pick Analysis:")
     print(analyzer.analyze_champion_picks().head(10))
