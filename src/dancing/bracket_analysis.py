@@ -19,6 +19,16 @@ from dancing.dancing_integration import create_teams_from_standings
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
     
+    # Define round order as class constant
+    ROUND_ORDER = [
+        "First Round",
+        "Second Round", 
+        "Sweet 16",
+        "Elite 8",
+        "Final Four",
+        "Championship"
+    ]
+    
     def __init__(self, standings: Standings, num_pools: int = 100):
         """
         Initialize analysis with standings data
@@ -76,7 +86,7 @@ class BracketAnalysis:
         Analyze upset patterns in winning brackets
         
         Returns:
-            DataFrame containing upset statistics by round
+            DataFrame containing upset statistics by round, ordered chronologically
         """
         upset_stats = defaultdict(list)
         
@@ -103,7 +113,11 @@ class BracketAnalysis:
             'max_upsets': stats_df.max()
         })
         
-        return summary.sort_values('round')
+        # Sort by predefined round order
+        summary['round_order'] = summary['round'].map({round_name: i for i, round_name in enumerate(self.ROUND_ORDER)})
+        summary = summary.sort_values('round_order').drop('round_order', axis=1)
+        
+        return summary
     
     def find_common_upsets(self) -> pd.DataFrame:
         """
