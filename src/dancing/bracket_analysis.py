@@ -15,6 +15,7 @@ from collections import defaultdict
 from dancing.wn_cbb_scraper import Standings
 from dancing.cbb_brackets import Bracket, Pool
 from dancing.dancing_integration import create_teams_from_standings
+from datetime import datetime
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -50,7 +51,12 @@ class BracketAnalysis:
         Args:
             entries_per_pool: Number of entries in each pool
         """
+        print(f"Beginning simulation, {datetime.now()}")
         for i in range(self.num_pools):
+            # Status report
+            if (i + 1)%100 == 0:
+                print(f"Simulation {i + 1} out of {self.num_pools}, {datetime.now()}")
+
             # Create actual bracket for this pool
             actual_bracket = create_teams_from_standings(self.standings)
             pool = Pool(actual_bracket)
@@ -119,28 +125,45 @@ class BracketAnalysis:
         
         return summary
     
-    def find_common_upsets(self) -> pd.DataFrame:
+    def find_common_underdogs(self) -> pd.DataFrame:
         """
-        Identify most common upset teams by round
+        Identify most common upset teams by round, where an upset is defined
+        as a team advancing further than their seed traditionally would.
+        
+        Expected seeds by round:
+        - First Round: All seeds (no upsets possible)
+        - Second Round: Seeds 1-8
+        - Sweet 16: Seeds 1-4
+        - Elite 8: Seeds 1-2
+        - Final Four: Seeds 1
+        - Championship: Seeds 1
         
         Returns:
             DataFrame containing most frequent upset teams, grouped by round
         """
+        # Define expected maximum seed for each round
+        EXPECTED_MAX_SEEDS = {
+            "First Round": 16,  # No upsets possible
+            "Second Round": 8,
+            "Sweet 16": 4,
+            "Elite 8": 2,
+            "Final Four": 1,
+            "Championship": 1
+        }
+        
         upset_counts = defaultdict(int)
         
         for bracket in self.winning_brackets:
             results = bracket.simulate_tournament()
             
             for round_name, teams in results.items():
-                if round_name != "Champion":
+                if round_name != "Champion":  # Skip final single-team result
+                    expected_max_seed = EXPECTED_MAX_SEEDS[round_name]
+                    
+                    # Count any team with seed higher than expected as an upset
                     for team in teams:
-                        # Find the game where this team won
-                        game = next(g for g in bracket.games 
-                                if g.winner == team)
-                        
-                        # Check if it was an upset
-                        if game.winner.seed > game.team1.seed:
-                            key = (round_name, game.winner.seed, game.winner.name)
+                        if team.seed > expected_max_seed:
+                            key = (round_name, team.seed, team.name)
                             upset_counts[key] += 1
         
         # Convert to DataFrame
@@ -154,10 +177,19 @@ class BracketAnalysis:
             for (round_name, seed, team), count in upset_counts.items()
         ])
         
+        if upsets_df.empty:
+            return pd.DataFrame(columns=['round', 'seed', 'team', 'frequency'])
+        
         # Sort chronologically by round, then by frequency within each round
-        upsets_df['round_order'] = upsets_df['round'].map({round_name: i for i, round_name in enumerate(self.ROUND_ORDER)})
-        upsets_df = upsets_df.sort_values(['round_order', 'frequency'], ascending=[True, False])
+        upsets_df['round_order'] = upsets_df['round'].map(
+            {round_name: i for i, round_name in enumerate(self.ROUND_ORDER)}
+        )
+        upsets_df = upsets_df.sort_values(
+            ['round_order', 'frequency'], 
+            ascending=[True, False]
+        )
         upsets_df = upsets_df.drop('round_order', axis=1)
+        upsets_df.rename(columns={"round":"make_it_to"},inplace=True)
         
         return upsets_df
     
@@ -188,53 +220,6 @@ class BracketAnalysis:
         ])
         
         return champions_df.sort_values('frequency', ascending=False)
-    
-    def analyze_entry_strategies(self) -> pd.DataFrame:
-        """
-        Analyze characteristics of winning bracket strategies
-        
-        Returns:
-            DataFrame containing strategy statistics
-        """
-        strategy_stats = []
-        
-        for bracket in self.winning_brackets:
-            stats = {
-                'total_upsets': 0,
-                'chalk_picks': 0,  # Number of favorites picked
-                'avg_winner_seed': 0,
-                'unique_conferences': set()
-            }
-            
-            results = bracket.simulate_tournament()
-            
-            for round_name, teams in results.items():
-                if round_name != "Champion":
-                    for team in teams:
-                        game = next(g for g in bracket.games 
-                                  if g.winner == team)
-                        
-                        # Count upsets
-                        if game.winner.seed > game.team1.seed:
-                            stats['total_upsets'] += 1
-                        else:
-                            stats['chalk_picks'] += 1
-                            
-                        # Track conferences
-                        stats['unique_conferences'].add(team.conference)
-                        
-                        # Calculate average winner seed
-                        stats['avg_winner_seed'] += team.seed
-            
-            # Finalize calculations
-            total_games = len([g for g in bracket.games if g.winner])
-            stats['avg_winner_seed'] /= total_games
-            stats['conference_diversity'] = len(stats['unique_conferences'])
-            del stats['unique_conferences']
-            
-            strategy_stats.append(stats)
-        
-        return pd.DataFrame(strategy_stats).describe()
 
 def main():
     """Example usage of bracket analysis"""
@@ -242,23 +227,20 @@ def main():
     standings = Standings()
     
     # Initialize analyzer
-    analyzer = BracketAnalysis(standings, num_pools=50)
+    analyzer = BracketAnalysis(standings, num_pools=1000)
     
     # Run simulations
-    analyzer.simulate_pools(entries_per_pool=100)
+    analyzer.simulate_pools(entries_per_pool=10)
     
     # Print various analyses
     print("\nUpset Statistics by Round:")
-    print(analyzer.analyze_upsets())
+    print(analyzer.analyze_upsets().to_string(index=False))
     
-    print("\nMost Common Upsets:")
-    print(analyzer.find_common_upsets().groupby("round").head(10))
+    print("\nMost Common Underdogs:")
+    print(analyzer.find_common_underdogs().groupby("make_it_to").head(10).to_string(index=False))
     
     print("\nChampionship Pick Analysis:")
-    print(analyzer.analyze_champion_picks().head(10))
-    
-    print("\nWinning Strategy Statistics:")
-    print(analyzer.analyze_entry_strategies())
+    print(analyzer.analyze_champion_picks().head(10).to_string(index=False))
 
 if __name__ == "__main__":
     main()
