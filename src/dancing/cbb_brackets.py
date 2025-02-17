@@ -9,7 +9,7 @@
 @Desc    :   Generalized March Madness bracket simulation package
 '''
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
 import numpy as np
@@ -62,16 +62,19 @@ class Game:
     winner: Optional[Team] = None
     actual_winner: Optional[Team] = None  # For comparing to real results
 
+@dataclass
 class Bracket:
     """
     Represents a tournament bracket, either actual results or a contestant's picks
     """
-    def __init__(self, teams: List[Team] = None):
-        """Initialize bracket with list of tournament teams"""
-        self.teams = teams or []
-        self.games: List[Game] = []
+    teams: List[Team]
+    games: List[Game] = field(default_factory=list)
+    results: Dict[str, List[Team]] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Called after dataclass auto-generated __init__"""
         self._validate_teams()
-        if teams:
+        if self.teams:
             self._create_initial_games()
 
     def _validate_teams(self):
@@ -168,40 +171,29 @@ class Bracket:
         return next_games
 
     def simulate_tournament(self) -> Dict[str, List[Team]]:
-        """
-        Simulate entire tournament
-        
-        Returns:
-            Dictionary mapping round names to lists of advancing teams
-        """
-        results = {}
-        current_games = self.games.copy()  # Start with first round games
+        """Simulate entire tournament and store results"""
+        self.results = {}  # Reset results
+        current_games = self.games.copy()
         
         # First round
         for game in current_games:
-            game.winner = self.simulate_game(game)  # Ensure winner is set
-        results["First Round"] = [g.winner for g in current_games]
+            game.winner = self.simulate_game(game)
+        self.results["First Round"] = [g.winner for g in current_games]
         
-        # Subsequent rounds
-        round_names = ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
-        
-        for round_name in round_names:
-            # Get next round's matchups
+        # Subsequent rounds...
+        for round_name in ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]:
             current_games = self.advance_round(current_games)
-            
-            # Ensure each game gets a winner
             for game in current_games:
-                if not game.winner:  # Only simulate if winner not already set
+                if not game.winner:
                     game.winner = self.simulate_game(game)
-                    
-            # Store results appropriately
+            
             if round_name == "Championship":
-                results[round_name] = [current_games[0].winner]  # List with one winner
-                results["Champion"] = current_games[0].winner    # Single Team object
+                self.results[round_name] = [current_games[0].winner]
+                self.results["Champion"] = current_games[0].winner
             else:
-                results[round_name] = [g.winner for g in current_games]
+                self.results[round_name] = [g.winner for g in current_games]
         
-        return results
+        return self.results
 
 class Pool:
     """
@@ -211,12 +203,13 @@ class Pool:
         """Initialize pool with actual tournament results for comparison"""
         self.actual_results = actual_results
         self.entries: List[Tuple[str, Bracket]] = []
+        self.actual_tournament = None  # Store the one true tournament outcome
         
     def add_entry(self, name: str, bracket: Bracket):
         """Add new bracket entry to pool"""
         self.entries.append((name, bracket))
         
-    def score_bracket(self, bracket: Bracket, round_values: Dict[str, int] = None) -> int:
+    def score_bracket(self, entry_results: Dict[str, List[Team]], round_values: Dict[str, int] = None) -> int:
         """
         Score a bracket against actual results
         
@@ -227,6 +220,8 @@ class Pool:
         Returns:
             Total points scored
         """
+        if self.actual_tournament is None:
+            raise ValueError("Must simulate actual tournament before scoring entries")
         if round_values is None:
             round_values = {
                 "First Round": 1,
@@ -238,14 +233,11 @@ class Pool:
             }
             
         points = 0
-        bracket_results = bracket.simulate_tournament()
-        actual_results = self.actual_results.simulate_tournament()
-        
         for round_name, value in round_values.items():
-            if bracket_results[round_name] and actual_results[round_name]:  # Check for non-empty results
-                bracket_winners = set(t.name for t in bracket_results[round_name] if t)  # Filter out None
-                actual_winners = set(t.name for t in actual_results[round_name] if t)    # Filter out None
-                points += len(bracket_winners & actual_winners) * value
+            if round_name in entry_results and round_name in self.actual_tournament:
+                entry_winners = set(t.name for t in entry_results[round_name])
+                actual_winners = set(t.name for t in self.actual_tournament[round_name])
+                points += len(entry_winners & actual_winners) * value
                 
         return points
         
@@ -261,18 +253,14 @@ class Pool:
         """
         results = []
         
-        # Store teams for creating fresh brackets each time
-        teams = self.actual_results.teams
-        
-        for _ in range(num_sims):
-            # Create fresh actual results bracket for this simulation
-            self.actual_results = Bracket(teams)
+        for sim in range(num_sims):
+            # Simulate actual tournament once per simulation
+            self.actual_tournament = self.actual_results.simulate_tournament()
             
             scores = []
-            for name, _ in self.entries:  # Original bracket not used
-                # Create fresh entry bracket for this simulation
-                entry_bracket = Bracket(teams)
-                score = self.score_bracket(entry_bracket)
+            for name, entry in self.entries:
+                entry_results = entry.simulate_tournament()
+                score = self.score_bracket(entry_results)  # Pass in already simulated results
                 scores.append({"name": name, "score": score})
                 
             # Find winner(s)
@@ -284,7 +272,7 @@ class Pool:
             win_share = 1.0 / len(winners)
             for name in winners:
                 results.append({
-                    "simulation": _,
+                    "simulation": sim,
                     "name": name,
                     "score": scores_df[scores_df["name"] == name]["score"].iloc[0],
                     "win_share": win_share

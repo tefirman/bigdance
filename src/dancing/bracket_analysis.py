@@ -9,18 +9,17 @@
 @Desc    :   Analyzing trends in March Madness bracket pool simulations
 '''
 
-from typing import List
+from typing import List, Dict
 import pandas as pd
 from collections import defaultdict
 from dancing.wn_cbb_scraper import Standings
-from dancing.cbb_brackets import Bracket, Pool
+from dancing.cbb_brackets import Team, Pool
 from dancing.dancing_integration import create_teams_from_standings
 from datetime import datetime
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
     
-    # Define round order as class constant
     ROUND_ORDER = [
         "First Round",
         "Second Round", 
@@ -31,17 +30,10 @@ class BracketAnalysis:
     ]
     
     def __init__(self, standings: Standings, num_pools: int = 100):
-        """
-        Initialize analysis with standings data
-        
-        Args:
-            standings: Warren Nolan standings data
-            num_pools: Number of pools to simulate for analysis
-        """
         self.standings = standings
         self.num_pools = num_pools
         self.pools: List[Pool] = []
-        self.winning_brackets: List[Bracket] = []
+        self.winning_results: List[Dict[str, List[Team]]] = []  # Store results instead of brackets
         self.all_results = pd.DataFrame()
         
     def simulate_pools(self, entries_per_pool: int = 10) -> None:
@@ -53,7 +45,6 @@ class BracketAnalysis:
         """
         print(f"Beginning simulation, {datetime.now()}")
         for i in range(self.num_pools):
-            # Status report
             if (i + 1)%100 == 0:
                 print(f"Simulation {i + 1} out of {self.num_pools}, {datetime.now()}")
 
@@ -66,24 +57,23 @@ class BracketAnalysis:
             for j, upset_factor in enumerate(upset_factors):
                 entry_bracket = create_teams_from_standings(self.standings)
                 for game in entry_bracket.games:
-                    # Modify simulate_game method to use this entry's upset factor
                     game.upset_factor = upset_factor
                 entry_name = f"Entry_{j+1}"
                 pool.add_entry(entry_name, entry_bracket)
             
-            # Store pool
             self.pools.append(pool)
             
             # Simulate and store results
             pool_results = pool.simulate_pool(num_sims=1000)
             
-            # Store winning bracket from this pool
+            # Store winning entry's results from this pool
             winning_entry = pool_results.iloc[0]['name']
             winning_bracket = [entry[1] for entry in pool.entries 
                              if entry[0] == winning_entry][0]
-            self.winning_brackets.append(winning_bracket)
+            # Simulate winning bracket to get its results
+            winning_results = winning_bracket.simulate_tournament()
+            self.winning_results.append(winning_results)
             
-            # Store full results
             pool_results['pool_id'] = i
             self.all_results = pd.concat([self.all_results, pool_results])
             
@@ -96,15 +86,21 @@ class BracketAnalysis:
         """
         upset_stats = defaultdict(list)
         
-        for bracket in self.winning_brackets:
-            results = bracket.simulate_tournament()
-            
+        for results in self.winning_results:
             for round_name, teams in results.items():
                 if round_name != "Champion":  # Skip final result
-                    # Count upsets (when lower seed beats higher seed)
-                    upsets = sum(1 for team in teams 
-                               if any(t for t in bracket.games 
-                                    if t.winner == team and t.winner.seed > t.team1.seed))
+                    # Count upsets by looking at team seeds
+                    upsets = 0
+                    for team in teams:
+                        # In each round, a team is an upset if their seed is higher than expected
+                        if round_name == "Second Round" and team.seed > 8:
+                            upsets += 1
+                        elif round_name == "Sweet 16" and team.seed > 4:
+                            upsets += 1
+                        elif round_name == "Elite 8" and team.seed > 2:
+                            upsets += 1
+                        elif round_name in ["Final Four", "Championship"] and team.seed > 1:
+                            upsets += 1
                     upset_stats[round_name].append(upsets)
         
         # Convert to DataFrame
@@ -143,7 +139,7 @@ class BracketAnalysis:
         """
         # Define expected maximum seed for each round
         EXPECTED_MAX_SEEDS = {
-            "First Round": 16,  # No upsets possible
+            "First Round": 16,
             "Second Round": 8,
             "Sweet 16": 4,
             "Elite 8": 2,
@@ -153,14 +149,10 @@ class BracketAnalysis:
         
         upset_counts = defaultdict(int)
         
-        for bracket in self.winning_brackets:
-            results = bracket.simulate_tournament()
-            
+        for results in self.winning_results:  # Now using stored results
             for round_name, teams in results.items():
-                if round_name != "Champion":  # Skip final single-team result
+                if round_name != "Champion":
                     expected_max_seed = EXPECTED_MAX_SEEDS[round_name]
-                    
-                    # Count any team with seed higher than expected as an upset
                     for team in teams:
                         if team.seed > expected_max_seed:
                             key = (round_name, team.seed, team.name)
@@ -202,8 +194,7 @@ class BracketAnalysis:
         """
         champion_counts = defaultdict(int)
         
-        for bracket in self.winning_brackets:
-            results = bracket.simulate_tournament()
+        for results in self.winning_results:  # Now using stored results
             champion = results['Champion']
             key = (champion.seed, champion.name, champion.conference)
             champion_counts[key] += 1

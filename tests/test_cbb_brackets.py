@@ -212,10 +212,11 @@ def test_pool_simulation(sample_teams):
 
 def test_scoring_system(sample_teams):
     """Test bracket scoring system"""
+    # Create and simulate actual bracket 
     actual_bracket = Bracket(sample_teams)
-    actual_results = actual_bracket.simulate_tournament()
-    
     pool = Pool(actual_bracket)
+    
+    # Create an entry bracket
     entry_bracket = Bracket(sample_teams)
     
     # Test with custom scoring system
@@ -228,14 +229,31 @@ def test_scoring_system(sample_teams):
         "Championship": 32
     }
     
-    score = pool.score_bracket(entry_bracket, custom_scoring)
+    # First simulate the actual tournament (needed before scoring)
+    pool.actual_tournament = actual_bracket.simulate_tournament()
+    
+    # Then simulate and score the entry
+    entry_results = entry_bracket.simulate_tournament()
+    score = pool.score_bracket(entry_results, custom_scoring)
+    
     assert isinstance(score, int)
     assert score >= 0
     
-    # Perfect bracket should get maximum score
-    max_score = sum(32 * custom_scoring[round_name] 
-                   for round_name in ["First Round", "Second Round", "Sweet 16", 
-                                    "Elite 8", "Final Four", "Championship"])
+    # Calculate maximum possible score
+    first_round_teams = 32  # 32 winners in first round
+    second_round_teams = 16
+    sweet_16_teams = 8
+    elite_8_teams = 4
+    final_four_teams = 2
+    championship_teams = 1
+    
+    max_score = (first_round_teams * custom_scoring["First Round"] +
+                 second_round_teams * custom_scoring["Second Round"] +
+                 sweet_16_teams * custom_scoring["Sweet 16"] +
+                 elite_8_teams * custom_scoring["Elite 8"] +
+                 final_four_teams * custom_scoring["Final Four"] +
+                 championship_teams * custom_scoring["Championship"])
+    
     assert score <= max_score
 
 def test_reproducibility(sample_teams):

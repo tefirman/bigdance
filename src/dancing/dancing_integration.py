@@ -110,7 +110,6 @@ def simulate_bracket_pool(standings: Standings,
     
     Args:
         standings: Standings object containing team ratings and info
-        seeds: Dictionary mapping team names to their tournament seeds
         num_entries: Number of bracket entries to simulate
         upset_factors: Optional list of upset factors for each entry
         
@@ -126,14 +125,19 @@ def simulate_bracket_pool(standings: Standings,
     # Generate upset factors if not provided
     if upset_factors is None:
         upset_factors = [0.1 + (i/num_entries)*0.3 for i in range(num_entries)]
+    elif len(upset_factors) != num_entries:
+        raise ValueError("Number of upset factors must match number of entries")
     
     # Create entries with varying upset factors
     for i in range(num_entries):
         entry_bracket = create_teams_from_standings(standings)
+        # Set upset factor for all games in this entry
+        for game in entry_bracket.games:
+            game.upset_factor = upset_factors[i]
         entry_name = f"Entry_{i+1}"
         pool.add_entry(entry_name, entry_bracket)
     
-    # Simulate pool
+    # Simulate pool with single reality per simulation
     results = pool.simulate_pool(num_sims=1000)
     return results
 
