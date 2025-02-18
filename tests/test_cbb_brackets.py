@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from src.dancing.cbb_brackets import Team, Game, Bracket, Pool
+from bigdance.cbb_brackets import Team, Game, Bracket, Pool
 
 @pytest.fixture
 def sample_teams():

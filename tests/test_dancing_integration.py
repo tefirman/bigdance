@@ -2,8 +2,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch
-from dancing.dancing_integration import create_teams_from_standings, simulate_bracket_pool
-from dancing.wn_cbb_scraper import Standings
+from bigdance.bigdance_integration import create_teams_from_standings, simulate_bracket_pool
+from bigdance.wn_cbb_scraper import Standings
 
 @pytest.fixture
 def mock_standings():

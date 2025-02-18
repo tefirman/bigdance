@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-from src.dancing.wn_cbb_scraper import BaseScraper, Standings, Matchups, Schedule
+from bigdance.wn_cbb_scraper import BaseScraper, Standings, Matchups, Schedule
 
 SAMPLE_ELO_HTML = """
 <table class="normal-grid alternating-rows stats-table">
