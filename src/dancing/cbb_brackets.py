@@ -70,6 +70,7 @@ class Bracket:
     teams: List[Team]
     games: List[Game] = field(default_factory=list)
     results: Dict[str, List[Team]] = field(default_factory=dict)
+    log_probability: float = float('inf')  # Initialize to infinity
 
     def __post_init__(self):
         """Called after dataclass auto-generated __init__"""
@@ -170,6 +171,34 @@ class Bracket:
         
         return next_games
 
+    def calculate_game_probability(self, game: Game) -> float:
+        """Calculate probability of game outcome based on Elo ratings"""
+        rating_diff = game.winner.rating - (game.team2.rating if game.winner == game.team1 else game.team1.rating)
+        return 1 / (1 + 10**(-rating_diff/400))
+
+    def calculate_log_probability(self) -> float:
+        """Calculate the negative log probability of the entire bracket outcome"""
+        if not self.results:
+            return float('inf')
+            
+        total_log_prob = 0
+        for round_name in ["First Round", "Second Round", "Sweet 16", 
+                          "Elite 8", "Final Four", "Championship"]:
+            if round_name not in self.results:
+                continue
+                
+            # Find games from this round
+            round_num = {"First Round": 1, "Second Round": 2, "Sweet 16": 3,
+                        "Elite 8": 4, "Final Four": 5, "Championship": 6}[round_name]
+            round_games = [g for g in self.games if g.round == round_num and g.winner]
+            
+            # Sum log probabilities for each game
+            for game in round_games:
+                prob = self.calculate_game_probability(game)
+                total_log_prob += -np.log(prob)
+                
+        return total_log_prob
+
     def simulate_tournament(self) -> Dict[str, List[Team]]:
         """Simulate entire tournament and store results"""
         self.results = {}  # Reset results
@@ -180,7 +209,7 @@ class Bracket:
             game.winner = self.simulate_game(game)
         self.results["First Round"] = [g.winner for g in current_games]
         
-        # Subsequent rounds...
+        # Subsequent rounds
         for round_name in ["Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]:
             current_games = self.advance_round(current_games)
             for game in current_games:
@@ -192,6 +221,9 @@ class Bracket:
                 self.results["Champion"] = current_games[0].winner
             else:
                 self.results[round_name] = [g.winner for g in current_games]
+        
+        # Calculate log probability of final bracket
+        self.log_probability = self.calculate_log_probability()
         
         return self.results
 

@@ -16,6 +16,7 @@ from dancing.wn_cbb_scraper import Standings
 from dancing.cbb_brackets import Team, Pool
 from dancing.dancing_integration import create_teams_from_standings
 from datetime import datetime
+import numpy as np
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -37,13 +38,12 @@ class BracketAnalysis:
         self.all_results = pd.DataFrame()
         
     def simulate_pools(self, entries_per_pool: int = 10) -> None:
-        """
-        Simulate multiple bracket pools
-        
-        Args:
-            entries_per_pool: Number of entries in each pool
-        """
+        """Simulate multiple bracket pools"""
         print(f"Beginning simulation, {datetime.now()}")
+        
+        # Track log probabilities for all entries
+        self.all_log_probs = []
+        
         for i in range(self.num_pools):
             if (i + 1)%100 == 0:
                 print(f"Simulation {i + 1} out of {self.num_pools}, {datetime.now()}")
@@ -66,13 +66,13 @@ class BracketAnalysis:
             # Simulate and store results
             pool_results = pool.simulate_pool(num_sims=1000)
             
-            # Store winning entry's results from this pool
+            # Store winning entry's results and log probability
             winning_entry = pool_results.iloc[0]['name']
             winning_bracket = [entry[1] for entry in pool.entries 
                              if entry[0] == winning_entry][0]
-            # Simulate winning bracket to get its results
             winning_results = winning_bracket.simulate_tournament()
             self.winning_results.append(winning_results)
+            self.all_log_probs.append(winning_bracket.log_probability)
             
             pool_results['pool_id'] = i
             self.all_results = pd.concat([self.all_results, pool_results])
@@ -211,6 +211,41 @@ class BracketAnalysis:
         ])
         
         return champions_df.sort_values('frequency', ascending=False)
+    
+    def analyze_bracket_likelihood(self) -> pd.DataFrame:
+        """
+        Analyze the distribution of bracket likelihoods in winning entries
+        
+        Returns:
+            DataFrame containing statistics about bracket likelihood scores
+        """
+        if not hasattr(self, 'all_log_probs'):
+            raise ValueError("Must run simulations before analyzing likelihoods")
+            
+        probs_df = pd.DataFrame({
+            'log_probability': self.all_log_probs
+        })
+        
+        # Calculate summary statistics
+        summary = {
+            'mean_log_prob': np.mean(self.all_log_probs),
+            'std_log_prob': np.std(self.all_log_probs),
+            'min_log_prob': np.min(self.all_log_probs),
+            'max_log_prob': np.max(self.all_log_probs),
+            'median_log_prob': np.median(self.all_log_probs),
+            'q25_log_prob': np.percentile(self.all_log_probs, 25),
+            'q75_log_prob': np.percentile(self.all_log_probs, 75)
+        }
+        
+        # # Add interpretation
+        # summary['interpretation'] = (
+        #     f"Winning brackets tend to have log probabilities "
+        #     f"between {summary['q25_log_prob']:.1f} and {summary['q75_log_prob']:.1f}. "
+        #     f"The median is {summary['median_log_prob']:.1f}. "
+        #     f"Lower values indicate more likely brackets."
+        # )
+        
+        return pd.DataFrame([summary])
 
 def main():
     """Example usage of bracket analysis"""
@@ -232,6 +267,9 @@ def main():
     
     print("\nChampionship Pick Analysis:")
     print(analyzer.analyze_champion_picks().head(10).to_string(index=False))
+
+    print("\nBracket Likelihood Analysis:")
+    print(analyzer.analyze_bracket_likelihood().T.to_string(header=False))
 
 if __name__ == "__main__":
     main()
