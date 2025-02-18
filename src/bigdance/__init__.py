@@ -1,5 +1,5 @@
 """
-Dancing - A March Madness bracket simulation package.
+bigdance - A March Madness bracket simulation package.
 
 This package provides tools for NCAA basketball bracket simulation by combining:
 - Real-time stats and ratings from Warren Nolan (no affiliation)
@@ -27,7 +27,7 @@ from .cbb_brackets import (
     Pool
 )
 
-from .dancing_integration import (
+from .bigdance_integration import (
     create_teams_from_standings,
     simulate_bracket_pool
 )
