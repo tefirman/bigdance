@@ -1,5 +1,9 @@
 # dancing
 
+<p align="center">
+  <img src="assets/DancingHex.png" width="150" alt="dancing logo">
+</p>
+
 A Python package for NCAA March Madness bracket simulation combining real-time ratings from Warren Nolan with customizable tournament simulations.
 
 ## Installation
