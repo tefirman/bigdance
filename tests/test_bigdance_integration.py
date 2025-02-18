@@ -2,8 +2,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch
-from dancing.dancing_integration import create_teams_from_standings, simulate_bracket_pool
-from dancing.wn_cbb_scraper import Standings
+from bigdance.bigdance_integration import create_teams_from_standings, simulate_bracket_pool
+from bigdance.wn_cbb_scraper import Standings
 
 @pytest.fixture
 def mock_standings():
@@ -184,7 +184,7 @@ def test_simulate_bracket_pool_with_upset_factors(mock_standings):
 
 def test_integration_with_real_standings(mock_standings):
     """Test full integration with actual Warren Nolan data"""
-    with patch('dancing.dancing_integration.Standings') as mock_standings_class:
+    with patch('bigdance.bigdance_integration.Standings') as mock_standings_class:
         # Configure mock to return our fixture data
         mock_standings_class.return_value = mock_standings
         

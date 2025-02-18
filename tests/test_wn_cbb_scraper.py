@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-from src.dancing.wn_cbb_scraper import BaseScraper, Standings, Matchups, Schedule
+from bigdance.wn_cbb_scraper import BaseScraper, Standings, Matchups, Schedule
 
 SAMPLE_ELO_HTML = """
 <table class="normal-grid alternating-rows stats-table">
@@ -335,7 +335,7 @@ class TestBaseScraper:
 
     def test_courteous_get(self, mock_session):
         """Test courteous GET request functionality"""
-        with patch('dancing.wn_cbb_scraper.BaseScraper._create_session', return_value=mock_session):
+        with patch('bigdance.wn_cbb_scraper.BaseScraper._create_session', return_value=mock_session):
             # Set up the mock response
             mock_response = MagicMock()
             mock_response.text = "<html>Mock HTML</html>"
@@ -371,7 +371,7 @@ class TestBaseScraper:
 class TestStandings:
     def test_initialization(self, mock_elo_response, mock_rank_response):
         """Test standings initialization"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
+        with patch('bigdance.wn_cbb_scraper.Standings._create_session') as mock_session:
             # Configure mock to return different responses for ELO vs ranks
             def mock_get(url):
                 if 'elo' in url:
@@ -387,7 +387,7 @@ class TestStandings:
 
     def test_elo_parsing(self, mock_elo_response):
         """Test parsing of ELO rankings"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session') as mock_session:
+        with patch('bigdance.wn_cbb_scraper.Standings._create_session') as mock_session:
             mock_session.return_value.get.return_value = MagicMock(text=SAMPLE_ELO_HTML)
             standings = Standings(season=2024)
             assert len(standings.elo) == 2
@@ -453,7 +453,7 @@ class TestStandings:
 
     def test_women_parameter(self, mock_elo_response):
         """Test women's basketball parameter"""
-        with patch('dancing.wn_cbb_scraper.Standings._create_session', return_value=mock_elo_response):
+        with patch('bigdance.wn_cbb_scraper.Standings._create_session', return_value=mock_elo_response):
             standings = Standings(season=2024, women=True)
             assert standings.gender == "w"
             assert "basketballw" in standings.base_url
@@ -461,13 +461,13 @@ class TestStandings:
 class TestMatchups:
     def test_initialization(self, mock_matchups_response):
         """Test matchups initialization"""
-        with patch('dancing.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
             matchups = Matchups(date=datetime.now(), elos=False)  # Disable ELO addition
             assert isinstance(matchups.matchups, pd.DataFrame)
 
     def test_matchups_parsing(self, mock_matchups_response):
         """Test parsing of matchups data"""
-        with patch('dancing.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
             # Initialize without ELO calculations
             matchups = Matchups(date=datetime.now(), elos=False)
             assert len(matchups.matchups) == 1
@@ -476,7 +476,7 @@ class TestMatchups:
 
     def test_elo_addition(self, mock_matchups_response):
         """Test adding ELO ratings to matchups"""
-        with patch('dancing.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
             # Create matchups without initial ELO calculation
             matchups = Matchups(date=datetime.now(), elos=False)
             
@@ -495,7 +495,7 @@ class TestMatchups:
 class TestSchedule:
     def test_initialization(self, mock_session):
         """Test schedule initialization"""
-        with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
@@ -516,7 +516,7 @@ class TestSchedule:
 
     def test_pull_games(self, mock_session):
         """Test game pulling functionality"""
-        with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
@@ -528,7 +528,7 @@ class TestSchedule:
 
     def test_women_parameter(self, mock_session):
         """Test women's basketball parameter"""
-        with patch('dancing.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
