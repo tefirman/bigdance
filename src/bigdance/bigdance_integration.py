@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-coding:utf-8 -*-
 '''
-@File    :   dancing_integration.py
+@File    :   bigdance_integration.py
 @Time    :   2025/01/19
 @Author  :   Taylor Firman
 @Version :   0.1.0
@@ -11,8 +11,8 @@
 
 from typing import List, Dict, Optional
 import pandas as pd
-from dancing.wn_cbb_scraper import Standings
-from dancing.cbb_brackets import Team, Bracket, Pool
+from bigdance.wn_cbb_scraper import Standings
+from bigdance.cbb_brackets import Team, Bracket, Pool
 
 def create_teams_from_standings(standings: Standings, 
                               regions: Optional[Dict[str, str]] = None) -> List[Team]:
