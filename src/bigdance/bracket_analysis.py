@@ -12,9 +12,9 @@
 from typing import List, Dict
 import pandas as pd
 from collections import defaultdict
-from dancing.wn_cbb_scraper import Standings
-from dancing.cbb_brackets import Team, Pool
-from dancing.dancing_integration import create_teams_from_standings
+from bigdance.wn_cbb_scraper import Standings
+from bigdance.cbb_brackets import Team, Pool
+from bigdance.bigdance_integration import create_teams_from_standings
 from datetime import datetime
 import numpy as np
 
