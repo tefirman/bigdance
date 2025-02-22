@@ -15,22 +15,38 @@ def create_round_header(round_name: str) -> ui.tags.h4:
     """Create a header for a tournament round"""
     return ui.h4(round_name, class_="mt-4 mb-3")
 
-def create_region_column(region: str) -> ui.column:
-    """Create a column containing a region's bracket"""
-    return ui.column(
-        6,
-        ui.h3(f"{region} Region"),
-        ui.div(
-            create_round_header("First Round"),
-            ui.output_ui(f"{region.lower()}_bracket_round1"),
-            create_round_header("Second Round"),
-            ui.output_ui(f"{region.lower()}_bracket_round2"),
-            create_round_header("Sweet 16"),
-            ui.output_ui(f"{region.lower()}_bracket_round3"),
-            create_round_header("Elite Eight"),
-            ui.output_ui(f"{region.lower()}_bracket_round4"),
-            class_="region-container"
-        )
+def create_region_column(region: str) -> ui.div:
+    """Create a div containing a region's bracket with horizontal round layout"""
+    return ui.div(
+        ui.h3(f"{region} Region", class_="region-title"),
+        ui.row(
+            ui.column(
+                3,  # Each round takes 1/4 of the width
+                create_round_header("First Round"),
+                ui.output_ui(f"{region.lower()}_bracket_round1"),
+                class_="round-column"
+            ),
+            ui.column(
+                3,
+                create_round_header("Second Round"),
+                ui.output_ui(f"{region.lower()}_bracket_round2"),
+                class_="round-column"
+            ),
+            ui.column(
+                3,
+                create_round_header("Sweet 16"),
+                ui.output_ui(f"{region.lower()}_bracket_round3"),
+                class_="round-column"
+            ),
+            ui.column(
+                3,
+                create_round_header("Elite Eight"),
+                ui.output_ui(f"{region.lower()}_bracket_round4"),
+                class_="round-column"
+            ),
+            class_="region-rounds"
+        ),
+        class_="region-container"
     )
 
 # Custom CSS for bracket styling
@@ -40,6 +56,19 @@ custom_css = """
     border-radius: 5px;
     padding: 15px;
     margin-bottom: 20px;
+}
+
+.region-title {
+    margin-bottom: 20px;
+}
+
+.round-column {
+    border-right: 1px solid #eee;
+    padding: 0 10px;
+}
+
+.round-column:last-child {
+    border-right: none;
 }
 
 .game-container {
@@ -55,6 +84,17 @@ custom_css = """
 
 .bracket-region {
     background-color: white;
+}
+
+.region-rounds {
+    margin: 0;
+}
+
+/* Make sure radio buttons and labels don't wrap awkwardly */
+.game-container .form-check {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 """
 
@@ -98,14 +138,15 @@ app_ui = ui.page_fluid(
         ),
         
         # Main panel with bracket regions
-        ui.row(
+        ui.div(
             create_region_column("East"),
             create_region_column("West"),
-        ),
-        ui.row(
             create_region_column("South"),
             create_region_column("Midwest"),
+            class_="regions-container"
         ),
+        
+        # Final Rounds
         ui.div(
             ui.h3("Final Rounds", class_="text-center mt-4"),
             ui.row(
@@ -118,7 +159,8 @@ app_ui = ui.page_fluid(
                     6,
                     create_round_header("Championship"),
                     ui.output_ui("championship_game")
-                )
+                ),
+                class_="final-rounds"
             ),
             class_="final-rounds-container mt-4"
         ),
