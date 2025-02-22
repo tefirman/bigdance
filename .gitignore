@@ -20,7 +20,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.pytest_cache/
+**/.pytest_cache/
+**/logs/
 .coverage
 htmlcov/
 cookies.txt
