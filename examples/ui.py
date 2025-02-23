@@ -65,17 +65,47 @@ custom_css = """
 .round-column {
     border-right: 1px solid #eee;
     padding: 0 10px;
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .round-column:last-child {
     border-right: none;
 }
 
+.bracket-region {
+    display: flex;
+    flex-direction: column;
+}
+
 .game-container {
-    margin-bottom: 15px;
     padding: 10px;
     background-color: #f8f9fa;
     border-radius: 5px;
+}
+
+/* First round games are close together */
+.round-column:nth-child(1) .game-container {
+    margin-bottom: 15px;
+}
+
+/* Second round games have more space */
+.round-column:nth-child(2) .game-container {
+    margin-bottom: 60px;
+    margin-top: 30px;
+}
+
+/* Sweet 16 games have even more space */
+.round-column:nth-child(3) .game-container {
+    margin-bottom: 140px;
+    margin-top: 70px;
+}
+
+/* Elite Eight game is centered in its column */
+.round-column:nth-child(4) .game-container {
+    margin-top: 0;  /* Remove top margin and let flex centering handle it */
 }
 
 .game-container .shiny-input-container {
