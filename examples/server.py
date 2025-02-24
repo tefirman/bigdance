@@ -14,8 +14,9 @@ from shiny.types import SilentException
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
+from bigdance.bigdance_integration import create_bracket_with_picks
 
-from data import teams
+from data import teams, actual_bracket
 
 logger = logging.getLogger(__name__)
 
@@ -149,16 +150,16 @@ def get_final_four_matchups(input):
 def server(input, output, session):
     """Main server function containing all callbacks and reactive logic"""
     
-    # Track when conference filter changes
-    @reactive.Effect
-    def _():
-        logger.info(f"Conference changed to: {input.conference()}")
+    # # Track when conference filter changes
+    # @reactive.Effect
+    # def _():
+    #     logger.info(f"Conference changed to: {input.conference()}")
 
-    # Debug info output
-    @output
-    @render.text
-    def debug_info():
-        return f"Current Conference: {input.conference()}\nLast Updated: {datetime.now()}"
+    # # Debug info output
+    # @output
+    # @render.text
+    # def debug_info():
+    #     return f"Current Conference: {input.conference()}\nLast Updated: {datetime.now()}"
 
     # First Round UI Outputs
     @output
@@ -291,13 +292,21 @@ def server(input, output, session):
         try:
             logger.debug("Starting simulation")
             # Track selections for all rounds
+            # selections = {
+            #     "First Round": {},
+            #     "Second Round": {},
+            #     "Sweet 16": {},
+            #     "Elite Eight": {},
+            #     "Final Four": {},
+            #     "Championship": {}
+            # }
             selections = {
-                "Round 1": {},
-                "Round 2": {},
-                "Sweet 16": {},
-                "Elite Eight": {},
-                "Final Four": {},
-                "Championship": {}
+                "First Round": [],
+                "Second Round": [],
+                "Sweet 16": [],
+                "Elite Eight": [],
+                "Final Four": [],
+                "Championship": []
             }
             
             # Check each region's games through Elite Eight
@@ -309,62 +318,71 @@ def server(input, output, session):
                     game_id = f"{region}_round1_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        selections["Round 1"][game_id] = winner
+                        # selections["First Round"][game_id] = winner
+                        selections["First Round"].append(winner)
                 
                 # Second round (4 games)
                 for i in range(4):
                     game_id = f"{region}_round2_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        selections["Round 2"][game_id] = winner
+                        # selections["Second Round"][game_id] = winner
+                        selections["Second Round"].append(winner)
                 
                 # Sweet 16 (2 games)
                 for i in range(2):
                     game_id = f"{region}_round3_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        selections["Sweet 16"][game_id] = winner
+                        # selections["Sweet 16"][game_id] = winner
+                        selections["Sweet 16"].append(winner)
                 
                 # Elite Eight (1 game)
                 game_id = f"{region}_round4_game_0"
                 winner = get_game_winner(input, game_id)
                 if winner:
-                    selections["Elite Eight"][game_id] = winner
+                    # selections["Elite Eight"][game_id] = winner
+                    selections["Elite Eight"].append(winner)
             
             # Final Four games
             for i in range(2):
                 game_id = f"final_round5_game_{i}"
                 winner = get_game_winner(input, game_id)
                 if winner:
-                    selections["Final Four"][game_id] = winner
+                    # selections["Final Four"][game_id] = winner
+                    selections["Final Four"].append(winner)
             
             # Championship game
             championship_winner = get_game_winner(input, "final_round6_game_0")
             if championship_winner:
-                selections["Championship"]["final_round6_game_0"] = championship_winner
+                # selections["Championship"]["final_round6_game_0"] = championship_winner
+                selections["Championship"].append(championship_winner)
             
-            # Format results message
-            result_msg = "Your Picks:\n\n"
+            my_bracket = create_bracket_with_picks(actual_bracket.teams, selections)
+            return my_bracket
+
+            # # Format results message
+            # result_msg = "Your Picks:\n\n"
             
-            # Add picks for each round
-            for round_name, games in selections.items():
-                if games:  # Only show rounds that have picks
-                    result_msg += f"{round_name}:\n"
-                    for game_id, winner in sorted(games.items()):
-                        if "final_round" in game_id:
-                            result_msg += f"Game {int(game_id.split('_')[-1]) + 1}: {winner}\n"
-                        else:
-                            region = game_id.split("_")[0].title()
-                            game_num = int(game_id.split("_")[-1]) + 1
-                            result_msg += f"{region} Game {game_num}: {winner}\n"
-                    result_msg += "\n"
+            # # Add picks for each round
+            # for round_name, games in selections.items():
+            #     if games:  # Only show rounds that have picks
+            #         result_msg += f"{round_name}:\n"
+            #         for game_id, winner in sorted(games.items()):
+            #             if "final_round" in game_id:
+            #                 result_msg += f"Game {int(game_id.split('_')[-1]) + 1}: {winner}\n"
+            #             else:
+            #                 region = game_id.split("_")[0].title()
+            #                 game_num = int(game_id.split("_")[-1]) + 1
+            #                 result_msg += f"{region} Game {game_num}: {winner}\n"
+            #         result_msg += "\n"
             
-            # Add championship winner announcement if there is one
-            if "Championship" in selections and selections["Championship"]:
-                winner = list(selections["Championship"].values())[0]
-                result_msg += f"\nTournament Champion: {winner}! 🏆\n"
+            # # Add championship winner announcement if there is one
+            # if "Championship" in selections and selections["Championship"]:
+            #     winner = list(selections["Championship"].values())[0]
+            #     result_msg += f"\nTournament Champion: {winner}! 🏆\n"
             
-            return result_msg
+            # return result_msg
             
         except Exception as e:
             logger.error(f"Error in simulation: {str(e)}", exc_info=True)

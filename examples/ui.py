@@ -146,9 +146,14 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.h4("Controls"),
                 ui.input_select(
-                    "conference",
-                    "Filter by Conference:",
-                    ["All Games", "ACC", "Big 12", "Big East", "Big Ten", "Pac-12", "SEC"]
+                    "num_entries",
+                    "Number of Entries:",
+                    [10, 20, 50]
+                ),
+                ui.input_select(
+                    "num_sims",
+                    "Number of Simulations:",
+                    [100, 500, 1000]
                 ),
                 ui.input_action_button(
                     "simulate", 
@@ -159,10 +164,10 @@ app_ui = ui.page_fluid(
                     ui.output_text("simulation_results"),
                     class_="mt-4"
                 ),
-                ui.div(
-                    ui.output_text("debug_info"),
-                    class_="mt-4 text-muted small"
-                ),
+                # ui.div(
+                #     ui.output_text("debug_info"),
+                #     class_="mt-4 text-muted small"
+                # ),
                 class_="sidebar-content"
             )
         ),
