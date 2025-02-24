@@ -102,6 +102,54 @@ def create_teams_from_standings(standings: Standings,
         
     return Bracket(teams)
 
+def create_bracket_with_picks(teams, picks_by_round):
+    """
+    Create a bracket with predetermined picks.
+    
+    Args:
+        teams: List of Team objects for the tournament
+        picks_by_round: Dictionary with round names as keys and lists of winning team names as values
+                       Rounds should be in order: "First Round", "Second Round", "Sweet 16", 
+                       "Elite 8", "Final Four", "Championship"
+    
+    Returns:
+        Bracket object with all picks set
+    """
+    # Create initial bracket
+    bracket = Bracket(teams)
+    
+    # Set winners for each round
+    for round_name, winners in picks_by_round.items():
+        round_num = {
+            "First Round": 1,
+            "Second Round": 2,
+            "Sweet 16": 3,
+            "Elite 8": 4,
+            "Final Four": 5,
+            "Championship": 6
+        }[round_name]
+        
+        # Find games for this round
+        round_games = [g for g in bracket.games if g.round == round_num]
+        
+        # Set winners for each game
+        for game, winner_name in zip(round_games, winners):
+            # Find the winning team object
+            winner = None
+            if game.team1.name == winner_name:
+                winner = game.team1
+            elif game.team2.name == winner_name:
+                winner = game.team2
+            else:
+                raise ValueError(f"Winner {winner_name} not found in game between {game.team1.name} and {game.team2.name}")
+            
+            game.winner = winner
+    
+    # Simulate to populate results dictionary and calculate log probability
+    bracket.simulate_tournament()
+    
+    return bracket
+
 def simulate_bracket_pool(standings: Standings,
                         num_entries: int = 100,
                         upset_factors: Optional[List[float]] = None) -> pd.DataFrame:
@@ -124,7 +172,8 @@ def simulate_bracket_pool(standings: Standings,
     
     # Generate upset factors if not provided
     if upset_factors is None:
-        upset_factors = [0.1 + (i/num_entries)*0.3 for i in range(num_entries)]
+        # upset_factors = [0.1 + (i/num_entries)*0.3 for i in range(num_entries)]
+        upset_factors = [0.1]*len(num_entries)
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")
     
