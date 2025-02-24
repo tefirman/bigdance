@@ -173,7 +173,7 @@ def simulate_bracket_pool(standings: Standings,
     # Generate upset factors if not provided
     if upset_factors is None:
         # upset_factors = [0.1 + (i/num_entries)*0.3 for i in range(num_entries)]
-        upset_factors = [0.1]*len(num_entries)
+        upset_factors = [0.1]*num_entries
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")
     
