@@ -9,12 +9,12 @@
 @Desc    :   Server logic for March Madness bracket app
 '''
 
-from shiny import render, reactive, ui
+from shiny import render, ui
 from shiny.types import SilentException
 import logging
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from bigdance.bigdance_integration import create_bracket_with_picks
+from bigdance.cbb_brackets import Bracket, Pool
 
 from data import teams, actual_bracket
 
@@ -338,14 +338,6 @@ def server(input, output, session):
         try:
             logger.debug("Starting simulation")
             # Track selections for all rounds
-            # selections = {
-            #     "First Round": {},
-            #     "Second Round": {},
-            #     "Sweet 16": {},
-            #     "Elite 8": {},
-            #     "Final Four": {},
-            #     "Championship": {}
-            # }
             selections = {
                 "First Round": [],
                 "Second Round": [],
@@ -364,7 +356,6 @@ def server(input, output, session):
                     game_id = f"{region}_round1_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        # selections["First Round"][game_id] = winner
                         selections["First Round"].append(winner)
                 
                 # Second round (4 games)
@@ -372,7 +363,6 @@ def server(input, output, session):
                     game_id = f"{region}_round2_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        # selections["Second Round"][game_id] = winner
                         selections["Second Round"].append(winner)
                 
                 # Sweet 16 (2 games)
@@ -380,14 +370,12 @@ def server(input, output, session):
                     game_id = f"{region}_round3_game_{i}"
                     winner = get_game_winner(input, game_id)
                     if winner:
-                        # selections["Sweet 16"][game_id] = winner
                         selections["Sweet 16"].append(winner)
                 
                 # Elite 8 (1 game)
                 game_id = f"{region}_round4_game_0"
                 winner = get_game_winner(input, game_id)
                 if winner:
-                    # selections["Elite 8"][game_id] = winner
                     selections["Elite 8"].append(winner)
             
             # Final Four games
@@ -395,41 +383,57 @@ def server(input, output, session):
                 game_id = f"final_round5_game_{i}"
                 winner = get_game_winner(input, game_id)
                 if winner:
-                    # selections["Final Four"][game_id] = winner
                     selections["Final Four"].append(winner)
             
             # Championship game
             championship_winner = get_game_winner(input, "final_round6_game_0")
             if championship_winner:
-                # selections["Championship"]["final_round6_game_0"] = championship_winner
                 selections["Championship"].append(championship_winner)
             
+            # Create the user's bracket
             my_bracket = create_bracket_with_picks(actual_bracket.teams, selections)
-            return my_bracket
 
-            # # Format results message
-            # result_msg = "Your Picks:\n\n"
+            # Create a new pool with the actual tournament results
+            pool = Pool(actual_bracket)
             
-            # # Add picks for each round
-            # for round_name, games in selections.items():
-            #     if games:  # Only show rounds that have picks
-            #         result_msg += f"{round_name}:\n"
-            #         for game_id, winner in sorted(games.items()):
-            #             if "final_round" in game_id:
-            #                 result_msg += f"Game {int(game_id.split('_')[-1]) + 1}: {winner}\n"
-            #             else:
-            #                 region = game_id.split("_")[0].title()
-            #                 game_num = int(game_id.split("_")[-1]) + 1
-            #                 result_msg += f"{region} Game {game_num}: {winner}\n"
-            #         result_msg += "\n"
+            # Add user's bracket to the pool
+            pool.add_entry("Your Bracket", my_bracket)
             
-            # # Add championship winner announcement if there is one
-            # if "Championship" in selections and selections["Championship"]:
-            #     winner = list(selections["Championship"].values())[0]
-            #     result_msg += f"\nTournament Champion: {winner}! 🏆\n"
+            # Add computer-generated entries with varying upset factors
+            num_entries = int(input.num_entries())
+            num_sims = int(input.num_sims())
             
-            # return result_msg
+            for i in range(num_entries):
+                # Create a fresh bracket from teams for each entry
+                entry_bracket = Bracket(actual_bracket.teams)
+                
+                # Vary the upset factor to create different predictions
+                upset_factor = 0.1 + (i / num_entries) * 0.3
+                for game in entry_bracket.games:
+                    game.upset_factor = upset_factor
+                    
+                entry_name = f"Entry_{i+1}"
+                pool.add_entry(entry_name, entry_bracket)
             
+            # Simulate pool
+            results = pool.simulate_pool(num_sims=num_sims)
+            
+            # Format the results for display
+            formatted_results = f"Simulation with {num_entries} entries and {num_sims} simulations:\n\n"
+            formatted_results += "Rank | Entry | Win % | Avg Score\n"
+            formatted_results += "-" * 40 + "\n"
+            
+            # Add top 10 results (or all if fewer than 10)
+            for i, row in results.iterrows():
+                if i >= 10:  # Show only top 10
+                    break
+                formatted_results += f"{i+1}. {row['name']} | {row['win_pct']:.1%} | {row['avg_score']:.1f}\n"
+            
+            your_rank = results[results['name'] == 'Your Bracket'].index[0] + 1 if 'Your Bracket' in results['name'].values else "N/A"
+            formatted_results += f"\nYour bracket's rank: {your_rank} out of {len(results)}"
+            
+            return formatted_results
+
         except Exception as e:
             logger.error(f"Error in simulation: {str(e)}", exc_info=True)
             return f"Error running simulation: {str(e)}"
