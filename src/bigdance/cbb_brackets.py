@@ -320,7 +320,7 @@ class Pool:
         summary.columns = ["name", "avg_score", "std_score", "wins"]
         summary["win_pct"] = summary["wins"] / num_sims
         
-        return summary.sort_values("win_pct", ascending=False)
+        return summary.sort_values("win_pct", ascending=False, ignore_index=True)
 
 def main():
     """Example usage of bracket simulation"""
