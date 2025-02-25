@@ -31,27 +31,44 @@ def get_game_winner(input, game_id: str) -> Optional[str]:
         return None
 
 def get_round1_matchups(region: str) -> List[Tuple[Optional[Dict], Optional[Dict]]]:
-    """Get initial matchups for first round games in a region"""
+    """
+    Get initial matchups for first round games in a region following NCAA tournament seeding rules:
+    1 vs 16, 8 vs 9, 5 vs 12, 4 vs 13, 6 vs 11, 3 vs 14, 7 vs 10, 2 vs 15
+    """
     matchups = []
     region_teams = teams[region]
     
-    # Process teams in pairs to create matchups
-    for i in range(0, len(region_teams), 2):
-        team1 = region_teams[i] if i < len(region_teams) else None
-        team2 = region_teams[i+1] if i+1 < len(region_teams) else None
+    # Define first round matchup pattern [(seed1, seed2), ...]
+    seed_matchups = [
+        (1, 16), (8, 9), (5, 12), (4, 13),
+        (6, 11), (3, 14), (7, 10), (2, 15)
+    ]
+    
+    # Create dictionary mapping seeds to teams
+    seed_to_team = {team["Seed"]: team for team in region_teams}
+    
+    # Create matchups following seed pattern
+    for seed1, seed2 in seed_matchups:
+        team1 = seed_to_team.get(seed1)
+        team2 = seed_to_team.get(seed2)
         matchups.append((team1, team2))
     
     return matchups
 
 def get_second_round_matchups(input, region: str) -> List[Tuple[Optional[Dict], Optional[Dict]]]:
-    """Get second round matchups based on first round selections"""
+    """
+    Get second round matchups based on first round selections.
+    Winners of games (1v16 vs 8v9), (5v12 vs 4v13), (6v11 vs 3v14), (7v10 vs 2v15)
+    """
     matchups = []
     region_teams = teams[region]
     
-    # Process first round games in pairs
-    for i in range(0, 8, 2):  # 8 first round games, process 2 at a time
-        game1_id = f"{region.lower()}_round1_game_{i}"
-        game2_id = f"{region.lower()}_round1_game_{i+1}"
+    # Define which first round games pair up in second round
+    second_round_pairs = [(0, 1), (2, 3), (4, 5), (6, 7)]
+    
+    for game1_idx, game2_idx in second_round_pairs:
+        game1_id = f"{region.lower()}_round1_game_{game1_idx}"
+        game2_id = f"{region.lower()}_round1_game_{game2_idx}"
         
         # Get winners from first round if selected
         winner1 = get_game_winner(input, game1_id)
@@ -62,24 +79,27 @@ def get_second_round_matchups(input, region: str) -> List[Tuple[Optional[Dict], 
         winner2_details = next((team for team in region_teams if team["Team"] == winner2), None) if winner2 else None
         
         matchups.append((winner1_details, winner2_details))
-        
+    
     return matchups
 
 def get_round_matchups(input, region: str, round_num: int) -> List[Tuple[Optional[Dict], Optional[Dict]]]:
-    """Get matchups for any round based on previous round selections"""
+    """
+    Get matchups for Sweet 16 (round 3) and Elite 8 (round 4) based on previous round selections.
+    Sweet 16: Winners of (1v16/8v9 vs 5v12/4v13) and (6v11/3v14 vs 7v10/2v15)
+    Elite 8: Winners of Sweet 16 games
+    """
     matchups = []
-    region_teams = teams[region]  # Get teams for specific region
+    region_teams = teams[region]
     
     # Calculate number of games in current round
     current_round_games = 2 ** (4 - round_num)  # 2 for Sweet 16, 1 for Elite 8
     
-    for i in range(0, current_round_games):
-        # For each game in current round, we need to look at two games from previous round
-        prev_round_game1 = i * 2
-        prev_round_game2 = i * 2 + 1
-        
-        prev_game1_id = f"{region.lower()}_round{round_num-1}_game_{prev_round_game1}"
-        prev_game2_id = f"{region.lower()}_round{round_num-1}_game_{prev_round_game2}"
+    # Define which previous round games pair up
+    game_pairs = [(i*2, i*2+1) for i in range(current_round_games)]
+    
+    for game1_idx, game2_idx in game_pairs:
+        prev_game1_id = f"{region.lower()}_round{round_num-1}_game_{game1_idx}"
+        prev_game2_id = f"{region.lower()}_round{round_num-1}_game_{game2_idx}"
         
         winner1 = get_game_winner(input, prev_game1_id)
         winner2 = get_game_winner(input, prev_game2_id)
@@ -101,7 +121,10 @@ def get_round_matchups(input, region: str, round_num: int) -> List[Tuple[Optiona
     return matchups
 
 def create_round_ui(input, region: str, round_num: int, matchups: List[Tuple[Dict, Dict]]) -> ui.div:
-    """Create UI for any round's games"""
+    """
+    Create UI for any round's games with higher seed selected by default,
+    while preserving user selections when possible.
+    """
     games = []
     for i, (team1, team2) in enumerate(matchups):
         game_id = f"{region.lower()}_round{round_num}_game_{i}"
@@ -112,14 +135,37 @@ def create_round_ui(input, region: str, round_num: int, matchups: List[Tuple[Dic
         if team2:
             choices[team2["Team"]] = f"({team2['Seed']}) {team2['Team']}"
         
-        game = ui.div(
-            {"class": "game-container"},
-            ui.input_radio_buttons(
-                game_id,
-                f"Game {i + 1}",
-                choices
-            ) if len(choices) == 2 else ui.p("Waiting for previous round selections...")
-        )
+        if len(choices) == 2:
+            # Try to get current selection (if any)
+            current_selection = None
+            try:
+                current_selection = input[game_id]()
+            except:
+                # No selection yet or other error
+                pass
+                
+            # If current selection exists and is still valid, keep it
+            if current_selection and current_selection in choices:
+                default_team = current_selection
+            else:
+                # Otherwise default to higher seed
+                default_team = team1["Team"] if team1["Seed"] < team2["Seed"] else team2["Team"]
+            
+            game = ui.div(
+                {"class": "game-container"},
+                ui.input_radio_buttons(
+                    game_id,
+                    f"Game {i + 1}",
+                    choices,
+                    selected=default_team
+                )
+            )
+        else:
+            game = ui.div(
+                {"class": "game-container"},
+                ui.p("Waiting for previous round selections...")
+            )
+        
         games.append(game)
     
     return ui.div(
@@ -128,10 +174,10 @@ def create_round_ui(input, region: str, round_num: int, matchups: List[Tuple[Dic
     )
 
 def get_final_four_matchups(input):
-    """Get Final Four matchups based on Elite Eight selections"""
+    """Get Final Four matchups based on Elite 8 selections"""
     winners = []
     for region in ["east", "west", "south", "midwest"]:
-        winner = get_game_winner(input, f"{region}_round4_game_0")  # Elite Eight winner
+        winner = get_game_winner(input, f"{region}_round4_game_0")  # Elite 8 winner
         if winner:
             winner_details = next((team for region_teams in teams.values() 
                                  for team in region_teams if team["Team"] == winner), None)
@@ -296,7 +342,7 @@ def server(input, output, session):
             #     "First Round": {},
             #     "Second Round": {},
             #     "Sweet 16": {},
-            #     "Elite Eight": {},
+            #     "Elite 8": {},
             #     "Final Four": {},
             #     "Championship": {}
             # }
@@ -304,12 +350,12 @@ def server(input, output, session):
                 "First Round": [],
                 "Second Round": [],
                 "Sweet 16": [],
-                "Elite Eight": [],
+                "Elite 8": [],
                 "Final Four": [],
                 "Championship": []
             }
             
-            # Check each region's games through Elite Eight
+            # Check each region's games through Elite 8
             for region in ["east", "west", "south", "midwest"]:
                 logger.debug(f"Checking {region} region")
                 
@@ -337,12 +383,12 @@ def server(input, output, session):
                         # selections["Sweet 16"][game_id] = winner
                         selections["Sweet 16"].append(winner)
                 
-                # Elite Eight (1 game)
+                # Elite 8 (1 game)
                 game_id = f"{region}_round4_game_0"
                 winner = get_game_winner(input, game_id)
                 if winner:
-                    # selections["Elite Eight"][game_id] = winner
-                    selections["Elite Eight"].append(winner)
+                    # selections["Elite 8"][game_id] = winner
+                    selections["Elite 8"].append(winner)
             
             # Final Four games
             for i in range(2):
