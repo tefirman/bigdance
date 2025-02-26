@@ -12,7 +12,7 @@
 from typing import List, Dict, Optional
 import pandas as pd
 from bigdance.wn_cbb_scraper import Standings
-from bigdance.cbb_brackets import Team, Bracket, Pool
+from bigdance.cbb_brackets import Game, Team, Bracket, Pool
 
 def create_teams_from_standings(standings: Standings, 
                               regions: Optional[Dict[str, str]] = None) -> List[Team]:
@@ -118,35 +118,80 @@ def create_bracket_with_picks(teams, picks_by_round):
     # Create initial bracket
     bracket = Bracket(teams)
     
-    # Set winners for each round
-    for round_name, winners in picks_by_round.items():
-        round_num = {
-            "First Round": 1,
-            "Second Round": 2,
-            "Sweet 16": 3,
-            "Elite 8": 4,
-            "Final Four": 5,
-            "Championship": 6
-        }[round_name]
-        
-        # Find games for this round
-        round_games = [g for g in bracket.games if g.round == round_num]
-        
-        # Set winners for each game
-        for game, winner_name in zip(round_games, winners):
-            # Find the winning team object
-            winner = None
-            if game.team1.name == winner_name:
-                winner = game.team1
-            elif game.team2.name == winner_name:
-                winner = game.team2
-            else:
-                raise ValueError(f"Winner {winner_name} not found in game between {game.team1.name} and {game.team2.name}")
-            
-            game.winner = winner
+    # Initialize results dictionary
+    bracket.results = {}
     
-    # Simulate to populate results dictionary and calculate log probability
-    bracket.simulate_tournament()
+    # Map round names to round numbers
+    round_nums = {
+        "First Round": 1,
+        "Second Round": 2,
+        "Sweet 16": 3,
+        "Elite 8": 4,
+        "Final Four": 5,
+        "Championship": 6
+    }
+    
+    # Working set of games for each round
+    current_round_games = bracket.games  # Start with first round games
+    
+    # Process each round in sequence
+    for round_name in ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]:
+        if round_name not in picks_by_round:
+            continue
+            
+        round_num = round_nums[round_name]
+        winners_for_round = []
+        next_round_games = []
+        
+        # Filter to games for the current round
+        if round_name == "First Round":
+            current_round_games = bracket.games  # These are all first round games from initialization
+        
+        # For each game in the current round, set the winner
+        for i, game in enumerate(current_round_games):
+            if i >= len(picks_by_round[round_name]):
+                break  # Not enough picks for this round
+                
+            winner_name = picks_by_round[round_name][i]
+            
+            # Find the team object for this winner
+            winner = None
+            if game.team1 and game.team1.name == winner_name:
+                winner = game.team1
+            elif game.team2 and game.team2.name == winner_name:
+                winner = game.team2
+            
+            if winner:
+                game.winner = winner
+                winners_for_round.append(winner)
+            
+        # Store the winners for this round in the results dictionary
+        bracket.results[round_name] = winners_for_round
+        
+        # Special case for championship
+        if round_name == "Championship" and winners_for_round:
+            bracket.results["Champion"] = winners_for_round[0]
+        
+        # Create next round matchups for subsequent rounds
+        if len(winners_for_round) > 1:
+            for j in range(0, len(winners_for_round), 2):
+                if j + 1 < len(winners_for_round):
+                    team1, team2 = winners_for_round[j], winners_for_round[j + 1]
+                    
+                    # Create a game for the next round
+                    next_game = Game(
+                        team1=team1,
+                        team2=team2,
+                        round=round_num + 1,
+                        region=team1.region if team1.region == team2.region else "Final Four"
+                    )
+                    next_round_games.append(next_game)
+        
+        # Update current games for the next iteration
+        current_round_games = next_round_games
+    
+    # Calculate log probability for this bracket
+    bracket.log_probability = bracket.calculate_log_probability()
     
     return bracket
 

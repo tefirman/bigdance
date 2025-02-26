@@ -162,12 +162,13 @@ class Bracket:
         # Create next round matchups
         if len(winners) > 1:  # Not championship game
             for i in range(0, len(winners), 2):
-                next_games.append(Game(
+                next_game = Game(
                     team1=winners[i],
                     team2=winners[i+1],
                     round=games[0].round + 1,
                     region=winners[i].region if winners[i].region == winners[i+1].region else "Final Four"
-                ))
+                )
+                next_games.append(next_game)
         
         return next_games
 
@@ -182,27 +183,69 @@ class Bracket:
             return float('inf')
             
         total_log_prob = 0
-        for round_name in ["First Round", "Second Round", "Sweet 16", 
-                          "Elite 8", "Final Four", "Championship"]:
+        round_names = {
+            1: "First Round", 
+            2: "Second Round", 
+            3: "Sweet 16",
+            4: "Elite 8", 
+            5: "Final Four", 
+            6: "Championship"
+        }
+        
+        # Track teams that advance from each round to calculate probabilities
+        round_outcomes = {}
+        
+        # First round probabilities from initial games
+        if "First Round" in self.results:
+            first_round_winners = {team.name: team for team in self.results["First Round"]}
+            for game in self.games:  # This only contains first round games from initialization
+                if game.winner and game.winner.name in first_round_winners:
+                    prob = self.calculate_game_probability(game)
+                    total_log_prob += -np.log(prob)
+                    # Track teams for next rounds
+                    round_outcomes[(game.team1.name, game.team2.name)] = game.winner
+                    
+        # Calculate probabilities for subsequent rounds using results dictionary
+        for round_num in range(2, 7):
+            round_name = round_names[round_num]
             if round_name not in self.results:
                 continue
                 
-            # Find games from this round
-            round_num = {"First Round": 1, "Second Round": 2, "Sweet 16": 3,
-                        "Elite 8": 4, "Final Four": 5, "Championship": 6}[round_name]
-            round_games = [g for g in self.games if g.round == round_num and g.winner]
+            round_winners = {team.name: team for team in self.results[round_name]}
+            prev_round_name = round_names[round_num - 1]
+            prev_winners = self.results.get(prev_round_name, [])
             
-            # Sum log probabilities for each game
-            for game in round_games:
-                prob = self.calculate_game_probability(game)
-                total_log_prob += -np.log(prob)
-                
+            # Create matchups from previous round winners
+            for i in range(0, len(prev_winners), 2):
+                if i + 1 < len(prev_winners):
+                    team1, team2 = prev_winners[i], prev_winners[i + 1]
+                    
+                    # Create a temporary game to calculate probability
+                    temp_game = Game(
+                        team1=team1,
+                        team2=team2,
+                        round=round_num,
+                        region=team1.region if team1.region == team2.region else "Final Four"
+                    )
+                    
+                    # Determine winner based on results
+                    if team1.name in round_winners:
+                        temp_game.winner = team1
+                    elif team2.name in round_winners:
+                        temp_game.winner = team2
+                    
+                    if temp_game.winner:
+                        prob = self.calculate_game_probability(temp_game)
+                        total_log_prob += -np.log(prob)
+        
         return total_log_prob
 
     def simulate_tournament(self) -> Dict[str, List[Team]]:
         """Simulate entire tournament and store results"""
         self.results = {}  # Reset results
-        current_games = self.games.copy()
+        
+        # Use only first round games from the initial setup
+        current_games = self.games.copy()  # These are all first round games from initialization
         
         # First round
         for game in current_games:
@@ -234,12 +277,20 @@ class Pool:
     def __init__(self, actual_results: Bracket):
         """Initialize pool with actual tournament results for comparison"""
         self.actual_results = actual_results
-        self.entries: List[Tuple[str, Bracket]] = []
+        self.entries: List[Tuple[str, Bracket, bool]] = []  # name, bracket, simulate_flag
         self.actual_tournament = None  # Store the one true tournament outcome
         
-    def add_entry(self, name: str, bracket: Bracket):
-        """Add new bracket entry to pool"""
-        self.entries.append((name, bracket))
+    def add_entry(self, name: str, bracket: Bracket, simulate: bool = True):
+        """
+        Add new bracket entry to pool
+        
+        Args:
+            name: Entry name
+            bracket: Bracket to add
+            simulate: Whether to simulate this bracket during pool simulation (default: True)
+                      Set to False for user-picked brackets that should be preserved
+        """
+        self.entries.append((name, bracket, simulate))
         
     def score_bracket(self, entry_results: Dict[str, List[Team]], round_values: Dict[str, int] = None) -> int:
         """
@@ -290,10 +341,24 @@ class Pool:
             self.actual_tournament = self.actual_results.simulate_tournament()
             
             scores = []
-            for name, entry in self.entries:
-                entry_results = entry.simulate_tournament()
-                score = self.score_bracket(entry_results)  # Pass in already simulated results
+            for name, entry, should_simulate in self.entries:
+                if should_simulate:
+                    # Simulate this entry - typically for computer-generated entries
+                    entry_results = entry.simulate_tournament()
+                else:
+                    # Don't re-simulate - typically for user entries with fixed picks
+                    # Just use the existing results
+                    entry_results = entry.results
+                    
+                    # If the entry hasn't been simulated yet, do it once
+                    if not entry_results:
+                        entry_results = entry.simulate_tournament()
+                
+                score = self.score_bracket(entry_results)
                 scores.append({"name": name, "score": score})
+
+                if name == "Your Bracket":
+                    print(entry.log_probability)
                 
             # Find winner(s)
             scores_df = pd.DataFrame(scores)
@@ -343,7 +408,6 @@ def main():
     
     # Create actual tournament results
     actual_bracket = Bracket(teams)
-    actual_results = actual_bracket.simulate_tournament()
     
     # Create pool with multiple entries
     pool = Pool(actual_bracket)

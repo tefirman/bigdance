@@ -222,10 +222,6 @@ class BracketAnalysis:
         if not hasattr(self, 'all_log_probs'):
             raise ValueError("Must run simulations before analyzing likelihoods")
             
-        probs_df = pd.DataFrame({
-            'log_probability': self.all_log_probs
-        })
-        
         # Calculate summary statistics
         summary = {
             'mean_log_prob': np.mean(self.all_log_probs),
@@ -236,14 +232,6 @@ class BracketAnalysis:
             'q25_log_prob': np.percentile(self.all_log_probs, 25),
             'q75_log_prob': np.percentile(self.all_log_probs, 75)
         }
-        
-        # # Add interpretation
-        # summary['interpretation'] = (
-        #     f"Winning brackets tend to have log probabilities "
-        #     f"between {summary['q25_log_prob']:.1f} and {summary['q75_log_prob']:.1f}. "
-        #     f"The median is {summary['median_log_prob']:.1f}. "
-        #     f"Lower values indicate more likely brackets."
-        # )
         
         return pd.DataFrame([summary])
 
