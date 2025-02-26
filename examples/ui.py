@@ -153,7 +153,7 @@ app_ui = ui.page_fluid(
                 ui.input_select(
                     "num_sims",
                     "Number of Simulations:",
-                    [100, 500, 1000]
+                    [1000, 5000, 10000]
                 ),
                 ui.input_action_button(
                     "simulate", 

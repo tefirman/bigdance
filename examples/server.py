@@ -396,9 +396,9 @@ def server(input, output, session):
             # Create a new pool with the actual tournament results
             pool = Pool(actual_bracket)
             
-            # Add user's bracket to the pool
-            pool.add_entry("Your Bracket", my_bracket)
-            
+            # Add user's bracket to the pool, setting simulate=False to preserve user picks
+            pool.add_entry("Your Bracket", my_bracket, simulate=False)
+
             # Add computer-generated entries with varying upset factors
             num_entries = int(input.num_entries())
             num_sims = int(input.num_sims())
@@ -413,6 +413,7 @@ def server(input, output, session):
                     game.upset_factor = upset_factor
                     
                 entry_name = f"Entry_{i+1}"
+                # These entries will be simulated normally
                 pool.add_entry(entry_name, entry_bracket)
             
             # Simulate pool
