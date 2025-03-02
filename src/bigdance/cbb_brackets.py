@@ -71,6 +71,7 @@ class Bracket:
     games: List[Game] = field(default_factory=list)
     results: Dict[str, List[Team]] = field(default_factory=dict)
     log_probability: float = float('inf')  # Initialize to infinity
+    log_probability_by_round: Dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
         """Called after dataclass auto-generated __init__"""
@@ -192,18 +193,27 @@ class Bracket:
             6: "Championship"
         }
         
+        # Initialize log probabilities by round
+        self.log_probability_by_round = {round_name: 0.0 for round_name in round_names.values()}
+        
         # Track teams that advance from each round to calculate probabilities
         round_outcomes = {}
         
         # First round probabilities from initial games
         if "First Round" in self.results:
             first_round_winners = {team.name: team for team in self.results["First Round"]}
+            round_log_prob = 0.0  # Track log probability for this round
             for game in self.games:  # This only contains first round games from initialization
                 if game.winner and game.winner.name in first_round_winners:
                     prob = self.calculate_game_probability(game)
-                    total_log_prob += -np.log(prob)
+                    game_log_prob = -np.log(prob)
+                    round_log_prob += game_log_prob  # Add to round total
+                    total_log_prob += game_log_prob
                     # Track teams for next rounds
                     round_outcomes[(game.team1.name, game.team2.name)] = game.winner
+            
+            # Store log probability for this round
+            self.log_probability_by_round["First Round"] = round_log_prob
                     
         # Calculate probabilities for subsequent rounds using results dictionary
         for round_num in range(2, 7):
@@ -214,6 +224,8 @@ class Bracket:
             round_winners = {team.name: team for team in self.results[round_name]}
             prev_round_name = round_names[round_num - 1]
             prev_winners = self.results.get(prev_round_name, [])
+            
+            round_log_prob = 0.0  # Track log probability for this round
             
             # Create matchups from previous round winners
             for i in range(0, len(prev_winners), 2):
@@ -236,7 +248,12 @@ class Bracket:
                     
                     if temp_game.winner:
                         prob = self.calculate_game_probability(temp_game)
-                        total_log_prob += -np.log(prob)
+                        game_log_prob = -np.log(prob)
+                        round_log_prob += game_log_prob  # Add to round total
+                        total_log_prob += game_log_prob
+            
+            # Store log probability for this round
+            self.log_probability_by_round[round_name] = round_log_prob
         
         return total_log_prob
 
@@ -336,6 +353,13 @@ class Pool:
         """
         results = []
         
+        # NEW: Additional data to track
+        round_log_probs = {
+            entry_name: {
+                round_name: [] for round_name in ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+            } for entry_name, _, _ in self.entries
+        }
+        
         for sim in range(num_sims):
             # Simulate actual tournament once per simulation
             self.actual_tournament = self.actual_results.simulate_tournament()
@@ -356,10 +380,11 @@ class Pool:
                 
                 score = self.score_bracket(entry_results)
                 scores.append({"name": name, "score": score})
-
-                if name == "Your Bracket":
-                    print(entry.log_probability)
                 
+                # NEW: Record per-round log probabilities 
+                for round_name, log_prob in entry.log_probability_by_round.items():
+                    round_log_probs[name][round_name].append(log_prob)
+            
             # Find winner(s)
             scores_df = pd.DataFrame(scores)
             max_score = scores_df["score"].max()
@@ -374,7 +399,7 @@ class Pool:
                     "score": scores_df[scores_df["name"] == name]["score"].iloc[0],
                     "win_share": win_share
                 })
-                
+        
         # Aggregate results
         results_df = pd.DataFrame(results)
         summary = results_df.groupby("name").agg({
@@ -384,6 +409,13 @@ class Pool:
         
         summary.columns = ["name", "avg_score", "std_score", "wins"]
         summary["win_pct"] = summary["wins"] / num_sims
+        
+        # NEW: Add per-round log probability statistics to the summary
+        for round_name in ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]:
+            summary[f"{round_name}_avg_log_prob"] = [
+                np.mean(round_log_probs[name][round_name]) if round_log_probs[name][round_name] else np.nan
+                for name in summary["name"]
+            ]
         
         return summary.sort_values("win_pct", ascending=False, ignore_index=True)
 

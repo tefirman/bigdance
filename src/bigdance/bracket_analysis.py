@@ -56,6 +56,9 @@ class BracketAnalysis:
         # Track log probabilities for all entries
         self.all_log_probs = []
         
+        # NEW: Track log probabilities by round for all winning entries
+        self.log_probs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
+        
         # Track upsets per round for all winning entries
         self.upsets_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
         
@@ -84,10 +87,15 @@ class BracketAnalysis:
             # Store winning entry's results and log probability
             winning_entry = pool_results.iloc[0]['name']
             winning_bracket = [entry[1] for entry in pool.entries 
-                             if entry[0] == winning_entry][0]
+                            if entry[0] == winning_entry][0]
             winning_results = winning_bracket.simulate_tournament()
             self.winning_results.append(winning_results)
             self.all_log_probs.append(winning_bracket.log_probability)
+            
+            # NEW: Store per-round log probabilities for the winning entry
+            for round_name, log_prob in winning_bracket.log_probability_by_round.items():
+                if round_name in self.log_probs_by_round:
+                    self.log_probs_by_round[round_name].append(log_prob)
             
             # Count upsets by round and append to tracking data
             for round_name, teams in winning_results.items():
@@ -291,15 +299,15 @@ class BracketAnalysis:
     
     def plot_log_probability_by_round(self, save: bool = True) -> plt.Figure:
         """
-        Plot distributions of log probabilities per round
+        Plot distributions of log probabilities per round using directly tracked values
         
         Args:
             save (bool): Whether to save plots to files
-                
+                    
         Returns:
             Figure object for the combined plots
         """
-        if not hasattr(self, 'winning_results'):
+        if not hasattr(self, 'log_probs_by_round'):
             raise ValueError("Must run simulations before plotting log probabilities by round")
         
         # Create a single figure with multiple subplots
@@ -309,90 +317,13 @@ class BracketAnalysis:
         # Flatten axes for easier iteration
         axes = axes.flatten()
         
-        # Calculate log probabilities by round
-        log_probs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
-        
-        for results in self.winning_results:
-            # Track previous round winners to calculate matchups
-            prev_round_winners = []
-            
-            for i, round_name in enumerate(self.ROUND_ORDER):
-                if round_name == "First Round":
-                    # First round games come from the initial bracket setup
-                    # We need to match these with the results
-                    round_winners = results.get(round_name, [])
-                    winner_names = {team.name for team in round_winners}
-                    
-                    # Calculate log probabilities for first round games
-                    round_log_probs = []
-                    
-                    # This requires accessing the original bracket games
-                    # We'll use the actual tournament bracket from the pool
-                    for pool in self.pools:
-                        for game in pool.actual_results.games:
-                            if game.winner and game.winner.name in winner_names:
-                                # Calculate and store probability
-                                prob = 1 / (1 + 10**((game.team2.rating - game.team1.rating)/400))
-                                if game.winner.name == game.team2.name:
-                                    prob = 1 - prob
-                                if prob > 0:  # Avoid log(0)
-                                    round_log_probs.append(-np.log(prob))
-                        
-                        # Only need to process one pool's games
-                        break
-                    
-                    if round_log_probs:
-                        log_probs_by_round[round_name].extend(round_log_probs)
-                    
-                    # Set up for next round
-                    prev_round_winners = round_winners
-                    
-                elif round_name != "Champion" and round_name in results:
-                    # Get current round winners
-                    round_winners = results.get(round_name, [])
-                    if not round_winners or not prev_round_winners:
-                        continue
-                        
-                    # Create matchups from previous round winners
-                    round_log_probs = []
-                    
-                    # Create temporary games and calculate probabilities
-                    for i in range(0, len(prev_round_winners), 2):
-                        if i + 1 < len(prev_round_winners):
-                            team1, team2 = prev_round_winners[i], prev_round_winners[i + 1]
-                            
-                            # Find the winner of this matchup in the current round
-                            winner = None
-                            for team in round_winners:
-                                if team.name == team1.name or team.name == team2.name:
-                                    winner = team
-                                    break
-                            
-                            if winner:
-                                # Calculate probability
-                                prob = 1 / (1 + 10**((team2.rating - team1.rating)/400))
-                                if winner.name == team2.name:
-                                    prob = 1 - prob
-                                if prob > 0:
-                                    round_log_probs.append(-np.log(prob))
-                    
-                    if round_log_probs:
-                        log_probs_by_round[round_name].extend(round_log_probs)
-                    
-                    # Set up for next round
-                    prev_round_winners = round_winners
-        
-        # Plot each round
-        for i, round_name in enumerate(self.ROUND_ORDER):
-            # Skipping Final Four and Championship for better visualization
-            if round_name in ["Final Four", "Championship"]:
-                continue
-                
-            if round_name in log_probs_by_round and len(log_probs_by_round[round_name]) > 0:
+        # Plot the first 4 rounds
+        for i, round_name in enumerate(self.ROUND_ORDER[:4]):  # First 4 rounds only
+            if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
                 ax = axes[i]
                 
                 # Get data for this round
-                data = log_probs_by_round[round_name]
+                data = self.log_probs_by_round[round_name]
                 
                 # Plot histogram
                 sns.histplot(data, ax=ax, kde=True, bins=30, stat="density")
@@ -420,6 +351,60 @@ class BracketAnalysis:
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         if save:
             fig.savefig(self.output_dir / "log_probabilities_by_round.png", dpi=300, bbox_inches='tight')
+        
+        return fig
+
+    def plot_final_rounds_log_probability(self, save: bool = True) -> plt.Figure:
+        """
+        Plot distributions of log probabilities for Final Four and Championship rounds
+        
+        Args:
+            save (bool): Whether to save plots to files
+                    
+        Returns:
+            Figure object for the final rounds plots
+        """
+        if not hasattr(self, 'log_probs_by_round'):
+            raise ValueError("Must run simulations before plotting log probabilities")
+        
+        # Create a figure with 2 subplots
+        fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+        fig.suptitle("Distribution of Log Probabilities for Final Rounds", fontsize=16)
+        
+        # Plot Final Four and Championship
+        for i, round_name in enumerate(["Final Four", "Championship"]):
+            if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
+                ax = axes[i]
+                
+                # Get data for this round
+                data = self.log_probs_by_round[round_name]
+                
+                # Plot histogram
+                sns.histplot(data, ax=ax, kde=True, bins=30, stat="density")
+                
+                # Add mean line
+                mean_value = np.mean(data)
+                ax.axvline(mean_value, color='red', linestyle='--', 
+                        label=f'Mean: {mean_value:.2f}')
+                
+                # Add percentile lines
+                q25 = np.percentile(data, 25)
+                q75 = np.percentile(data, 75)
+                ax.axvline(q25, color='green', linestyle=':', 
+                        label=f'25th percentile: {q25:.2f}')
+                ax.axvline(q75, color='orange', linestyle=':', 
+                        label=f'75th percentile: {q75:.2f}')
+                
+                # Customize plot
+                ax.set_title(f"{round_name}")
+                ax.set_xlabel("Negative Log Probability (lower is more likely)")
+                ax.set_ylabel("Density")
+                ax.legend()
+        
+        # Adjust layout and save figure
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        if save:
+            fig.savefig(self.output_dir / "final_rounds_log_probabilities.png", dpi=300, bbox_inches='tight')
         
         return fig
 
@@ -602,11 +587,57 @@ class BracketAnalysis:
         
         return summary_df
 
+    def analyze_round_log_probabilities(self) -> pd.DataFrame:
+        """
+        Analyze log probability statistics by round
+        
+        Returns:
+            DataFrame containing log probability statistics by round
+        """
+        if not hasattr(self, 'log_probs_by_round'):
+            raise ValueError("Must run simulations before analyzing log probabilities by round")
+        
+        stats = []
+        for round_name in self.ROUND_ORDER:
+            if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
+                data = self.log_probs_by_round[round_name]
+                stats.append({
+                    'round': round_name,
+                    'avg_log_prob': np.mean(data),
+                    'std_log_prob': np.std(data),
+                    'min_log_prob': np.min(data),
+                    'q25_log_prob': np.percentile(data, 25),
+                    'median_log_prob': np.median(data),
+                    'q75_log_prob': np.percentile(data, 75),
+                    'max_log_prob': np.max(data),
+                    'total_games': len(data)
+                })
+        
+        # Convert to DataFrame
+        stats_df = pd.DataFrame(stats)
+        
+        # Sort by predefined round order
+        stats_df['round_order'] = stats_df['round'].map({round_name: i for i, round_name in enumerate(self.ROUND_ORDER)})
+        stats_df = stats_df.sort_values('round_order').drop('round_order', axis=1)
+        
+        # Save to CSV
+        stats_df.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
+        
+        return stats_df
+
     def save_all_data(self):
         """Save all analysis data to CSV files"""
         if hasattr(self, 'all_log_probs'):
             pd.DataFrame({'log_probability': self.all_log_probs}).to_csv(
                 self.output_dir / "log_probability_data.csv", index=False)
+        
+        if hasattr(self, 'log_probs_by_round'):
+            # Save per-round log probabilities
+            log_probs_df = pd.DataFrame({
+                round_name: self.log_probs_by_round.get(round_name, [])
+                for round_name in self.ROUND_ORDER
+            })
+            log_probs_df.to_csv(self.output_dir / "log_probabilities_by_round_data.csv", index=False)
         
         if hasattr(self, 'upsets_by_round'):
             pd.DataFrame(self.upsets_by_round).to_csv(
@@ -618,6 +649,11 @@ class BracketAnalysis:
         # Save upset statistics
         upset_stats = self.analyze_upsets()
         upset_stats.to_csv(self.output_dir / "upset_statistics.csv", index=False)
+        
+        # Save round log probability statistics
+        if hasattr(self, 'log_probs_by_round'):
+            round_log_stats = self.analyze_round_log_probabilities()
+            round_log_stats.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
 
 def main():
     """Example usage of bracket analysis"""
@@ -639,6 +675,7 @@ def main():
     
     # Generate original plots
     analyzer.plot_upset_distributions()
+    analyzer.plot_final_rounds_log_probability()
     analyzer.plot_log_probability_distribution()
     
     # Generate new plots
