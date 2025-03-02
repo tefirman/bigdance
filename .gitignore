@@ -22,6 +22,7 @@ wheels/
 *.egg
 **/.pytest_cache/
 **/logs/
+**/bracket_analysis_output/
 .coverage
 htmlcov/
 cookies.txt
