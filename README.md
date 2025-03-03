@@ -1,6 +1,6 @@
 <table>
 <tr>
-  <td><img src="assets/DancingHex.png" width="400" alt="bigdance logo"></td>
+  <td><img src="https://github.com/tefirman/bigdance/blob/main/assets/DancingHex.png?raw=true" width="400" alt="bigdance logo"></td>
   <td>
     <h1>bigdance</h1>
     A Python package for NCAA March Madness bracket simulation combining real-time ratings from Warren Nolan with customizable tournament simulations.
