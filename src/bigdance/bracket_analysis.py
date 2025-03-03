@@ -297,12 +297,12 @@ class BracketAnalysis:
         
         return fig
     
-    def plot_log_probability_by_round(self, save: bool = True) -> plt.Figure:
+    def plot_all_rounds_log_probability(self, save: bool = True) -> plt.Figure:
         """
-        Plot distributions of log probabilities per round using directly tracked values
+        Plot distributions of log probabilities for all tournament rounds in a single 3x2 grid
         
         Args:
-            save (bool): Whether to save plots to files
+            save (bool): Whether to save plot to file
                     
         Returns:
             Figure object for the combined plots
@@ -310,15 +310,15 @@ class BracketAnalysis:
         if not hasattr(self, 'log_probs_by_round'):
             raise ValueError("Must run simulations before plotting log probabilities by round")
         
-        # Create a single figure with multiple subplots
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        # Create a single figure with a 3x2 grid of subplots
+        fig, axes = plt.subplots(3, 2, figsize=(15, 18))
         fig.suptitle("Distribution of Log Probabilities by Tournament Round", fontsize=16)
         
         # Flatten axes for easier iteration
         axes = axes.flatten()
         
-        # Plot the first 4 rounds
-        for i, round_name in enumerate(self.ROUND_ORDER[:4]):  # First 4 rounds only
+        # Plot each round
+        for i, round_name in enumerate(self.ROUND_ORDER):  # All 6 rounds
             if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
                 ax = axes[i]
                 
@@ -350,61 +350,7 @@ class BracketAnalysis:
         # Adjust layout and save combined figure
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         if save:
-            fig.savefig(self.output_dir / "log_probabilities_by_round.png", dpi=300, bbox_inches='tight')
-        
-        return fig
-
-    def plot_final_rounds_log_probability(self, save: bool = True) -> plt.Figure:
-        """
-        Plot distributions of log probabilities for Final Four and Championship rounds
-        
-        Args:
-            save (bool): Whether to save plots to files
-                    
-        Returns:
-            Figure object for the final rounds plots
-        """
-        if not hasattr(self, 'log_probs_by_round'):
-            raise ValueError("Must run simulations before plotting log probabilities")
-        
-        # Create a figure with 2 subplots
-        fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-        fig.suptitle("Distribution of Log Probabilities for Final Rounds", fontsize=16)
-        
-        # Plot Final Four and Championship
-        for i, round_name in enumerate(["Final Four", "Championship"]):
-            if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
-                ax = axes[i]
-                
-                # Get data for this round
-                data = self.log_probs_by_round[round_name]
-                
-                # Plot histogram
-                sns.histplot(data, ax=ax, kde=True, bins=30, stat="density")
-                
-                # Add mean line
-                mean_value = np.mean(data)
-                ax.axvline(mean_value, color='red', linestyle='--', 
-                        label=f'Mean: {mean_value:.2f}')
-                
-                # Add percentile lines
-                q25 = np.percentile(data, 25)
-                q75 = np.percentile(data, 75)
-                ax.axvline(q25, color='green', linestyle=':', 
-                        label=f'25th percentile: {q25:.2f}')
-                ax.axvline(q75, color='orange', linestyle=':', 
-                        label=f'75th percentile: {q75:.2f}')
-                
-                # Customize plot
-                ax.set_title(f"{round_name}")
-                ax.set_xlabel("Negative Log Probability (lower is more likely)")
-                ax.set_ylabel("Density")
-                ax.legend()
-        
-        # Adjust layout and save figure
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
-        if save:
-            fig.savefig(self.output_dir / "final_rounds_log_probabilities.png", dpi=300, bbox_inches='tight')
+            fig.savefig(self.output_dir / "all_rounds_log_probabilities.png", dpi=300, bbox_inches='tight')
         
         return fig
 
@@ -675,11 +621,8 @@ def main():
     
     # Generate original plots
     analyzer.plot_upset_distributions()
-    analyzer.plot_final_rounds_log_probability()
+    analyzer.plot_all_rounds_log_probability()
     analyzer.plot_log_probability_distribution()
-    
-    # Generate new plots
-    analyzer.plot_log_probability_by_round()
     analyzer.plot_total_upsets_distribution()
     
     # Print various analyses
