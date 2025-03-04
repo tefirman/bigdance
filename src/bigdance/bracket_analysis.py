@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from pathlib import Path
+import argparse
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -603,18 +604,30 @@ class BracketAnalysis:
 
 def main():
     """Example usage of bracket analysis"""
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Analyze March Madness bracket pool simulations')
+    parser.add_argument('--num_pools', type=int, default=1000,
+                        help='Number of pools to simulate')
+    parser.add_argument('--entries_per_pool', type=int, default=10,
+                        help='Number of entries per pool')
+    parser.add_argument('--women', action='store_true',
+                        help='Whether to use women\'s basketball data instead of men\'s')
+    args = parser.parse_args()
+
     # Get current standings
-    standings = Standings()
+    standings = Standings(women=args.women)
     
     # Set up output directory
-    output_dir = "bracket_analysis_output"
+    gender = "women" if args.women else "men"
+    output_dir = f"bracket_analysis_{args.entries_per_pool}entries_{gender}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Initialize analyzer with output directory
-    analyzer = BracketAnalysis(standings, num_pools=1000, output_dir=output_dir)
+    print(f"Starting analysis for {args.entries_per_pool} entries over {args.num_pools} pools")
+    analyzer = BracketAnalysis(standings, num_pools=args.num_pools, output_dir=output_dir)
     
     # Run simulations
-    analyzer.simulate_pools(entries_per_pool=10)
+    analyzer.simulate_pools(entries_per_pool=args.entries_per_pool)
     
     # Save all data and generate plots
     analyzer.save_all_data()
