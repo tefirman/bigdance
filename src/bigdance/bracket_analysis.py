@@ -409,44 +409,54 @@ class BracketAnalysis:
     def find_common_underdogs(self) -> pd.DataFrame:
         """
         Identify most common upset teams by round, where an upset is defined
-        as a team advancing further than their seed traditionally would.
+        as a team advancing through a round despite having a seed lower than typically expected.
         
-        Expected seeds by round:
-        - First Round: All seeds (no upsets possible)
-        - Second Round: Seeds 1-8
-        - Sweet 16: Seeds 1-4
-        - Elite 8: Seeds 1-2
-        - Final Four: Seeds 1
-        - Championship: Seeds 1
+        Teams that make it through each round (i.e., appear in the next round):
+        - First Round: Teams with seeds 1-8 typically advance (9-16 would be upsets)
+        - Second Round: Teams with seeds 1-4 typically advance (5-16 would be upsets)
+        - Sweet 16: Teams with seeds 1-2 typically advance (3-16 would be upsets)
+        - Elite 8: Teams with seed 1 typically advance (2-16 would be upsets)
+        - Final Four: Teams with seed 1 typically advance (2-16 would be upsets)
         
         Returns:
-            DataFrame containing most frequent upset teams, grouped by round
+            DataFrame containing most frequent upset teams, grouped by round they advanced from
         """
-        # Define expected maximum seed for each round
+        # Define expected maximum seed that should advance through each round
+        # Any team with a higher seed than this advancing is considered an underdog
         EXPECTED_MAX_SEEDS = {
-            "First Round": 16,
-            "Second Round": 8,
-            "Sweet 16": 4,
-            "Elite 8": 2,
-            "Final Four": 1,
-            "Championship": 1
+            "First Round": 8,    # Teams advancing through First Round to Second Round
+            "Second Round": 4,   # Teams advancing through Second Round to Sweet 16
+            "Sweet 16": 2,       # Teams advancing through Sweet 16 to Elite 8
+            "Elite 8": 1,        # Teams advancing through Elite 8 to Final Four
+            "Final Four": 1      # Teams advancing through Final Four to Championship
+        }
+        
+        # Map round names to the next round they advance to
+        NEXT_ROUND = {
+            "First Round": "Second Round",
+            "Second Round": "Sweet 16",
+            "Sweet 16": "Elite 8",
+            "Elite 8": "Final Four",
+            "Final Four": "Championship"
         }
         
         upset_counts = defaultdict(int)
         
-        for results in self.winning_results:  # Now using stored results
-            for round_name, teams in results.items():
-                if round_name != "Champion":
-                    expected_max_seed = EXPECTED_MAX_SEEDS[round_name]
-                    for team in teams:
+        for results in self.winning_results:  # Using stored results
+            for round_name, expected_max_seed in EXPECTED_MAX_SEEDS.items():
+                next_round = NEXT_ROUND.get(round_name)
+                if next_round and next_round in results:
+                    for team in results[next_round]:
                         if team.seed > expected_max_seed:
+                            # This team is an underdog that advanced through the previous round
                             key = (round_name, team.seed, team.name)
                             upset_counts[key] += 1
         
         # Convert to DataFrame
         upsets_df = pd.DataFrame([
             {
-                'round': round_name,
+                'advanced_through': round_name,
+                'to_reach': NEXT_ROUND.get(round_name, "N/A"),
                 'seed': seed,
                 'team': team,
                 'frequency': count / self.num_pools
@@ -455,10 +465,10 @@ class BracketAnalysis:
         ])
         
         if upsets_df.empty:
-            return pd.DataFrame(columns=['round', 'seed', 'team', 'frequency'])
+            return pd.DataFrame(columns=['advanced_through', 'to_reach', 'seed', 'team', 'frequency'])
         
         # Sort chronologically by round, then by frequency within each round
-        upsets_df['round_order'] = upsets_df['round'].map(
+        upsets_df['round_order'] = upsets_df['advanced_through'].map(
             {round_name: i for i, round_name in enumerate(self.ROUND_ORDER)}
         )
         upsets_df = upsets_df.sort_values(
@@ -466,7 +476,6 @@ class BracketAnalysis:
             ascending=[True, False]
         )
         upsets_df = upsets_df.drop('round_order', axis=1)
-        upsets_df.rename(columns={"round":"make_it_to"},inplace=True)
         
         # Save data
         upsets_df.to_csv(self.output_dir / "common_underdogs.csv", index=False)
@@ -643,7 +652,7 @@ def main():
     print(analyzer.analyze_upsets().to_string(index=False))
     
     print("\nMost Common Underdogs:")
-    print(analyzer.find_common_underdogs().groupby("make_it_to").head(10).to_string(index=False))
+    print(analyzer.find_common_underdogs().groupby("advanced_through").head(10).to_string(index=False))
     
     print("\nChampionship Pick Analysis:")
     print(analyzer.analyze_champion_picks().head(10).to_string(index=False))
