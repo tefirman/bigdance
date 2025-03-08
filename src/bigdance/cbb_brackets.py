@@ -72,6 +72,7 @@ class Bracket:
     results: Dict[str, List[Team]] = field(default_factory=dict)
     log_probability: float = float('inf')  # Initialize to infinity
     log_probability_by_round: Dict[str, float] = field(default_factory=dict)
+    underdogs_by_round: Dict[str, List[Team]] = field(default_factory=dict)
 
     def __post_init__(self):
         """Called after dataclass auto-generated __init__"""
@@ -257,9 +258,83 @@ class Bracket:
         
         return total_log_prob
 
+    def is_underdog(self, team: Team, round_name: str) -> bool:
+        """
+        Determine if a team is considered an underdog based on seeding expectations for the round.
+        
+        Args:
+            team: Team to evaluate
+            round_name: Tournament round name
+            
+        Returns:
+            True if the team is an underdog for this round, False otherwise
+        """
+        seed_thresholds = {
+            "First Round": 8,     # Seeds 9-16 are underdogs
+            "Second Round": 4,    # Seeds 5-16 are underdogs
+            "Sweet 16": 2,        # Seeds 3-16 are underdogs
+            "Elite 8": 1,         # Seeds 2-16 are underdogs
+            "Final Four": 1,      # Seeds 2-16 are underdogs
+            "Championship": 1     # Seeds 2-16 are underdogs
+        }
+        
+        threshold = seed_thresholds.get(round_name, 1)
+        return team.seed > threshold
+
+    def identify_underdogs(self) -> Dict[str, List[Team]]:
+        """
+        Identify underdog teams in all rounds of bracket results.
+        An underdog is defined as a team with a seed lower than typically expected
+        for advancement in a given round.
+        
+        Returns:
+            Dictionary mapping round names to lists of underdog teams
+        """
+        if not self.results:
+            return {}
+            
+        underdogs = {}
+        
+        # Check each round
+        for round_name, teams in self.results.items():
+            if round_name == "Champion":
+                continue  # Skip the single champion result
+                
+            round_underdogs = [team for team in teams if self.is_underdog(team, round_name)]
+            if round_underdogs:
+                underdogs[round_name] = round_underdogs
+                
+        self.underdogs_by_round = underdogs
+        return underdogs
+        
+    def count_underdogs_by_round(self) -> Dict[str, int]:
+        """
+        Count the number of underdogs in each round.
+        
+        Returns:
+            Dictionary mapping round names to count of underdogs
+        """
+        if not self.underdogs_by_round and self.results:
+            self.identify_underdogs()
+            
+        return {round_name: len(teams) for round_name, teams in self.underdogs_by_round.items()}
+    
+    def total_underdogs(self) -> int:
+        """
+        Count the total number of underdogs across all rounds.
+        
+        Returns:
+            Total number of underdogs in the bracket
+        """
+        if not self.underdogs_by_round and self.results:
+            self.identify_underdogs()
+            
+        return sum(len(teams) for teams in self.underdogs_by_round.values())
+
     def simulate_tournament(self) -> Dict[str, List[Team]]:
         """Simulate entire tournament and store results"""
         self.results = {}  # Reset results
+        self.underdogs_by_round = {}  # Reset underdogs tracking
         
         # Use only first round games from the initial setup
         current_games = self.games.copy()  # These are all first round games from initialization
@@ -284,6 +359,9 @@ class Bracket:
         
         # Calculate log probability of final bracket
         self.log_probability = self.calculate_log_probability()
+        
+        # Identify underdogs in the results
+        self.identify_underdogs()
         
         return self.results
 

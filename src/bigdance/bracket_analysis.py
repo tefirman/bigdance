@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 from bigdance.wn_cbb_scraper import Standings
-from bigdance.cbb_brackets import Team, Pool
+from bigdance.cbb_brackets import Team, Pool, Bracket
 from bigdance.bigdance_integration import create_teams_from_standings
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -40,6 +40,7 @@ class BracketAnalysis:
         self.num_pools = num_pools
         self.pools: List[Pool] = []
         self.winning_results: List[Dict[str, List[Team]]] = []  # Store results instead of brackets
+        self.winning_brackets: List[Bracket] = []  # Store the actual winning brackets
         self.all_results = pd.DataFrame()
         
         # Set up output directory for saving graphs and data
@@ -57,11 +58,11 @@ class BracketAnalysis:
         # Track log probabilities for all entries
         self.all_log_probs = []
         
-        # NEW: Track log probabilities by round for all winning entries
+        # Track log probabilities by round for all winning entries
         self.log_probs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
         
-        # Track upsets per round for all winning entries
-        self.upsets_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
+        # Track underdogs by round for all winning entries
+        self.underdogs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
         
         for i in range(self.num_pools):
             if (i + 1)%100 == 0:
@@ -90,33 +91,23 @@ class BracketAnalysis:
             winning_bracket = [entry[1] for entry in pool.entries 
                             if entry[0] == winning_entry][0]
             winning_results = winning_bracket.simulate_tournament()
+            
             self.winning_results.append(winning_results)
+            self.winning_brackets.append(winning_bracket)
             self.all_log_probs.append(winning_bracket.log_probability)
             
-            # NEW: Store per-round log probabilities for the winning entry
+            # Store per-round log probabilities for the winning entry
             for round_name, log_prob in winning_bracket.log_probability_by_round.items():
                 if round_name in self.log_probs_by_round:
                     self.log_probs_by_round[round_name].append(log_prob)
             
-            # Count upsets by round and append to tracking data
-            for round_name, teams in winning_results.items():
-                if round_name != "Champion":  # Skip final result
-                    upsets = 0
-                    for team in teams:
-                        # In each round, a team is an upset if their seed is higher than expected
-                        if round_name == "First Round" and team.seed > 8:
-                            upsets += 1
-                        elif round_name == "Second Round" and team.seed > 4:
-                            upsets += 1
-                        elif round_name == "Sweet 16" and team.seed > 2:
-                            upsets += 1
-                        elif round_name == "Elite 8" and team.seed > 1:
-                            upsets += 1
-                        elif round_name in ["Final Four", "Championship"] and team.seed > 1:
-                            upsets += 1
-                    
-                    if round_name in self.upsets_by_round:
-                        self.upsets_by_round[round_name].append(upsets)
+            # Store underdog counts by round - using new direct methods from Bracket class
+            underdog_counts = winning_bracket.count_underdogs_by_round()
+            for round_name in self.ROUND_ORDER:
+                if round_name in underdog_counts:
+                    self.underdogs_by_round[round_name].append(underdog_counts[round_name])
+                else:
+                    self.underdogs_by_round[round_name].append(0)
             
             pool_results['pool_id'] = i
             self.all_results = pd.concat([self.all_results, pool_results])
@@ -128,37 +119,16 @@ class BracketAnalysis:
         Returns:
             DataFrame containing upset statistics by round, ordered chronologically
         """
-        upset_stats = defaultdict(list)
-        
-        for results in self.winning_results:
-            for round_name, teams in results.items():
-                if round_name != "Champion":  # Skip final result
-                    # Count upsets by looking at team seeds
-                    upsets = 0
-                    for team in teams:
-                        # In each round, a team is an upset if their seed is higher than expected
-                        if round_name == "First Round" and team.seed > 8:
-                            upsets += 1
-                        elif round_name == "Second Round" and team.seed > 4:
-                            upsets += 1
-                        elif round_name == "Sweet 16" and team.seed > 2:
-                            upsets += 1
-                        elif round_name == "Elite 8" and team.seed > 1:
-                            upsets += 1
-                        elif round_name in ["Final Four", "Championship"] and team.seed > 1:
-                            upsets += 1
-                    upset_stats[round_name].append(upsets)
-        
-        # Convert to DataFrame
-        stats_df = pd.DataFrame(upset_stats)
-        
-        # Calculate summary statistics
+        if not hasattr(self, 'underdogs_by_round') or not self.underdogs_by_round:
+            raise ValueError("Must run simulations before analyzing upsets")
+            
+        # Calculate summary statistics from stored underdog counts
         summary = pd.DataFrame({
-            'round': stats_df.columns,
-            'avg_upsets': stats_df.mean(),
-            'std_upsets': stats_df.std(),
-            'min_upsets': stats_df.min(),
-            'max_upsets': stats_df.max()
+            'round': list(self.underdogs_by_round.keys()),
+            'avg_upsets': [np.mean(counts) if counts else 0 for counts in self.underdogs_by_round.values()],
+            'std_upsets': [np.std(counts) if counts else 0 for counts in self.underdogs_by_round.values()],
+            'min_upsets': [min(counts) if counts else 0 for counts in self.underdogs_by_round.values()],
+            'max_upsets': [max(counts) if counts else 0 for counts in self.underdogs_by_round.values()]
         })
         
         # Sort by predefined round order
@@ -177,7 +147,7 @@ class BracketAnalysis:
         Returns:
             Dict of figures for each round
         """
-        if not hasattr(self, 'upsets_by_round'):
+        if not hasattr(self, 'underdogs_by_round') or not self.underdogs_by_round:
             raise ValueError("Must run simulations before plotting upset distributions")
         
         # Create a single figure with multiple subplots
@@ -195,14 +165,14 @@ class BracketAnalysis:
             if round_name in ["Final Four", "Championship"]:
                 continue
 
-            if round_name in self.upsets_by_round and len(self.upsets_by_round[round_name]) > 0:
+            if round_name in self.underdogs_by_round and len(self.underdogs_by_round[round_name]) > 0:
                 ax = axes[i]
                 
                 # Get max possible for x-axis
                 max_possible = max_per_round.get(round_name, 8)
                 
                 # Get data for this round
-                data = self.upsets_by_round[round_name]
+                data = self.underdogs_by_round[round_name]
                 
                 # Create integer bins
                 bins = np.arange(-0.5, max_possible + 1.5, 1)  # Ensure bins are centered on integers
@@ -243,18 +213,15 @@ class BracketAnalysis:
         Returns:
             Figure object
         """
-        if not hasattr(self, 'upsets_by_round'):
+        if not hasattr(self, 'underdogs_by_round') or not self.underdogs_by_round:
             raise ValueError("Must run simulations before plotting total upsets distribution")
         
         # Calculate total upsets for each simulation
         total_upsets = []
         
-        for i in range(len(self.winning_results)):
-            sim_total = 0
-            for round_name in self.ROUND_ORDER:
-                if round_name in self.upsets_by_round and i < len(self.upsets_by_round[round_name]):
-                    sim_total += self.upsets_by_round[round_name][i]
-            total_upsets.append(sim_total)
+        # Use the total_underdogs from each winning bracket
+        for bracket in self.winning_brackets:
+            total_upsets.append(bracket.total_underdogs())
         
         # Create figure
         fig = plt.figure(figsize=(10, 6))
@@ -411,26 +378,9 @@ class BracketAnalysis:
         Identify most common upset teams by round, where an upset is defined
         as a team advancing through a round despite having a seed lower than typically expected.
         
-        Teams that make it through each round (i.e., appear in the next round):
-        - First Round: Teams with seeds 1-8 typically advance (9-16 would be upsets)
-        - Second Round: Teams with seeds 1-4 typically advance (5-16 would be upsets)
-        - Sweet 16: Teams with seeds 1-2 typically advance (3-16 would be upsets)
-        - Elite 8: Teams with seed 1 typically advance (2-16 would be upsets)
-        - Final Four: Teams with seed 1 typically advance (2-16 would be upsets)
-        
         Returns:
             DataFrame containing most frequent upset teams, grouped by round they advanced from
         """
-        # Define expected maximum seed that should advance through each round
-        # Any team with a higher seed than this advancing is considered an underdog
-        EXPECTED_MAX_SEEDS = {
-            "First Round": 8,    # Teams advancing through First Round to Second Round
-            "Second Round": 4,   # Teams advancing through Second Round to Sweet 16
-            "Sweet 16": 2,       # Teams advancing through Sweet 16 to Elite 8
-            "Elite 8": 1,        # Teams advancing through Elite 8 to Final Four
-            "Final Four": 1      # Teams advancing through Final Four to Championship
-        }
-        
         # Map round names to the next round they advance to
         NEXT_ROUND = {
             "First Round": "Second Round",
@@ -442,15 +392,13 @@ class BracketAnalysis:
         
         upset_counts = defaultdict(int)
         
-        for results in self.winning_results:  # Using stored results
-            for round_name, expected_max_seed in EXPECTED_MAX_SEEDS.items():
-                next_round = NEXT_ROUND.get(round_name)
-                if next_round and next_round in results:
-                    for team in results[next_round]:
-                        if team.seed > expected_max_seed:
-                            # This team is an underdog that advanced through the previous round
-                            key = (round_name, team.seed, team.name)
-                            upset_counts[key] += 1
+        # Use the underdogs identified in each bracket
+        for bracket in self.winning_brackets:
+            for round_name, underdogs in bracket.underdogs_by_round.items():
+                for team in underdogs:
+                    # Key format: (round advanced through, seed, team name)
+                    key = (round_name, team.seed, team.name)
+                    upset_counts[key] += 1
         
         # Convert to DataFrame
         upsets_df = pd.DataFrame([
