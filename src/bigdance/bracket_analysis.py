@@ -139,10 +139,11 @@ class BracketAnalysis:
     
     def plot_upset_distributions(self, save: bool = True) -> Dict[str, plt.Figure]:
         """
-        Plot distributions of upsets per round with discrete integer bins
+        Plot distributions of upsets per round with discrete integer bins.
+        Also saves the underlying histogram data for use in other applications.
         
         Args:
-            save (bool): Whether to save plots to files
+            save (bool): Whether to save plots and data to files
                 
         Returns:
             Dict of figures for each round
@@ -156,6 +157,9 @@ class BracketAnalysis:
         
         # Flatten axes for easier iteration
         axes = axes.flatten()
+        
+        # Dictionary to store histogram data for each round
+        histogram_data = {}
         
         # Plot each round
         max_per_round = {"First Round": 32, "Second Round": 16, "Sweet 16": 8,
@@ -177,6 +181,19 @@ class BracketAnalysis:
                 # Create integer bins
                 bins = np.arange(-0.5, max_possible + 1.5, 1)  # Ensure bins are centered on integers
                 
+                # Compute histogram values manually to capture the data
+                hist_values, bin_edges = np.histogram(data, bins=bins, density=True)
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                
+                # Store the histogram data for this round
+                histogram_data[round_name] = pd.DataFrame({
+                    'bin_center': bin_centers,
+                    'bin_start': bin_edges[:-1],
+                    'bin_end': bin_edges[1:],
+                    'density': hist_values,
+                    'count': np.histogram(data, bins=bins, density=False)[0]
+                })
+                
                 # Plot histogram with discrete integer bins
                 sns.histplot(data, ax=ax, bins=bins, discrete=True, stat="density")
                 
@@ -195,20 +212,37 @@ class BracketAnalysis:
                 ax.set_xticks(range(max_possible + 1))
                 
                 ax.legend()
+        
+        # Save the histogram data for all rounds to a single file
+        if save and histogram_data:
+            # Save each round to a separate CSV file
+            for round_name, df in histogram_data.items():
+                df.to_csv(self.output_dir / f"histogram_data_{round_name.replace(' ', '_').lower()}.csv", index=False)
+            
+            # Also create a single JSON file with all data for easier loading in Shiny
+            import json
+            with open(self.output_dir / "upset_distributions_data.json", 'w') as f:
+                # Convert DataFrame to dict for each round
+                json_data = {round_name: df.to_dict(orient='records') for round_name, df in histogram_data.items()}
+                json.dump(json_data, f, indent=2)
                 
         # Adjust layout and save combined figure
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         if save:
             fig.savefig(self.output_dir / "upsets_all_rounds.png", dpi=300, bbox_inches='tight')
         
+        # Store the data for later access
+        self.histogram_data = histogram_data
+        
         return fig
 
     def plot_total_upsets_distribution(self, save: bool = True) -> plt.Figure:
         """
-        Plot distribution of total number of upsets across all rounds with discrete integer bins
+        Plot distribution of total number of upsets across all rounds with discrete integer bins.
+        Also saves the underlying histogram data for use in other applications.
         
         Args:
-            save (bool): Whether to save plot to file
+            save (bool): Whether to save plot and data to files
                 
         Returns:
             Figure object
@@ -232,6 +266,28 @@ class BracketAnalysis:
         
         # Create integer bins
         bins = np.arange(min_upsets - 0.5, max_upsets + 1.5, 1)
+        
+        # Compute histogram values manually to capture the data
+        hist_values, bin_edges = np.histogram(total_upsets, bins=bins, density=True)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        
+        # Create DataFrame with histogram data
+        total_histogram_data = pd.DataFrame({
+            'bin_center': bin_centers,
+            'bin_start': bin_edges[:-1],
+            'bin_end': bin_edges[1:],
+            'density': hist_values,
+            'count': np.histogram(total_upsets, bins=bins, density=False)[0]
+        })
+        
+        # Save the histogram data
+        if save:
+            total_histogram_data.to_csv(self.output_dir / "total_upsets_histogram_data.csv", index=False)
+            
+            # Also save as JSON for easier loading in Shiny
+            import json
+            with open(self.output_dir / "total_upsets_distribution_data.json", 'w') as f:
+                json.dump(total_histogram_data.to_dict(orient='records'), f, indent=2)
         
         # Plot distribution with discrete bins
         sns.histplot(total_upsets, bins=bins, discrete=True)
@@ -263,14 +319,18 @@ class BracketAnalysis:
         if save:
             plt.savefig(self.output_dir / "total_upsets_distribution.png", dpi=300, bbox_inches='tight')
         
+        # Store the data for later access
+        self.total_histogram_data = total_histogram_data
+        
         return fig
-    
+
     def plot_all_rounds_log_probability(self, save: bool = True) -> plt.Figure:
         """
-        Plot distributions of log probabilities for all tournament rounds in a single 3x2 grid
+        Plot distributions of log probabilities for all tournament rounds in a single 3x2 grid.
+        Also saves the underlying histogram data for use in other applications.
         
         Args:
-            save (bool): Whether to save plot to file
+            save (bool): Whether to save plot and data to files
                     
         Returns:
             Figure object for the combined plots
@@ -285,6 +345,9 @@ class BracketAnalysis:
         # Flatten axes for easier iteration
         axes = axes.flatten()
         
+        # Dictionary to store histogram data for each round
+        log_prob_histogram_data = {}
+        
         # Plot each round
         for i, round_name in enumerate(self.ROUND_ORDER):  # All 6 rounds
             if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
@@ -292,6 +355,20 @@ class BracketAnalysis:
                 
                 # Get data for this round
                 data = self.log_probs_by_round[round_name]
+                
+                # Calculate histogram bin edges
+                # For log probabilities, we use KDE-based binning
+                hist_values, bin_edges = np.histogram(data, bins=30, density=True)
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                
+                # Store the histogram data for this round
+                log_prob_histogram_data[round_name] = pd.DataFrame({
+                    'bin_center': bin_centers,
+                    'bin_start': bin_edges[:-1],
+                    'bin_end': bin_edges[1:],
+                    'density': hist_values,
+                    'count': np.histogram(data, bins=bin_edges, density=False)[0]
+                })
                 
                 # Plot histogram
                 sns.histplot(data, ax=ax, kde=True, bins=30, stat="density")
@@ -315,19 +392,36 @@ class BracketAnalysis:
                 ax.set_ylabel("Density")
                 ax.legend()
         
+        # Save the histogram data
+        if save and log_prob_histogram_data:
+            # Save each round to a separate CSV file
+            for round_name, df in log_prob_histogram_data.items():
+                df.to_csv(self.output_dir / f"log_prob_histogram_{round_name.replace(' ', '_').lower()}.csv", index=False)
+            
+            # Also create a single JSON file with all data for easier loading in Shiny
+            import json
+            with open(self.output_dir / "log_prob_distributions_data.json", 'w') as f:
+                # Convert DataFrame to dict for each round
+                json_data = {round_name: df.to_dict(orient='records') for round_name, df in log_prob_histogram_data.items()}
+                json.dump(json_data, f, indent=2)
+        
         # Adjust layout and save combined figure
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         if save:
             fig.savefig(self.output_dir / "all_rounds_log_probabilities.png", dpi=300, bbox_inches='tight')
         
+        # Store the data for later access
+        self.log_prob_histogram_data = log_prob_histogram_data
+        
         return fig
 
     def plot_log_probability_distribution(self, save: bool = True, x_margin: float = 5.0, bins: int = 30) -> plt.Figure:
         """
-        Plot distribution of log probability scores
+        Plot distribution of log probability scores.
+        Also saves the underlying histogram data for use in other applications.
         
         Args:
-            save (bool): Whether to save plot to file
+            save (bool): Whether to save plot and data to files
             x_margin (float): How much to extend the x-axis on each side
             bins (int): Number of bins for the histogram
             
@@ -340,12 +434,37 @@ class BracketAnalysis:
         # Create figure
         fig = plt.figure(figsize=(10, 6))
         
+        # Calculate histogram bin edges
+        min_val = min(self.all_log_probs) - x_margin
+        max_val = max(self.all_log_probs) + x_margin
+        bin_edges = np.linspace(min_val, max_val, bins + 1)
+        
+        # Compute histogram values manually to capture the data
+        hist_values, bin_edges = np.histogram(self.all_log_probs, bins=bin_edges, density=True)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        
+        # Create DataFrame with histogram data
+        log_prob_histogram_data = pd.DataFrame({
+            'bin_center': bin_centers,
+            'bin_start': bin_edges[:-1],
+            'bin_end': bin_edges[1:],
+            'density': hist_values,
+            'count': np.histogram(self.all_log_probs, bins=bin_edges, density=False)[0]
+        })
+        
+        # Save the histogram data
+        if save:
+            log_prob_histogram_data.to_csv(self.output_dir / "log_probability_histogram_data.csv", index=False)
+            
+            # Also save as JSON for easier loading in Shiny
+            import json
+            with open(self.output_dir / "log_probability_distribution_data.json", 'w') as f:
+                json.dump(log_prob_histogram_data.to_dict(orient='records'), f, indent=2)
+        
         # Plot distribution with increased bins
         sns.histplot(self.all_log_probs, kde=True, bins=bins)
         
         # Set extended x-axis limits
-        min_val = min(self.all_log_probs) - x_margin
-        max_val = max(self.all_log_probs) + x_margin
         plt.xlim(min_val, max_val)
         
         # Add mean line
@@ -371,7 +490,57 @@ class BracketAnalysis:
         if save:
             plt.savefig(self.output_dir / "log_probability_distribution.png", dpi=300, bbox_inches='tight')
         
+        # Store the data for later access
+        self.overall_log_prob_histogram_data = log_prob_histogram_data
+        
         return fig
+
+    def save_all_data(self):
+        """Save all analysis data to CSV files and histogram data to JSON files"""
+        if hasattr(self, 'all_log_probs'):
+            pd.DataFrame({'log_probability': self.all_log_probs}).to_csv(
+                self.output_dir / "log_probability_data.csv", index=False)
+        
+        if hasattr(self, 'log_probs_by_round'):
+            # Save per-round log probabilities
+            log_probs_df = pd.DataFrame({
+                round_name: self.log_probs_by_round.get(round_name, [])
+                for round_name in self.ROUND_ORDER
+            })
+            log_probs_df.to_csv(self.output_dir / "log_probabilities_by_round_data.csv", index=False)
+        
+        if hasattr(self, 'underdogs_by_round'):
+            pd.DataFrame(self.underdogs_by_round).to_csv(
+                self.output_dir / "upsets_by_round_data.csv", index=False)
+        
+        if hasattr(self, 'all_results'):
+            self.all_results.to_csv(self.output_dir / "pool_results.csv", index=False)
+        
+        # Save upset statistics
+        upset_stats = self.analyze_upsets()
+        upset_stats.to_csv(self.output_dir / "upset_statistics.csv", index=False)
+        
+        # Save round log probability statistics
+        if hasattr(self, 'log_probs_by_round'):
+            round_log_stats = self.analyze_round_log_probabilities()
+            round_log_stats.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
+            
+        # Save common underdogs data
+        common_underdogs = self.find_common_underdogs()
+        common_underdogs.to_csv(self.output_dir / "common_underdogs.csv", index=False)
+        
+        # Generate histogram data but don't save figures (already done separately)
+        if not hasattr(self, 'histogram_data'):
+            self.plot_upset_distributions(save=True)
+        
+        if not hasattr(self, 'total_histogram_data'):
+            self.plot_total_upsets_distribution(save=True)
+            
+        if not hasattr(self, 'log_prob_histogram_data'):
+            self.plot_all_rounds_log_probability(save=True)
+            
+        if not hasattr(self, 'overall_log_prob_histogram_data'):
+            self.plot_log_probability_distribution(save=True)
     
     def find_common_underdogs(self) -> pd.DataFrame:
         """
