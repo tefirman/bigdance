@@ -13,9 +13,10 @@ from typing import List, Dict, Optional
 import pandas as pd
 from bigdance.wn_cbb_scraper import Standings
 from bigdance.cbb_brackets import Game, Team, Bracket, Pool
+import argparse
 
 def create_teams_from_standings(standings: Standings, 
-                              regions: Optional[Dict[str, str]] = None) -> List[Team]:
+                              regions: Optional[Dict[str, str]] = None) -> Bracket:
     """
     Convert Warren Nolan standings into bracket-compatible Team objects.
     Ensures conference champions get automatic bids, then fills remaining spots
@@ -23,11 +24,11 @@ def create_teams_from_standings(standings: Standings,
     
     Args:
         standings: Standings object containing team ratings and info
-        seeds: Optional dictionary mapping team names to their regional seeds (1-16)
         regions: Optional dictionary mapping team names to their tournament regions
+        women: Whether to use women's basketball data (default: False)
                
     Returns:
-        List of Team objects ready for bracket simulation
+        Bracket object with teams ready for simulation
     """
     TOURNAMENT_REGIONS = ['East', 'West', 'South', 'Midwest']
     regions = regions or {}
@@ -132,7 +133,7 @@ def create_bracket_with_picks(teams, picks_by_round):
     }
     
     # Working set of games for each round
-    current_round_games = bracket.games  # Start with first round games
+    current_round_games = bracket.games.copy()  # Start with first round games from initialization
     
     # Process each round in sequence
     for round_name in ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]:
@@ -195,20 +196,27 @@ def create_bracket_with_picks(teams, picks_by_round):
     
     return bracket
 
-def simulate_bracket_pool(standings: Standings,
+def simulate_bracket_pool(standings: Optional[Standings] = None,
                         num_entries: int = 100,
-                        upset_factors: Optional[List[float]] = None) -> pd.DataFrame:
+                        upset_factors: Optional[List[float]] = None,
+                        women: bool = False) -> pd.DataFrame:
     """
     Simulate a bracket pool using Warren Nolan ratings.
     
     Args:
-        standings: Standings object containing team ratings and info
+        standings: Standings object containing team ratings and info.
+                  If None, will create a new Standings object with the specified gender.
         num_entries: Number of bracket entries to simulate
         upset_factors: Optional list of upset factors for each entry
+        women: Whether to use women's basketball data (default: False)
         
     Returns:
         DataFrame containing simulation results
     """
+    # Create standings if not provided
+    if standings is None:
+        standings = Standings(women=women)
+    
     # Create actual results bracket
     actual_bracket = create_teams_from_standings(standings)
     
@@ -236,14 +244,70 @@ def simulate_bracket_pool(standings: Standings,
     return results
 
 def main():
-    """Example usage of integration module"""
-    # Get current standings
-    standings = Standings()
+    """Example usage of integration module with command-line arguments"""
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Simulate March Madness bracket pool')
+    parser.add_argument('--num_entries', type=int, default=10,
+                        help='Number of entries to simulate')
+    parser.add_argument('--num_sims', type=int, default=1000,
+                        help='Number of simulations to run')
+    parser.add_argument('--women', action='store_true',
+                        help='Use women\'s basketball data instead of men\'s')
+    parser.add_argument('--conference', type=str, default=None,
+                        help='Filter by specific conference')
+    parser.add_argument('--upset_min', type=float, default=0.1,
+                        help='Minimum upset factor')
+    parser.add_argument('--upset_max', type=float, default=0.4,
+                        help='Maximum upset factor')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Print verbose output')
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    if args.verbose:
+        print(f"Running with the following settings:")
+        print(f'  Basketball type: {"Women" if args.women else "Men"}')
+        print(f"  Number of entries: {args.num_entries}")
+        print(f"  Number of simulations: {args.num_sims}")
+        if args.conference:
+            print(f"  Conference filter: {args.conference}")
+        print(f"  Upset factor range: {args.upset_min} to {args.upset_max}")
+    
+    # Get current standings with appropriate gender and conference
+    standings = Standings(conference=args.conference, women=args.women)
+    
+    # Generate upset factors ranging from min to max
+    upset_factors = None
+    if args.num_entries > 1:
+        upset_factors = [args.upset_min + (i/(args.num_entries-1))*(args.upset_max-args.upset_min) 
+                        for i in range(args.num_entries)]
+    else:
+        upset_factors = [args.upset_min]  # Just use minimum for a single entry
     
     # Create and simulate bracket pool
-    results = simulate_bracket_pool(standings, num_entries=10)
+    results = simulate_bracket_pool(
+        standings=standings,
+        num_entries=args.num_entries,
+        upset_factors=upset_factors,
+    )
+    
+    # Display results
     print("\nPool Simulation Results:")
     print(results.to_string(index=False))
+    
+    # Print additional statistics if verbose
+    if args.verbose:
+        # Calculate average win percentage and score
+        avg_win_pct = results['win_pct'].mean()
+        avg_score = results['avg_score'].mean()
+        print(f"\nAverage win percentage: {avg_win_pct:.4f}")
+        print(f"Average score: {avg_score:.2f}")
+        
+        # Print top 3 entries
+        print("\nTop performing entries:")
+        for i, row in results.head(3).iterrows():
+            print(f"{i+1}. {row['name']}: {row['win_pct']:.1%} win rate, {row['avg_score']:.1f} avg score")
 
 if __name__ == "__main__":
     main()
