@@ -1,0 +1,23 @@
+seed,team,conference,frequency
+1,Houston,Big 12,0.15
+1,Auburn,SEC,0.13
+1,Florida,SEC,0.1
+2,Tennessee,SEC,0.09
+1,Duke,ACC,0.09
+2,Michigan State,Big Ten,0.07
+2,Saint John's,Big East,0.06
+2,Alabama,SEC,0.04
+3,BYU,Big 12,0.03
+3,Louisville,ACC,0.03
+4,Maryland,Big Ten,0.03
+4,Texas Tech,Big 12,0.03
+4,Iowa State,Big 12,0.03
+5,Kentucky,SEC,0.02
+6,Memphis,American Athletic,0.02
+7,Gonzaga,West Coast,0.02
+11,Utah State,Mountain West,0.01
+3,Saint Mary's College,West Coast,0.01
+10,North Carolina,ACC,0.01
+5,Michigan,Big Ten,0.01
+5,Connecticut,Big East,0.01
+9,Colorado State,Mountain West,0.01

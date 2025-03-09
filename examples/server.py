@@ -432,6 +432,8 @@ def server(input, output, session):
             
             your_rank = results[results['name'] == 'Your Bracket'].index[0] + 1 if 'Your Bracket' in results['name'].values else "N/A"
             formatted_results += f"\nYour bracket's rank: {your_rank} out of {len(results)}"
+            formatted_results += f"\nNumber of upsets: {my_bracket.total_underdogs()}"
+            formatted_results += f"\nLog likelihood: {my_bracket.calculate_log_probability()}"
             
             return formatted_results
 

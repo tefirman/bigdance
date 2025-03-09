@@ -1,0 +1,227 @@
+advanced_through,to_reach,seed,team,frequency
+First Round,Second Round,10,North Carolina,0.56
+First Round,Second Round,9,Kansas,0.54
+First Round,Second Round,10,UC San Diego,0.51
+First Round,Second Round,10,Indiana,0.51
+First Round,Second Round,9,Colorado State,0.5
+First Round,Second Round,9,Xavier,0.48
+First Round,Second Round,10,Georgia,0.47
+First Round,Second Round,9,VCU,0.46
+First Round,Second Round,11,Utah State,0.42
+First Round,Second Round,11,Marquette,0.39
+First Round,Second Round,11,Dayton,0.39
+First Round,Second Round,12,McNeese,0.38
+First Round,Second Round,13,Akron,0.37
+First Round,Second Round,12,Liberty,0.36
+First Round,Second Round,12,High Point,0.34
+First Round,Second Round,13,UNCW,0.33
+First Round,Second Round,13,Grand Canyon,0.3
+First Round,Second Round,11,Boise State,0.26
+First Round,Second Round,12,Yale,0.26
+First Round,Second Round,13,Chattanooga,0.23
+First Round,Second Round,15,Vermont,0.23
+First Round,Second Round,14,Lipscomb,0.21
+First Round,Second Round,14,Arkansas State,0.21
+First Round,Second Round,14,Robert Morris,0.19
+First Round,Second Round,15,Norfolk State,0.17
+First Round,Second Round,15,Central Connecticut,0.16
+First Round,Second Round,16,SIUE,0.14
+First Round,Second Round,14,Montana,0.13
+First Round,Second Round,16,Quinnipiac,0.13
+First Round,Second Round,15,Omaha,0.13
+First Round,Second Round,16,Bucknell,0.08
+First Round,Second Round,16,Bethune-Cookman,0.07
+Second Round,Sweet 16,5,Oregon,0.39
+Second Round,Sweet 16,5,Connecticut,0.37
+Second Round,Sweet 16,6,Memphis,0.36
+Second Round,Sweet 16,6,Drake,0.35
+Second Round,Sweet 16,7,Gonzaga,0.35
+Second Round,Sweet 16,5,Michigan,0.35
+Second Round,Sweet 16,6,Illinois,0.33
+Second Round,Sweet 16,5,Kentucky,0.3
+Second Round,Sweet 16,6,UCLA,0.24
+Second Round,Sweet 16,10,Georgia,0.21
+Second Round,Sweet 16,7,Ole Miss,0.21
+Second Round,Sweet 16,10,UC San Diego,0.21
+Second Round,Sweet 16,7,Purdue,0.2
+Second Round,Sweet 16,9,Colorado State,0.19
+Second Round,Sweet 16,10,North Carolina,0.19
+Second Round,Sweet 16,12,High Point,0.18
+Second Round,Sweet 16,10,Indiana,0.18
+Second Round,Sweet 16,8,Arizona,0.18
+Second Round,Sweet 16,7,Creighton,0.18
+Second Round,Sweet 16,8,Wisconsin,0.18
+Second Round,Sweet 16,8,New Mexico,0.17
+Second Round,Sweet 16,12,McNeese,0.17
+Second Round,Sweet 16,11,Marquette,0.16
+Second Round,Sweet 16,9,Xavier,0.16
+Second Round,Sweet 16,8,Arkansas,0.15
+Second Round,Sweet 16,9,Kansas,0.15
+Second Round,Sweet 16,12,Liberty,0.15
+Second Round,Sweet 16,11,Dayton,0.15
+Second Round,Sweet 16,9,VCU,0.14
+Second Round,Sweet 16,13,Akron,0.13
+Second Round,Sweet 16,11,Utah State,0.12
+Second Round,Sweet 16,13,UNCW,0.12
+Second Round,Sweet 16,13,Grand Canyon,0.11
+Second Round,Sweet 16,11,Boise State,0.1
+Second Round,Sweet 16,12,Yale,0.1
+Second Round,Sweet 16,14,Robert Morris,0.07
+Second Round,Sweet 16,15,Vermont,0.06
+Second Round,Sweet 16,14,Arkansas State,0.06
+Second Round,Sweet 16,13,Chattanooga,0.05
+Second Round,Sweet 16,14,Lipscomb,0.05
+Second Round,Sweet 16,16,SIUE,0.04
+Second Round,Sweet 16,15,Norfolk State,0.04
+Second Round,Sweet 16,15,Omaha,0.03
+Second Round,Sweet 16,16,Quinnipiac,0.02
+Second Round,Sweet 16,14,Montana,0.02
+Second Round,Sweet 16,16,Bethune-Cookman,0.02
+Second Round,Sweet 16,15,Central Connecticut,0.01
+Second Round,Sweet 16,16,Bucknell,0.01
+Sweet 16,Elite 8,3,BYU,0.3
+Sweet 16,Elite 8,7,Gonzaga,0.26
+Sweet 16,Elite 8,3,Louisville,0.25
+Sweet 16,Elite 8,6,Memphis,0.23
+Sweet 16,Elite 8,4,Texas Tech,0.22
+Sweet 16,Elite 8,4,Iowa State,0.18
+Sweet 16,Elite 8,5,Kentucky,0.18
+Sweet 16,Elite 8,3,Saint Mary's College,0.18
+Sweet 16,Elite 8,4,Maryland,0.17
+Sweet 16,Elite 8,3,Clemson,0.17
+Sweet 16,Elite 8,5,Oregon,0.16
+Sweet 16,Elite 8,4,Texas A&M,0.15
+Sweet 16,Elite 8,6,Illinois,0.14
+Sweet 16,Elite 8,9,Colorado State,0.13
+Sweet 16,Elite 8,6,Drake,0.12
+Sweet 16,Elite 8,5,Michigan,0.12
+Sweet 16,Elite 8,6,UCLA,0.12
+Sweet 16,Elite 8,10,UC San Diego,0.12
+Sweet 16,Elite 8,10,Indiana,0.12
+Sweet 16,Elite 8,5,Connecticut,0.11
+Sweet 16,Elite 8,10,Georgia,0.1
+Sweet 16,Elite 8,9,Kansas,0.09
+Sweet 16,Elite 8,7,Ole Miss,0.09
+Sweet 16,Elite 8,7,Purdue,0.09
+Sweet 16,Elite 8,9,Xavier,0.08
+Sweet 16,Elite 8,8,Wisconsin,0.07
+Sweet 16,Elite 8,9,VCU,0.07
+Sweet 16,Elite 8,12,Yale,0.06
+Sweet 16,Elite 8,8,Arizona,0.06
+Sweet 16,Elite 8,11,Utah State,0.06
+Sweet 16,Elite 8,8,New Mexico,0.06
+Sweet 16,Elite 8,10,North Carolina,0.06
+Sweet 16,Elite 8,11,Boise State,0.06
+Sweet 16,Elite 8,12,Liberty,0.06
+Sweet 16,Elite 8,8,Arkansas,0.05
+Sweet 16,Elite 8,12,High Point,0.05
+Sweet 16,Elite 8,7,Creighton,0.04
+Sweet 16,Elite 8,14,Robert Morris,0.03
+Sweet 16,Elite 8,11,Dayton,0.03
+Sweet 16,Elite 8,13,UNCW,0.03
+Sweet 16,Elite 8,13,Akron,0.03
+Sweet 16,Elite 8,11,Marquette,0.02
+Sweet 16,Elite 8,12,McNeese,0.02
+Sweet 16,Elite 8,15,Vermont,0.02
+Sweet 16,Elite 8,13,Grand Canyon,0.02
+Sweet 16,Elite 8,15,Central Connecticut,0.01
+Sweet 16,Elite 8,15,Omaha,0.01
+Sweet 16,Elite 8,14,Montana,0.01
+Sweet 16,Elite 8,14,Arkansas State,0.01
+Sweet 16,Elite 8,15,Norfolk State,0.01
+Elite 8,Final Four,2,Saint John's,0.23
+Elite 8,Final Four,2,Tennessee,0.23
+Elite 8,Final Four,2,Michigan State,0.21
+Elite 8,Final Four,2,Alabama,0.16
+Elite 8,Final Four,3,BYU,0.15
+Elite 8,Final Four,4,Iowa State,0.11
+Elite 8,Final Four,7,Gonzaga,0.11
+Elite 8,Final Four,4,Texas Tech,0.11
+Elite 8,Final Four,5,Kentucky,0.1
+Elite 8,Final Four,4,Maryland,0.09
+Elite 8,Final Four,6,Memphis,0.09
+Elite 8,Final Four,3,Saint Mary's College,0.09
+Elite 8,Final Four,3,Louisville,0.08
+Elite 8,Final Four,5,Oregon,0.07
+Elite 8,Final Four,6,UCLA,0.06
+Elite 8,Final Four,6,Illinois,0.05
+Elite 8,Final Four,7,Ole Miss,0.05
+Elite 8,Final Four,8,Wisconsin,0.05
+Elite 8,Final Four,5,Connecticut,0.05
+Elite 8,Final Four,3,Clemson,0.05
+Elite 8,Final Four,9,Colorado State,0.04
+Elite 8,Final Four,5,Michigan,0.04
+Elite 8,Final Four,4,Texas A&M,0.04
+Elite 8,Final Four,11,Utah State,0.04
+Elite 8,Final Four,10,North Carolina,0.04
+Elite 8,Final Four,10,Indiana,0.04
+Elite 8,Final Four,8,New Mexico,0.03
+Elite 8,Final Four,6,Drake,0.03
+Elite 8,Final Four,10,Georgia,0.03
+Elite 8,Final Four,12,Liberty,0.03
+Elite 8,Final Four,7,Purdue,0.03
+Elite 8,Final Four,9,VCU,0.03
+Elite 8,Final Four,11,Marquette,0.02
+Elite 8,Final Four,9,Xavier,0.02
+Elite 8,Final Four,8,Arkansas,0.02
+Elite 8,Final Four,8,Arizona,0.02
+Elite 8,Final Four,10,UC San Diego,0.02
+Elite 8,Final Four,11,Dayton,0.01
+Elite 8,Final Four,13,UNCW,0.01
+Elite 8,Final Four,13,Akron,0.01
+Elite 8,Final Four,12,McNeese,0.01
+Elite 8,Final Four,15,Omaha,0.01
+Elite 8,Final Four,12,Yale,0.01
+Elite 8,Final Four,12,High Point,0.01
+Elite 8,Final Four,11,Boise State,0.01
+Final Four,Championship,2,Tennessee,0.15
+Final Four,Championship,2,Michigan State,0.12
+Final Four,Championship,2,Alabama,0.09
+Final Four,Championship,2,Saint John's,0.09
+Final Four,Championship,4,Iowa State,0.07
+Final Four,Championship,3,Saint Mary's College,0.06
+Final Four,Championship,3,BYU,0.06
+Final Four,Championship,3,Louisville,0.05
+Final Four,Championship,6,Illinois,0.04
+Final Four,Championship,4,Texas Tech,0.04
+Final Four,Championship,4,Maryland,0.04
+Final Four,Championship,6,UCLA,0.04
+Final Four,Championship,6,Memphis,0.03
+Final Four,Championship,5,Kentucky,0.03
+Final Four,Championship,5,Connecticut,0.03
+Final Four,Championship,7,Gonzaga,0.03
+Final Four,Championship,10,Indiana,0.03
+Final Four,Championship,8,Arkansas,0.02
+Final Four,Championship,11,Utah State,0.02
+Final Four,Championship,3,Clemson,0.02
+Final Four,Championship,10,North Carolina,0.02
+Final Four,Championship,9,Colorado State,0.01
+Final Four,Championship,5,Michigan,0.01
+Final Four,Championship,4,Texas A&M,0.01
+Final Four,Championship,11,Dayton,0.01
+Final Four,Championship,8,New Mexico,0.01
+Final Four,Championship,6,Drake,0.01
+Final Four,Championship,13,Akron,0.01
+Final Four,Championship,15,Omaha,0.01
+Final Four,Championship,9,Xavier,0.01
+Final Four,Championship,5,Oregon,0.01
+Final Four,Championship,11,Boise State,0.01
+Final Four,Championship,12,Liberty,0.01
+Championship,N/A,2,Tennessee,0.09
+Championship,N/A,2,Michigan State,0.07
+Championship,N/A,2,Saint John's,0.06
+Championship,N/A,2,Alabama,0.04
+Championship,N/A,4,Iowa State,0.03
+Championship,N/A,4,Texas Tech,0.03
+Championship,N/A,3,Louisville,0.03
+Championship,N/A,3,BYU,0.03
+Championship,N/A,4,Maryland,0.03
+Championship,N/A,6,Memphis,0.02
+Championship,N/A,5,Kentucky,0.02
+Championship,N/A,7,Gonzaga,0.02
+Championship,N/A,9,Colorado State,0.01
+Championship,N/A,5,Michigan,0.01
+Championship,N/A,11,Utah State,0.01
+Championship,N/A,3,Saint Mary's College,0.01
+Championship,N/A,10,North Carolina,0.01
+Championship,N/A,5,Connecticut,0.01

@@ -1,0 +1,7 @@
+round,avg_upsets,std_upsets,min_upsets,max_upsets
+First Round,9.91,2.573305267549888,5,18
+Second Round,7.71,1.8016381434683268,4,12
+Sweet 16,4.83,1.371531990148243,2,8
+Elite 8,2.74,0.7952358140828417,1,4
+Final Four,1.2,0.6782329983125268,0,2
+Championship,0.53,0.4990991885387111,0,1
