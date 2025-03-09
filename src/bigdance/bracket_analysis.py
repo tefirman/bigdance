@@ -137,46 +137,51 @@ class BracketAnalysis:
         
         return summary
     
-    def plot_upset_distributions(self, save: bool = True) -> Dict[str, plt.Figure]:
+    def plot_upset_distributions(self, save: bool = True) -> plt.Figure:
         """
-        Plot distributions of upsets per round with discrete integer bins.
+        Plot distributions of upsets per round and total upsets in a single figure.
+        The figure has a 3x2 grid with round-specific plots in the top 2 rows
+        and the total distribution spanning the bottom row.
         Also saves the underlying histogram data for use in other applications.
         
         Args:
             save (bool): Whether to save plots and data to files
                 
         Returns:
-            Dict of figures for each round
+            Figure object
         """
         if not hasattr(self, 'underdogs_by_round') or not self.underdogs_by_round:
             raise ValueError("Must run simulations before plotting upset distributions")
         
-        # Create a single figure with multiple subplots
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        fig.suptitle("Distribution of Underdogs by Tournament Round", fontsize=16)
+        # Create a figure with a 3x2 grid
+        fig = plt.figure(figsize=(15, 18))
+        gs = plt.GridSpec(3, 2, figure=fig)
         
-        # Flatten axes for easier iteration
-        axes = axes.flatten()
+        # Add main title
+        fig.suptitle("Tournament Upset Distributions", fontsize=16)
         
         # Dictionary to store histogram data for each round
         histogram_data = {}
         
-        # Plot each round
+        # Plot each round in top two rows (2x2 grid)
         max_per_round = {"First Round": 32, "Second Round": 16, "Sweet 16": 8,
                         "Elite 8": 4, "Final Four": 2, "Championship": 1}
-        for i, round_name in enumerate(self.ROUND_ORDER):
-            # Skipping Final Four and Championship, upsets are less meaningful
-            if round_name in ["Final Four", "Championship"]:
-                continue
-
+        
+        # Define which rounds to plot (skip Final Four and Championship)
+        plot_rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8"]
+        
+        for i, round_name in enumerate(plot_rounds):
+            row, col = divmod(i, 2)  # Calculate position in 2x2 grid
+            
             if round_name in self.underdogs_by_round and len(self.underdogs_by_round[round_name]) > 0:
-                ax = axes[i]
-                
-                # Get max possible for x-axis
-                max_possible = max_per_round.get(round_name, 8)
+                # Create subplot in the corresponding position
+                ax = fig.add_subplot(gs[row, col])
                 
                 # Get data for this round
                 data = self.underdogs_by_round[round_name]
+                
+                # Get max possible for x-axis
+                max_possible = max_per_round.get(round_name, 8)
                 
                 # Create integer bins
                 bins = np.arange(-0.5, max_possible + 1.5, 1)  # Ensure bins are centered on integers
@@ -186,13 +191,13 @@ class BracketAnalysis:
                 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
                 
                 # Store the histogram data for this round
-                histogram_data[round_name] = pd.DataFrame({
-                    'bin_center': bin_centers,
-                    'bin_start': bin_edges[:-1],
-                    'bin_end': bin_edges[1:],
-                    'density': hist_values,
-                    'count': np.histogram(data, bins=bins, density=False)[0]
-                })
+                histogram_data[round_name] = {
+                    'bin_center': bin_centers.tolist(),
+                    'bin_start': bin_edges[:-1].tolist(),
+                    'bin_end': bin_edges[1:].tolist(),
+                    'density': hist_values.tolist(),
+                    'count': np.histogram(data, bins=bins, density=False)[0].tolist()
+                }
                 
                 # Plot histogram with discrete integer bins
                 sns.histplot(data, ax=ax, bins=bins, discrete=True, stat="density")
@@ -213,52 +218,11 @@ class BracketAnalysis:
                 
                 ax.legend()
         
-        # Save the histogram data for all rounds to a single file
-        if save and histogram_data:
-            # Save each round to a separate CSV file
-            for round_name, df in histogram_data.items():
-                df.to_csv(self.output_dir / f"histogram_data_{round_name.replace(' ', '_').lower()}.csv", index=False)
-            
-            # Also create a single JSON file with all data for easier loading in Shiny
-            import json
-            with open(self.output_dir / "upset_distributions_data.json", 'w') as f:
-                # Convert DataFrame to dict for each round
-                json_data = {round_name: df.to_dict(orient='records') for round_name, df in histogram_data.items()}
-                json.dump(json_data, f, indent=2)
-                
-        # Adjust layout and save combined figure
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
-        if save:
-            fig.savefig(self.output_dir / "upsets_all_rounds.png", dpi=300, bbox_inches='tight')
+        # Calculate total upsets for each simulation for bottom plot
+        total_upsets = [bracket.total_underdogs() for bracket in self.winning_brackets]
         
-        # Store the data for later access
-        self.histogram_data = histogram_data
-        
-        return fig
-
-    def plot_total_upsets_distribution(self, save: bool = True) -> plt.Figure:
-        """
-        Plot distribution of total number of upsets across all rounds with discrete integer bins.
-        Also saves the underlying histogram data for use in other applications.
-        
-        Args:
-            save (bool): Whether to save plot and data to files
-                
-        Returns:
-            Figure object
-        """
-        if not hasattr(self, 'underdogs_by_round') or not self.underdogs_by_round:
-            raise ValueError("Must run simulations before plotting total upsets distribution")
-        
-        # Calculate total upsets for each simulation
-        total_upsets = []
-        
-        # Use the total_underdogs from each winning bracket
-        for bracket in self.winning_brackets:
-            total_upsets.append(bracket.total_underdogs())
-        
-        # Create figure
-        fig = plt.figure(figsize=(10, 6))
+        # Create subplot that spans the bottom row
+        ax_total = fig.add_subplot(gs[2, :])
         
         # Find min and max for bin range
         min_upsets = min(total_upsets)
@@ -271,106 +235,108 @@ class BracketAnalysis:
         hist_values, bin_edges = np.histogram(total_upsets, bins=bins, density=True)
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         
-        # Create DataFrame with histogram data
-        total_histogram_data = pd.DataFrame({
-            'bin_center': bin_centers,
-            'bin_start': bin_edges[:-1],
-            'bin_end': bin_edges[1:],
-            'density': hist_values,
-            'count': np.histogram(total_upsets, bins=bins, density=False)[0]
-        })
-        
-        # Save the histogram data
-        if save:
-            total_histogram_data.to_csv(self.output_dir / "total_upsets_histogram_data.csv", index=False)
-            
-            # Also save as JSON for easier loading in Shiny
-            import json
-            with open(self.output_dir / "total_upsets_distribution_data.json", 'w') as f:
-                json.dump(total_histogram_data.to_dict(orient='records'), f, indent=2)
+        # Add total upsets to histogram data
+        histogram_data["Total Upsets"] = {
+            'bin_center': bin_centers.tolist(),
+            'bin_start': bin_edges[:-1].tolist(),
+            'bin_end': bin_edges[1:].tolist(),
+            'density': hist_values.tolist(),
+            'count': np.histogram(total_upsets, bins=bins, density=False)[0].tolist()
+        }
         
         # Plot distribution with discrete bins
-        sns.histplot(total_upsets, bins=bins, discrete=True)
+        sns.histplot(total_upsets, bins=bins, discrete=True, ax=ax_total)
         
         # Add mean line
         mean_value = np.mean(total_upsets)
-        plt.axvline(mean_value, color='red', linestyle='--', 
-                label=f'Mean: {mean_value:.2f}')
+        ax_total.axvline(mean_value, color='red', linestyle='--', 
+                    label=f'Mean: {mean_value:.2f}')
         
         # Add percentile lines
         q25 = np.percentile(total_upsets, 25)
         q75 = np.percentile(total_upsets, 75)
-        plt.axvline(q25, color='green', linestyle=':', 
-                label=f'25th percentile: {q25:.2f}')
-        plt.axvline(q75, color='orange', linestyle=':', 
-                label=f'75th percentile: {q75:.2f}')
+        ax_total.axvline(q25, color='green', linestyle=':', 
+                    label=f'25th percentile: {q25:.2f}')
+        ax_total.axvline(q75, color='orange', linestyle=':', 
+                    label=f'75th percentile: {q75:.2f}')
         
         # Customize plot
-        plt.title("Distribution of Total Upsets Across All Rounds")
-        plt.xlabel("Total Number of Upsets")
-        plt.ylabel("Frequency")
+        ax_total.set_title("Distribution of Total Upsets Across All Rounds")
+        ax_total.set_xlabel("Total Number of Upsets")
+        ax_total.set_ylabel("Frequency")
         
         # Set x-ticks to be integers
-        plt.xticks(range(int(min_upsets), int(max_upsets) + 1))
+        ax_total.set_xticks(range(int(min_upsets), int(max_upsets) + 1))
         
-        plt.legend()
+        ax_total.legend()
         
-        # Save figure
+        # Save the histogram data to a single JSON file
         if save:
-            plt.savefig(self.output_dir / "total_upsets_distribution.png", dpi=300, bbox_inches='tight')
+            import json
+            with open(self.output_dir / "upset_distributions_data.json", 'w') as f:
+                json.dump(histogram_data, f, indent=2)
+        
+        # Adjust layout and save figure
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        if save:
+            plt.savefig(self.output_dir / "all_upset_distributions.png", dpi=300, bbox_inches='tight')
         
         # Store the data for later access
-        self.total_histogram_data = total_histogram_data
+        self.upset_histogram_data = histogram_data
         
         return fig
 
-    def plot_all_rounds_log_probability(self, save: bool = True) -> plt.Figure:
+    def plot_log_probability_distributions(self, save: bool = True) -> plt.Figure:
         """
-        Plot distributions of log probabilities for all tournament rounds in a single 3x2 grid.
+        Plot distributions of log probabilities per round and overall log probability in a single figure.
+        The figure has a 4x2 grid with round-specific plots in the top 3 rows
+        and the overall distribution spanning the bottom row.
         Also saves the underlying histogram data for use in other applications.
         
         Args:
-            save (bool): Whether to save plot and data to files
-                    
+            save (bool): Whether to save plots and data to files
+                
         Returns:
-            Figure object for the combined plots
+            Figure object
         """
         if not hasattr(self, 'log_probs_by_round'):
-            raise ValueError("Must run simulations before plotting log probabilities by round")
+            raise ValueError("Must run simulations before plotting log probabilities")
         
-        # Create a single figure with a 3x2 grid of subplots
-        fig, axes = plt.subplots(3, 2, figsize=(15, 18))
-        fig.suptitle("Distribution of Log Probabilities by Tournament Round", fontsize=16)
+        # Create a figure with a 4x2 grid (3 rows for rounds, 1 row for overall)
+        fig = plt.figure(figsize=(15, 22))
+        gs = plt.GridSpec(4, 2, figure=fig)
         
-        # Flatten axes for easier iteration
-        axes = axes.flatten()
+        # Add main title
+        fig.suptitle("Tournament Log Probability Distributions", fontsize=16)
         
         # Dictionary to store histogram data for each round
         log_prob_histogram_data = {}
         
-        # Plot each round
+        # Plot each round in top three rows (3x2 grid)
         for i, round_name in enumerate(self.ROUND_ORDER):  # All 6 rounds
+            row, col = divmod(i, 2)  # Calculate position in grid
+            
             if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
-                ax = axes[i]
+                # Create subplot in the corresponding position
+                ax = fig.add_subplot(gs[row, col])
                 
                 # Get data for this round
                 data = self.log_probs_by_round[round_name]
                 
-                # Calculate histogram bin edges
-                # For log probabilities, we use KDE-based binning
+                # Calculate histogram bin edges - for log probabilities, use KDE-based binning
                 hist_values, bin_edges = np.histogram(data, bins=30, density=True)
                 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
                 
                 # Store the histogram data for this round
-                log_prob_histogram_data[round_name] = pd.DataFrame({
-                    'bin_center': bin_centers,
-                    'bin_start': bin_edges[:-1],
-                    'bin_end': bin_edges[1:],
-                    'density': hist_values,
-                    'count': np.histogram(data, bins=bin_edges, density=False)[0]
-                })
+                log_prob_histogram_data[round_name] = {
+                    'bin_center': bin_centers.tolist(),
+                    'bin_start': bin_edges[:-1].tolist(),
+                    'bin_end': bin_edges[1:].tolist(),
+                    'density': hist_values.tolist(),
+                    'count': np.histogram(data, bins=bin_edges, density=False)[0].tolist()
+                }
                 
-                # Plot histogram
+                # Plot histogram with KDE
                 sns.histplot(data, ax=ax, kde=True, bins=30, stat="density")
                 
                 # Add mean line
@@ -392,155 +358,71 @@ class BracketAnalysis:
                 ax.set_ylabel("Density")
                 ax.legend()
         
-        # Save the histogram data
-        if save and log_prob_histogram_data:
-            # Save each round to a separate CSV file
-            for round_name, df in log_prob_histogram_data.items():
-                df.to_csv(self.output_dir / f"log_prob_histogram_{round_name.replace(' ', '_').lower()}.csv", index=False)
-            
-            # Also create a single JSON file with all data for easier loading in Shiny
-            import json
-            with open(self.output_dir / "log_prob_distributions_data.json", 'w') as f:
-                # Convert DataFrame to dict for each round
-                json_data = {round_name: df.to_dict(orient='records') for round_name, df in log_prob_histogram_data.items()}
-                json.dump(json_data, f, indent=2)
+        # Create subplot for overall log probability, spans the bottom row
+        ax_total = fig.add_subplot(gs[3, :])
         
-        # Adjust layout and save combined figure
+        # Get data for overall log probability
+        data = self.all_log_probs
+        
+        # Calculate bin edges with margin for better visualization
+        x_margin = 5.0
+        min_val = min(data) - x_margin
+        max_val = max(data) + x_margin
+        bin_edges = np.linspace(min_val, max_val, 30 + 1)
+        
+        # Compute histogram values
+        hist_values, bin_edges = np.histogram(data, bins=bin_edges, density=True)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        
+        # Add overall log probability to histogram data
+        log_prob_histogram_data["Overall"] = {
+            'bin_center': bin_centers.tolist(),
+            'bin_start': bin_edges[:-1].tolist(),
+            'bin_end': bin_edges[1:].tolist(),
+            'density': hist_values.tolist(),
+            'count': np.histogram(data, bins=bin_edges, density=False)[0].tolist()
+        }
+        
+        # Plot overall distribution with KDE
+        sns.histplot(data, kde=True, bins=bin_edges, ax=ax_total)
+        
+        # Set extended x-axis limits
+        ax_total.set_xlim(min_val, max_val)
+        
+        # Add mean line
+        mean_value = np.mean(data)
+        ax_total.axvline(mean_value, color='red', linestyle='--', 
+                    label=f'Mean: {mean_value:.2f}')
+        
+        # Add percentile lines
+        q25 = np.percentile(data, 25)
+        q75 = np.percentile(data, 75)
+        ax_total.axvline(q25, color='green', linestyle=':', 
+                    label=f'25th percentile: {q25:.2f}')
+        ax_total.axvline(q75, color='orange', linestyle=':', 
+                    label=f'75th percentile: {q75:.2f}')
+        
+        # Customize plot
+        ax_total.set_title("Distribution of Overall Bracket Log Probability Scores")
+        ax_total.set_xlabel("Negative Log Probability (lower is more likely)")
+        ax_total.set_ylabel("Frequency")
+        ax_total.legend()
+        
+        # Save the histogram data to a single JSON file
+        if save:
+            import json
+            with open(self.output_dir / "log_probability_distributions_data.json", 'w') as f:
+                json.dump(log_prob_histogram_data, f, indent=2)
+        
+        # Adjust layout and save figure
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         if save:
-            fig.savefig(self.output_dir / "all_rounds_log_probabilities.png", dpi=300, bbox_inches='tight')
+            plt.savefig(self.output_dir / "all_log_probability_distributions.png", dpi=300, bbox_inches='tight')
         
         # Store the data for later access
         self.log_prob_histogram_data = log_prob_histogram_data
         
         return fig
-
-    def plot_log_probability_distribution(self, save: bool = True, x_margin: float = 5.0, bins: int = 30) -> plt.Figure:
-        """
-        Plot distribution of log probability scores.
-        Also saves the underlying histogram data for use in other applications.
-        
-        Args:
-            save (bool): Whether to save plot and data to files
-            x_margin (float): How much to extend the x-axis on each side
-            bins (int): Number of bins for the histogram
-            
-        Returns:
-            Figure object
-        """
-        if not hasattr(self, 'all_log_probs'):
-            raise ValueError("Must run simulations before plotting log probability distribution")
-            
-        # Create figure
-        fig = plt.figure(figsize=(10, 6))
-        
-        # Calculate histogram bin edges
-        min_val = min(self.all_log_probs) - x_margin
-        max_val = max(self.all_log_probs) + x_margin
-        bin_edges = np.linspace(min_val, max_val, bins + 1)
-        
-        # Compute histogram values manually to capture the data
-        hist_values, bin_edges = np.histogram(self.all_log_probs, bins=bin_edges, density=True)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        
-        # Create DataFrame with histogram data
-        log_prob_histogram_data = pd.DataFrame({
-            'bin_center': bin_centers,
-            'bin_start': bin_edges[:-1],
-            'bin_end': bin_edges[1:],
-            'density': hist_values,
-            'count': np.histogram(self.all_log_probs, bins=bin_edges, density=False)[0]
-        })
-        
-        # Save the histogram data
-        if save:
-            log_prob_histogram_data.to_csv(self.output_dir / "log_probability_histogram_data.csv", index=False)
-            
-            # Also save as JSON for easier loading in Shiny
-            import json
-            with open(self.output_dir / "log_probability_distribution_data.json", 'w') as f:
-                json.dump(log_prob_histogram_data.to_dict(orient='records'), f, indent=2)
-        
-        # Plot distribution with increased bins
-        sns.histplot(self.all_log_probs, kde=True, bins=bins)
-        
-        # Set extended x-axis limits
-        plt.xlim(min_val, max_val)
-        
-        # Add mean line
-        mean_value = np.mean(self.all_log_probs)
-        plt.axvline(mean_value, color='red', linestyle='--', 
-                label=f'Mean: {mean_value:.2f}')
-        
-        # Add percentile lines
-        q25 = np.percentile(self.all_log_probs, 25)
-        q75 = np.percentile(self.all_log_probs, 75)
-        plt.axvline(q25, color='green', linestyle=':', 
-                label=f'25th percentile: {q25:.2f}')
-        plt.axvline(q75, color='orange', linestyle=':', 
-                label=f'75th percentile: {q75:.2f}')
-        
-        # Customize plot
-        plt.title("Distribution of Bracket Log Probability Scores")
-        plt.xlabel("Negative Log Probability (lower is more likely)")
-        plt.ylabel("Frequency")
-        plt.legend()
-        
-        # Save figure
-        if save:
-            plt.savefig(self.output_dir / "log_probability_distribution.png", dpi=300, bbox_inches='tight')
-        
-        # Store the data for later access
-        self.overall_log_prob_histogram_data = log_prob_histogram_data
-        
-        return fig
-
-    def save_all_data(self):
-        """Save all analysis data to CSV files and histogram data to JSON files"""
-        if hasattr(self, 'all_log_probs'):
-            pd.DataFrame({'log_probability': self.all_log_probs}).to_csv(
-                self.output_dir / "log_probability_data.csv", index=False)
-        
-        if hasattr(self, 'log_probs_by_round'):
-            # Save per-round log probabilities
-            log_probs_df = pd.DataFrame({
-                round_name: self.log_probs_by_round.get(round_name, [])
-                for round_name in self.ROUND_ORDER
-            })
-            log_probs_df.to_csv(self.output_dir / "log_probabilities_by_round_data.csv", index=False)
-        
-        if hasattr(self, 'underdogs_by_round'):
-            pd.DataFrame(self.underdogs_by_round).to_csv(
-                self.output_dir / "upsets_by_round_data.csv", index=False)
-        
-        if hasattr(self, 'all_results'):
-            self.all_results.to_csv(self.output_dir / "pool_results.csv", index=False)
-        
-        # Save upset statistics
-        upset_stats = self.analyze_upsets()
-        upset_stats.to_csv(self.output_dir / "upset_statistics.csv", index=False)
-        
-        # Save round log probability statistics
-        if hasattr(self, 'log_probs_by_round'):
-            round_log_stats = self.analyze_round_log_probabilities()
-            round_log_stats.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
-            
-        # Save common underdogs data
-        common_underdogs = self.find_common_underdogs()
-        common_underdogs.to_csv(self.output_dir / "common_underdogs.csv", index=False)
-        
-        # Generate histogram data but don't save figures (already done separately)
-        if not hasattr(self, 'histogram_data'):
-            self.plot_upset_distributions(save=True)
-        
-        if not hasattr(self, 'total_histogram_data'):
-            self.plot_total_upsets_distribution(save=True)
-            
-        if not hasattr(self, 'log_prob_histogram_data'):
-            self.plot_all_rounds_log_probability(save=True)
-            
-        if not hasattr(self, 'overall_log_prob_histogram_data'):
-            self.plot_log_probability_distribution(save=True)
     
     def find_common_underdogs(self) -> pd.DataFrame:
         """
@@ -632,45 +514,23 @@ class BracketAnalysis:
         
         return champions_df
     
-    def analyze_bracket_likelihood(self) -> pd.DataFrame:
+    def analyze_log_probabilities(self) -> pd.DataFrame:
         """
-        Analyze the distribution of bracket likelihoods in winning entries
+        Analyze log probability statistics by round and overall.
+        Combines per-round analysis with overall bracket likelihood.
         
         Returns:
-            DataFrame containing statistics about bracket likelihood scores
-        """
-        if not hasattr(self, 'all_log_probs'):
-            raise ValueError("Must run simulations before analyzing likelihoods")
-            
-        # Calculate summary statistics
-        summary = {
-            'mean_log_prob': np.mean(self.all_log_probs),
-            'std_log_prob': np.std(self.all_log_probs),
-            'min_log_prob': np.min(self.all_log_probs),
-            'max_log_prob': np.max(self.all_log_probs),
-            'median_log_prob': np.median(self.all_log_probs),
-            'q25_log_prob': np.percentile(self.all_log_probs, 25),
-            'q75_log_prob': np.percentile(self.all_log_probs, 75)
-        }
-        
-        summary_df = pd.DataFrame([summary])
-        
-        # Save data
-        summary_df.to_csv(self.output_dir / "bracket_likelihood_stats.csv", index=False)
-        
-        return summary_df
-
-    def analyze_round_log_probabilities(self) -> pd.DataFrame:
-        """
-        Analyze log probability statistics by round
-        
-        Returns:
-            DataFrame containing log probability statistics by round
+            DataFrame containing log probability statistics by round and overall
         """
         if not hasattr(self, 'log_probs_by_round'):
             raise ValueError("Must run simulations before analyzing log probabilities by round")
         
+        if not hasattr(self, 'all_log_probs'):
+            raise ValueError("Must run simulations before analyzing overall log probabilities")
+        
         stats = []
+        
+        # First analyze each round
         for round_name in self.ROUND_ORDER:
             if round_name in self.log_probs_by_round and len(self.log_probs_by_round[round_name]) > 0:
                 data = self.log_probs_by_round[round_name]
@@ -686,47 +546,85 @@ class BracketAnalysis:
                     'total_games': len(data)
                 })
         
+        # Then analyze overall bracket
+        overall_data = self.all_log_probs
+        stats.append({
+            'round': 'Overall',
+            'avg_log_prob': np.mean(overall_data),
+            'std_log_prob': np.std(overall_data),
+            'min_log_prob': np.min(overall_data),
+            'q25_log_prob': np.percentile(overall_data, 25),
+            'median_log_prob': np.median(overall_data),
+            'q75_log_prob': np.percentile(overall_data, 75),
+            'max_log_prob': np.max(overall_data),
+            'total_games': len(overall_data)
+        })
+        
         # Convert to DataFrame
         stats_df = pd.DataFrame(stats)
         
-        # Sort by predefined round order
-        stats_df['round_order'] = stats_df['round'].map({round_name: i for i, round_name in enumerate(self.ROUND_ORDER)})
-        stats_df = stats_df.sort_values('round_order').drop('round_order', axis=1)
+        # Sort with rounds first, then overall at the end
+        round_order = {round_name: i for i, round_name in enumerate(self.ROUND_ORDER)}
+        round_order['Overall'] = len(self.ROUND_ORDER)  # Put Overall at the end
         
-        # Save to CSV
-        stats_df.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
+        stats_df['sort_order'] = stats_df['round'].map(round_order)
+        stats_df = stats_df.sort_values('sort_order').drop('sort_order', axis=1)
         
         return stats_df
 
     def save_all_data(self):
-        """Save all analysis data to CSV files"""
-        if hasattr(self, 'all_log_probs'):
-            pd.DataFrame({'log_probability': self.all_log_probs}).to_csv(
-                self.output_dir / "log_probability_data.csv", index=False)
+        """Save all analysis data to CSV files and generate plots"""
+        # # Save log probabilities data (combined overall and by round)
+        # if hasattr(self, 'log_probs_by_round') and hasattr(self, 'all_log_probs'):
+        #     # Start with per-round log probabilities
+        #     log_probs_df = pd.DataFrame({
+        #         round_name: pd.Series(self.log_probs_by_round.get(round_name, []))
+        #         for round_name in self.ROUND_ORDER
+        #     })
+            
+        #     # Add overall log probability as another column
+        #     # Ensure lengths match by padding shorter arrays if needed
+        #     max_len = max([len(log_probs_df[col]) for col in log_probs_df.columns] + [len(self.all_log_probs)])
+        #     log_probs_df['Overall'] = pd.Series(self.all_log_probs).reindex(range(max_len))
+            
+        #     # Save combined data
+        #     log_probs_df.to_csv(self.output_dir / "log_probabilities.csv", index=False)
         
-        if hasattr(self, 'log_probs_by_round'):
-            # Save per-round log probabilities
-            log_probs_df = pd.DataFrame({
-                round_name: self.log_probs_by_round.get(round_name, [])
-                for round_name in self.ROUND_ORDER
-            })
-            log_probs_df.to_csv(self.output_dir / "log_probabilities_by_round_data.csv", index=False)
+        # # Save upsets by round data
+        # if hasattr(self, 'underdogs_by_round'):
+        #     upsets_df = pd.DataFrame({
+        #         round_name: pd.Series(counts) 
+        #         for round_name, counts in self.underdogs_by_round.items()
+        #     })
+        #     upsets_df.to_csv(self.output_dir / "upsets_by_round_data.csv", index=False)
         
-        if hasattr(self, 'upsets_by_round'):
-            pd.DataFrame(self.upsets_by_round).to_csv(
-                self.output_dir / "upsets_by_round_data.csv", index=False)
+        # # Save pool results
+        # if hasattr(self, 'all_results'):
+        #     self.all_results.to_csv(self.output_dir / "pool_results.csv", index=False)
         
-        if hasattr(self, 'all_results'):
-            self.all_results.to_csv(self.output_dir / "pool_results.csv", index=False)
-        
-        # Save upset statistics
+        # Save analysis results
         upset_stats = self.analyze_upsets()
         upset_stats.to_csv(self.output_dir / "upset_statistics.csv", index=False)
         
-        # Save round log probability statistics
-        if hasattr(self, 'log_probs_by_round'):
-            round_log_stats = self.analyze_round_log_probabilities()
-            round_log_stats.to_csv(self.output_dir / "round_log_probability_stats.csv", index=False)
+        # Combine round and overall log probability stats
+        if hasattr(self, 'log_probs_by_round') and hasattr(self, 'all_log_probs'):
+            log_prob_stats = self.analyze_log_probabilities()
+            log_prob_stats.to_csv(self.output_dir / "log_probability_stats.csv", index=False)
+        
+        common_underdogs = self.find_common_underdogs()
+        common_underdogs.to_csv(self.output_dir / "common_underdogs.csv", index=False)
+        
+        champion_picks = self.analyze_champion_picks()
+        champion_picks.to_csv(self.output_dir / "champion_picks.csv", index=False)
+        
+        # Generate plots and histogram data if not already generated
+        if not hasattr(self, 'upset_histogram_data'):
+            self.plot_upset_distributions(save=True)
+            
+        if not hasattr(self, 'log_prob_histogram_data'):
+            self.plot_log_probability_distributions(save=True)
+            
+        print(f"All analysis data and visualizations saved to {self.output_dir}/")
 
 def main():
     """Example usage of bracket analysis"""
@@ -760,9 +658,7 @@ def main():
     
     # Generate original plots
     analyzer.plot_upset_distributions()
-    analyzer.plot_all_rounds_log_probability()
-    analyzer.plot_log_probability_distribution()
-    analyzer.plot_total_upsets_distribution()
+    analyzer.plot_log_probability_distributions()
     
     # Print various analyses
     print("\nUpset Statistics by Round:")
@@ -775,7 +671,7 @@ def main():
     print(analyzer.analyze_champion_picks().head(10).to_string(index=False))
 
     print("\nBracket Likelihood Analysis:")
-    print(analyzer.analyze_bracket_likelihood().T.to_string(header=False))
+    print(analyzer.analyze_log_probabilities().T.to_string(header=False))
     
     print(f"\nAnalysis data and visualizations have been saved to {output_dir}/")
 
