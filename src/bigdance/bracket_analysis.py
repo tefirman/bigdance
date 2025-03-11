@@ -90,10 +90,36 @@ class BracketAnalysis:
             try:
                 # Create actual bracket for this pool
                 actual_bracket = create_teams_from_standings(self.standings)
+                
+                # IMPORTANT: Add moderate upset factor to actual tournament results
+                for game in actual_bracket.games:
+                    game.upset_factor = 0.25  # More realistic tournament has upsets
+                    
                 pool = Pool(actual_bracket)
                 
                 # Create entries with varying upset factors
-                upset_factors = [0.1 + (j/entries_per_pool)*0.3 for j in range(entries_per_pool)]
+                # Create a realistic distribution of upset factors
+                upset_factors = []
+                
+                # Add some low upset factors (chalk-like)
+                low_count = max(1, int(entries_per_pool * 0.1))  # 10% of entries
+                for j in range(low_count):
+                    upset_factors.append(0.05 + (j / low_count) * 0.1)  # 0.05 to 0.15
+                    
+                # Add majority in the "sweet spot" range
+                mid_count = max(1, int(entries_per_pool * 0.7))  # 70% of entries
+                for j in range(mid_count):
+                    upset_factors.append(0.15 + (j / mid_count) * 0.15)  # 0.15 to 0.3
+                    
+                # Add some high upset factors
+                high_count = entries_per_pool - low_count - mid_count  # Remaining entries
+                for j in range(high_count):
+                    upset_factors.append(0.3 + (j / max(1, high_count)) * 0.2)  # 0.3 to 0.5
+                    
+                # Shuffle the factors to avoid systematic bias
+                np.random.shuffle(upset_factors)
+                
+                # Use upset_factors list instead of linear distribution
                 for j, upset_factor in enumerate(upset_factors):
                     try:
                         entry_bracket = create_teams_from_standings(self.standings)
