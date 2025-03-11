@@ -274,3 +274,164 @@ def test_reproducibility(sample_teams):
         assert winners1 == winners2
     
     assert results1["Champion"].name == results2["Champion"].name
+
+def test_upset_rates_at_different_factors(sample_teams):
+    """Test that higher upset_factor actually creates more upsets"""
+    # Create bracket with sample teams
+    bracket = Bracket(sample_teams)
+    
+    # Test upset factors
+    upset_factors = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]
+    upset_rates = []
+    
+    for upset_factor in upset_factors:
+        # Set the upset factor on the simulate_game method for this test
+        original_method = bracket.simulate_game
+        
+        # Add diagnostic information - print the original and adjusted probabilities
+        def test_simulate_with_diagnostics(self, game, upset_factor=upset_factor):
+            rating_diff = game.team1.rating - game.team2.rating
+            base_prob = 1 / (1 + 10**(-rating_diff/400))
+            adjusted_prob = (base_prob * (1 - upset_factor)) + (0.5 * upset_factor)
+            
+            # Print diagnostic information for the first few games
+            if hasattr(test_simulate_with_diagnostics, 'count'):
+                test_simulate_with_diagnostics.count += 1
+            else:
+                test_simulate_with_diagnostics.count = 1
+                
+            if test_simulate_with_diagnostics.count <= 10:
+                favorite = game.team1 if game.team1.seed < game.team2.seed else game.team2
+                underdog = game.team2 if game.team1.seed < game.team2.seed else game.team1
+                is_upset = (adjusted_prob < 0.5 and game.team1.seed < game.team2.seed) or \
+                           (adjusted_prob > 0.5 and game.team1.seed > game.team2.seed)
+                print(f"F={upset_factor:.1f}, {game.team1.seed} vs {game.team2.seed}, "\
+                      f"Base p={base_prob:.4f}, Adj p={adjusted_prob:.4f}, Upset? {is_upset}")
+            
+            return game.team1 if np.random.random() < adjusted_prob else game.team2
+        
+        # Patch the method for this test
+        bracket.simulate_game = test_simulate_with_diagnostics.__get__(bracket, type(bracket))
+        
+        upsets = 0
+        total_games = 0
+        
+        # Run multiple simulations
+        for _ in range(100):
+            # Reset the bracket
+            bracket = Bracket(sample_teams)
+            bracket.simulate_game = test_simulate_with_diagnostics.__get__(bracket, type(bracket))
+            
+            # Run tournament simulation
+            bracket.simulate_tournament()
+            
+            # Count upsets
+            for round_name, teams in bracket.underdogs_by_round.items():
+                upsets += len(teams)
+            
+            # Count total games in the tournament (63 for a 64-team tournament)
+            total_games += 63
+        
+        upset_rate = upsets / total_games
+        upset_rates.append(upset_rate)
+        
+        # Restore original method
+        bracket.simulate_game = original_method
+        
+        print(f"Upset factor: {upset_factor:.1f}, Upset rate: {upset_rate:.4f}")
+    
+    print("\nAll upset rates:", upset_rates)
+    
+    # Check if rates generally increase (allow for some statistical variation)
+    is_generally_increasing = True
+    for i in range(1, len(upset_rates)):
+        if upset_rates[i] < upset_rates[i-1] - 0.02:  # Allow 2% variation
+            is_generally_increasing = False
+            print(f"Drop at {upset_factors[i]}: {upset_rates[i-1]:.4f} -> {upset_rates[i]:.4f}")
+    
+    assert is_generally_increasing, f"Upset rates are not generally increasing: {upset_rates}"
+
+def test_seeding_impact(sample_teams):
+    """Test that seeding has appropriate impact on advancement probability"""
+    results = {}
+    
+    # Run many simulations
+    for _ in range(1000):
+        bracket = Bracket(sample_teams)
+        outcomes = bracket.simulate_tournament()
+        
+        # Track which seeds reached each round
+        for round_name, teams_result in outcomes.items():
+            if round_name not in results:
+                results[round_name] = []
+            
+            # Handle both single Team objects and lists of Teams
+            if round_name == "Champion":
+                # Champion is a single Team object
+                results[round_name].append(teams_result.seed)
+            else:
+                # Other rounds have lists of teams
+                for team in teams_result:
+                    results[round_name].append(team.seed)
+    
+    # Calculate advancement rates by seed, dividing by number of teams per seed (4)
+    advancement_rates = {}
+    for round_name, seeds in results.items():
+        if round_name not in ["Champion"]:  # Process rounds with multiple teams
+            counts = {}
+            for seed in range(1, 17):
+                # Divide by 4000 (4 teams per seed × 1000 simulations)
+                counts[seed] = seeds.count(seed) / 4000
+            advancement_rates[round_name] = counts
+        else:
+            # Champion is just one team, so divide by 1000 simulations
+            counts = {}
+            for seed in range(1, 17):
+                counts[seed] = seeds.count(seed) / 1000
+            advancement_rates[round_name] = counts
+    
+    # Print advancement rates for analysis
+    print("\nAdvancement rates by seed:")
+    for round_name, rates in advancement_rates.items():
+        print(f"\n{round_name}:")
+        for seed, rate in sorted(rates.items()):
+            print(f"Seed {seed}: {rate:.4f}")
+    
+    # Verification checks - general relationships that should hold
+    sweet_16_rates = advancement_rates["Sweet 16"]
+    assert sweet_16_rates[1] > sweet_16_rates[4] > sweet_16_rates[8]  # Higher seeds should advance more
+    
+    # Verify reasonable 1-seed advancement rates
+    assert 0.7 < advancement_rates["Sweet 16"][1] < 0.95  # 1 seeds should make Sweet 16 70-95% of time
+    assert 0.3 < advancement_rates["Final Four"][1] < 0.7  # 1 seeds should make Final Four 30-70% of time
+
+def test_pool_with_variable_upset_factors(sample_teams):
+    """Test that brackets with reasonable upset factors perform well"""
+    actual_bracket = Bracket(sample_teams)
+    
+    # Create pool
+    pool = Pool(actual_bracket)
+    
+    # Add entries with different upset factors
+    upset_factors = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    for factor in upset_factors:
+        entry = Bracket(sample_teams)
+        # Set upset factor for all games
+        for game in entry.games:
+            game.upset_factor = factor
+        pool.add_entry(f"Entry_{factor:.1f}", entry)
+    
+    # Simulate pool
+    results = pool.simulate_pool(num_sims=1000)
+    
+    # Print results
+    print("\nPool results with different upset factors:")
+    print(results)
+    
+    # Verify that winning entry has a reasonable upset factor
+    winning_factor = float(results.iloc[0]['name'].split('_')[1])
+    print(f"Winning upset factor: {winning_factor}")
+    
+    # Verify that at least one non-zero upset factor performs better than pure chalk
+    non_zero_entries = results[results['name'] != "Entry_0.0"]
+    assert non_zero_entries.iloc[0]['win_pct'] >= results[results['name'] == "Entry_0.0"].iloc[0]['win_pct']

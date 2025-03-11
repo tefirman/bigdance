@@ -123,9 +123,9 @@ class Bracket:
                     region=region
                 ))
 
-    def simulate_game(self, game: Game, upset_factor: float = 0.1) -> Team:
+    def simulate_game(self, game: Game, upset_factor: float = 0.2) -> Team:
         """
-        Simulate single game outcome using rating differential and optional upset factor
+        Simulate single game outcome using rating differential, seed differential, and upset factor
         
         Args:
             game: Game to simulate
@@ -134,13 +134,67 @@ class Bracket:
         Returns:
             Winning team
         """
-        rating_diff = game.team1.rating - game.team2.rating
-        base_prob = 1 / (1 + 10**(-rating_diff/400))  # Basic Elo formula
+        # Determine favorite and underdog based on seed (lower seed is better)
+        if game.team1.seed < game.team2.seed:
+            favorite, underdog = game.team1, game.team2
+            favorite_is_team1 = True
+        elif game.team1.seed > game.team2.seed:
+            favorite, underdog = game.team2, game.team1
+            favorite_is_team1 = False
+        else:
+            # Equal seeds, determine by rating
+            if game.team1.rating > game.team2.rating:
+                favorite, underdog = game.team1, game.team2
+                favorite_is_team1 = True
+            else:
+                favorite, underdog = game.team2, game.team1
+                favorite_is_team1 = False
         
-        # Apply upset factor to make results less predictable
-        prob = (base_prob * (1 - upset_factor)) + (0.5 * upset_factor)
+        # Calculate favorite's base win probability using Elo formula
+        rating_diff = favorite.rating - underdog.rating
         
-        return game.team1 if np.random.random() < prob else game.team2
+        # Enhanced seed-based adjustment for tournament dynamics
+        seed_diff = underdog.seed - favorite.seed  # Positive number
+        
+        # Higher seed advantage - increasing the boost significantly
+        seed_boost = min(250, seed_diff * 20)  # Further increased multiplier and cap
+        
+        # Apply extra boost for top seeds to reflect their historical advantage
+        if favorite.seed == 1:
+            seed_boost += 100  # Significant extra boost for 1-seeds
+        elif favorite.seed <= 4:
+            seed_boost += 75   # Strong boost for 2-4 seeds
+        
+        # Reduce upset factor for games with 1-seeds to better match historical performance
+        effective_upset_factor = upset_factor
+        if favorite.seed == 1:
+            effective_upset_factor *= 0.5  # Further reduce randomness for 1-seed games
+        elif favorite.seed <= 4:
+            effective_upset_factor *= 0.7  # Reduce randomness for top seeds
+        
+        # Make round-specific adjustments (if available in the game object)
+        if hasattr(game, 'round') and game.round > 1:
+            # Later rounds slightly favor higher seeds (less randomness)
+            effective_upset_factor *= 0.9
+        
+        # Apply the adjustment
+        adjusted_rating_diff = rating_diff + seed_boost
+        
+        # Calculate probability with adjusted rating diff
+        base_prob = 1 / (1 + 10**(-adjusted_rating_diff/400))
+        
+        # Apply upset factor to reduce favorite's probability toward 0.5, with tournament-specific rules
+        upset_adjusted_prob = base_prob * (1 - effective_upset_factor) + (0.5 * effective_upset_factor)
+        
+        # Ensure that 1-seeds in the first round have at least a 90% win probability
+        if favorite.seed == 1 and underdog.seed == 16 and hasattr(game, 'round') and game.round == 1:
+            upset_adjusted_prob = max(upset_adjusted_prob, 0.9)
+        
+        # Determine winner
+        if np.random.random() < upset_adjusted_prob:
+            return favorite
+        else:
+            return underdog
 
     def advance_round(self, games: List[Game]) -> List[Game]:
         """
