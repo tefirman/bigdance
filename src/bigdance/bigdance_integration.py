@@ -11,6 +11,7 @@
 
 from typing import List, Dict, Optional
 import pandas as pd
+import numpy as np
 from bigdance.wn_cbb_scraper import Standings
 from bigdance.cbb_brackets import Game, Team, Bracket, Pool
 import argparse
@@ -220,13 +221,41 @@ def simulate_bracket_pool(standings: Optional[Standings] = None,
     # Create actual results bracket
     actual_bracket = create_teams_from_standings(standings)
     
+    # Apply a moderate-high upset factor to the actual tournament result
+    # This ensures the actual tournament has a realistic amount of upsets
+    for game in actual_bracket.games:
+        game.upset_factor = 0.25  # Higher upset factor for actual tournament
+    
     # Initialize pool
     pool = Pool(actual_bracket)
     
     # Generate upset factors if not provided
     if upset_factors is None:
-        # upset_factors = [0.1 + (i/num_entries)*0.3 for i in range(num_entries)]
-        upset_factors = [0.1]*num_entries
+        # Create a distribution that favors realistic upset factors
+        # Focus more entries in the 0.15-0.3 range where optimal strategies usually lie
+        # Include some entries with very low and very high upset factors
+        upset_factors = []
+        
+        # Add some low upset factors (chalk-like)
+        low_count = max(1, int(num_entries * 0.1))  # 10% of entries
+        for i in range(low_count):
+            upset_factors.append(0.05 + (i / low_count) * 0.1)  # 0.05 to 0.15
+            
+        # Add majority in the "sweet spot" range
+        mid_count = max(1, int(num_entries * 0.7))  # 70% of entries
+        for i in range(mid_count):
+            upset_factors.append(0.15 + (i / mid_count) * 0.15)  # 0.15 to 0.3
+            
+        # Add some high upset factors
+        high_count = num_entries - low_count - mid_count  # Remaining entries
+        for i in range(high_count):
+            upset_factors.append(0.3 + (i / max(1, high_count)) * 0.2)  # 0.3 to 0.5
+            
+        # Shuffle the factors to avoid systematic bias
+        np.random.shuffle(upset_factors)
+        
+        # Ensure we have exactly the right number
+        upset_factors = upset_factors[:num_entries]
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")
     
