@@ -209,6 +209,7 @@ def simulate_bracket_pool(standings: Optional[Standings] = None,
                   If None, will create a new Standings object with the specified gender.
         num_entries: Number of bracket entries to simulate
         upset_factors: Optional list of upset factors for each entry
+                      Ranges from -1.0 (extreme chalk) to 1.0 (coin flip)
         women: Whether to use women's basketball data (default: False)
         
     Returns:
@@ -221,41 +222,34 @@ def simulate_bracket_pool(standings: Optional[Standings] = None,
     # Create actual results bracket
     actual_bracket = create_teams_from_standings(standings)
     
-    # Apply a moderate-high upset factor to the actual tournament result
+    # Apply a moderate upset factor to the actual tournament result
     # This ensures the actual tournament has a realistic amount of upsets
     for game in actual_bracket.games:
-        game.upset_factor = 0.25  # Higher upset factor for actual tournament
+        game.upset_factor = 0.25  # Moderate upset factor for actual tournament
     
     # Initialize pool
     pool = Pool(actual_bracket)
     
     # Generate upset factors if not provided
     if upset_factors is None:
-        # Create a distribution that favors realistic upset factors
-        # Focus more entries in the 0.15-0.3 range where optimal strategies usually lie
-        # Include some entries with very low and very high upset factors
-        upset_factors = []
+        # Create a normal distribution centered around 0 with standard deviation 0.3
+        # This gives us a realistic mix of chalk-leaning and upset-leaning entries
+        upset_factors = np.random.normal(0, 0.3, num_entries)
         
-        # Add some low upset factors (chalk-like)
-        low_count = max(1, int(num_entries * 0.1))  # 10% of entries
-        for i in range(low_count):
-            upset_factors.append(0.05 + (i / low_count) * 0.1)  # 0.05 to 0.15
-            
-        # Add majority in the "sweet spot" range
-        mid_count = max(1, int(num_entries * 0.7))  # 70% of entries
-        for i in range(mid_count):
-            upset_factors.append(0.15 + (i / mid_count) * 0.15)  # 0.15 to 0.3
-            
-        # Add some high upset factors
-        high_count = num_entries - low_count - mid_count  # Remaining entries
-        for i in range(high_count):
-            upset_factors.append(0.3 + (i / max(1, high_count)) * 0.2)  # 0.3 to 0.5
-            
-        # Shuffle the factors to avoid systematic bias
-        np.random.shuffle(upset_factors)
+        # Clip values to stay within -1.0 to 1.0 range
+        upset_factors = np.clip(upset_factors, -1.0, 1.0)
         
-        # Ensure we have exactly the right number
-        upset_factors = upset_factors[:num_entries]
+        # Ensure we include some extreme values for variety
+        if num_entries >= 10:
+            # Include at least one strong chalk picker
+            upset_factors[0] = -0.8
+            # Include at least one strong upset picker
+            upset_factors[1] = 0.8
+            # Include at least one pure elo-based picker
+            upset_factors[2] = 0.0
+            # Shuffle to randomize positions
+            np.random.shuffle(upset_factors)
+            
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")
     
@@ -274,7 +268,6 @@ def simulate_bracket_pool(standings: Optional[Standings] = None,
 
 def main():
     """Example usage of integration module with command-line arguments"""
-    # Set up argument parser
     parser = argparse.ArgumentParser(description='Simulate March Madness bracket pool')
     parser.add_argument('--num_entries', type=int, default=10,
                         help='Number of entries to simulate')
@@ -284,10 +277,10 @@ def main():
                         help='Use women\'s basketball data instead of men\'s')
     parser.add_argument('--conference', type=str, default=None,
                         help='Filter by specific conference')
-    parser.add_argument('--upset_min', type=float, default=0.1,
-                        help='Minimum upset factor')
-    parser.add_argument('--upset_max', type=float, default=0.4,
-                        help='Maximum upset factor')
+    parser.add_argument('--upset_min', type=float, default=-0.5,
+                        help='Minimum upset factor (-1.0 for extreme chalk)')
+    parser.add_argument('--upset_max', type=float, default=0.5,
+                        help='Maximum upset factor (1.0 for coin flip)')
     parser.add_argument('--verbose', action='store_true',
                         help='Print verbose output')
     

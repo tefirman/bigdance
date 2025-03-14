@@ -194,3 +194,36 @@ def test_integration_with_real_standings(mock_standings):
         assert all(col in results.columns for col in [
             'name', 'avg_score', 'std_score', 'wins', 'win_pct'
         ])
+
+def test_simulate_bracket_pool_with_full_upset_range(mock_standings):
+    """Test bracket pool simulation with the full range of upset factors (-1.0 to 1.0)"""
+    num_entries = 5
+    # Include a full range from extreme chalk to coin flip
+    upset_factors = [-0.8, -0.4, 0.0, 0.4, 0.8]
+    
+    # Just verify that the simulation runs with the new upset factor range
+    results = simulate_bracket_pool(
+        mock_standings, 
+        num_entries=num_entries,
+        upset_factors=upset_factors
+    )
+    
+    # Check basic structure and requirements
+    assert len(results) == num_entries
+    assert all(col in results.columns for col in [
+        'name', 'avg_score', 'std_score', 'wins', 'win_pct'
+    ])
+    assert abs(results['win_pct'].sum() - 1.0) < 0.01  # Win percentages should sum to 1
+    
+    # Verify all entries have some non-zero standard deviation
+    assert all(results['std_score'] > 0)
+    
+    # Verify the simulation runs with out-of-bounds values by clipping them
+    # This tests the robustness of the implementation
+    extreme_factors = [-2.0, -0.5, 0.5, 2.0, 0.0]
+    results_extreme = simulate_bracket_pool(
+        mock_standings, 
+        num_entries=num_entries,
+        upset_factors=extreme_factors
+    )
+    assert len(results_extreme) == num_entries

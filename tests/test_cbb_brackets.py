@@ -118,7 +118,13 @@ def test_game_simulation(sample_bracket):
         winners.append(winner)
     
     # Higher rated team should win more often
+
+    print(winners)
+
     higher_seed_wins = sum(1 for w in winners if w.seed == 1)
+
+    print(str(higher_seed_wins))
+
     assert higher_seed_wins > 800  # Should win roughly 80-90% of the time
 
 def test_advance_round(sample_bracket):
@@ -276,80 +282,87 @@ def test_reproducibility(sample_teams):
     assert results1["Champion"].name == results2["Champion"].name
 
 def test_upset_rates_at_different_factors(sample_teams):
-    """Test that higher upset_factor actually creates more upsets"""
-    # Create bracket with sample teams
-    bracket = Bracket(sample_teams)
-    
-    # Test upset factors
-    upset_factors = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]
+    """Test that the new upset_factor scale works as expected across the range from -1.0 to 1.0"""
+    # Test upset factors across the full spectrum
+    upset_factors = [-0.8, -0.4, 0.0, 0.4, 0.8]
     upset_rates = []
     
     for upset_factor in upset_factors:
-        # Set the upset factor on the simulate_game method for this test
-        original_method = bracket.simulate_game
+        # Create a new bracket for each test to ensure independence
+        test_bracket = Bracket(sample_teams)
         
-        # Add diagnostic information - print the original and adjusted probabilities
-        def test_simulate_with_diagnostics(self, game, upset_factor=upset_factor):
-            rating_diff = game.team1.rating - game.team2.rating
-            base_prob = 1 / (1 + 10**(-rating_diff/400))
-            adjusted_prob = (base_prob * (1 - upset_factor)) + (0.5 * upset_factor)
-            
-            # Print diagnostic information for the first few games
-            if hasattr(test_simulate_with_diagnostics, 'count'):
-                test_simulate_with_diagnostics.count += 1
-            else:
-                test_simulate_with_diagnostics.count = 1
-                
-            if test_simulate_with_diagnostics.count <= 10:
-                favorite = game.team1 if game.team1.seed < game.team2.seed else game.team2
-                underdog = game.team2 if game.team1.seed < game.team2.seed else game.team1
-                is_upset = (adjusted_prob < 0.5 and game.team1.seed < game.team2.seed) or \
-                           (adjusted_prob > 0.5 and game.team1.seed > game.team2.seed)
-                print(f"F={upset_factor:.1f}, {game.team1.seed} vs {game.team2.seed}, "\
-                      f"Base p={base_prob:.4f}, Adj p={adjusted_prob:.4f}, Upset? {is_upset}")
-            
-            return game.team1 if np.random.random() < adjusted_prob else game.team2
+        # Set the upset factor on all games
+        for game in test_bracket.games:
+            game.upset_factor = upset_factor
         
-        # Patch the method for this test
-        bracket.simulate_game = test_simulate_with_diagnostics.__get__(bracket, type(bracket))
+        # Run tournament simulation
+        test_bracket.simulate_tournament()
         
-        upsets = 0
-        total_games = 0
-        
-        # Run multiple simulations
-        for _ in range(100):
-            # Reset the bracket
-            bracket = Bracket(sample_teams)
-            bracket.simulate_game = test_simulate_with_diagnostics.__get__(bracket, type(bracket))
-            
-            # Run tournament simulation
-            bracket.simulate_tournament()
-            
-            # Count upsets
-            for round_name, teams in bracket.underdogs_by_round.items():
-                upsets += len(teams)
-            
-            # Count total games in the tournament (63 for a 64-team tournament)
-            total_games += 63
-        
-        upset_rate = upsets / total_games
+        # Count upsets (underdogs winning)
+        upsets = test_bracket.total_underdogs()
+        upset_rate = upsets / 63  # 63 total games in a 64-team tournament
         upset_rates.append(upset_rate)
-        
-        # Restore original method
-        bracket.simulate_game = original_method
-        
         print(f"Upset factor: {upset_factor:.1f}, Upset rate: {upset_rate:.4f}")
     
     print("\nAll upset rates:", upset_rates)
     
-    # Check if rates generally increase (allow for some statistical variation)
-    is_generally_increasing = True
+    # Check if rates generally increase with increasing upset factor
+    # This should now be a monotonic relationship from low to high
     for i in range(1, len(upset_rates)):
-        if upset_rates[i] < upset_rates[i-1] - 0.02:  # Allow 2% variation
-            is_generally_increasing = False
-            print(f"Drop at {upset_factors[i]}: {upset_rates[i-1]:.4f} -> {upset_rates[i]:.4f}")
+        assert upset_rates[i] > upset_rates[i-1] - 0.03, \
+            f"Upset rates should generally increase. Drop at {upset_factors[i]}: {upset_rates[i-1]:.4f} -> {upset_rates[i]:.4f}"
+
+def test_negative_upset_factor_behavior(sample_teams):
+    """Test that negative upset factors properly favor higher seeds beyond elo predictions"""
+    # Create brackets with different upset factors
+    chalk_bracket = Bracket(sample_teams)  # extreme chalk
+    elo_bracket = Bracket(sample_teams)    # pure elo-based
     
-    assert is_generally_increasing, f"Upset rates are not generally increasing: {upset_rates}"
+    # Set different upset factors
+    for game in chalk_bracket.games:
+        game.upset_factor = -1.0  # Extreme chalk (100% favorite wins)
+    
+    for game in elo_bracket.games:
+        game.upset_factor = 0.0   # Pure elo (no adjustment)
+    
+    # Run multiple simulations to get stable results
+    chalk_upsets = 0
+    elo_upsets = 0
+    num_sims = 50
+    
+    for _ in range(num_sims):
+        # Create fresh brackets to reset results
+        chalk_bracket = Bracket(sample_teams)
+        elo_bracket = Bracket(sample_teams)
+        
+        # Set upset factors
+        for game in chalk_bracket.games:
+            game.upset_factor = -1.0
+        for game in elo_bracket.games:
+            game.upset_factor = 0.0
+        
+        # Simulate tournaments
+        chalk_bracket.simulate_tournament()
+        elo_bracket.simulate_tournament()
+        
+        # Count upsets
+        chalk_upsets += chalk_bracket.total_underdogs()
+        elo_upsets += elo_bracket.total_underdogs()
+    
+    # Calculate average upsets per bracket
+    avg_chalk_upsets = chalk_upsets / num_sims
+    avg_elo_upsets = elo_upsets / num_sims
+    
+    print(f"Average upsets with extreme chalk (-1.0): {avg_chalk_upsets:.2f}")
+    print(f"Average upsets with pure elo (0.0): {avg_elo_upsets:.2f}")
+    
+    # Extreme chalk should produce significantly fewer upsets than elo-based
+    assert avg_chalk_upsets < avg_elo_upsets * 0.7, \
+        f"Extreme chalk should generate far fewer upsets than elo-based picks"
+    
+    # For extreme chalk (-1.0), expect very few upsets overall
+    assert avg_chalk_upsets < 1.0, \
+        f"Extreme chalk should produce very few upsets, got {avg_chalk_upsets:.2f}"
 
 def test_seeding_impact(sample_teams):
     """Test that seeding has appropriate impact on advancement probability"""

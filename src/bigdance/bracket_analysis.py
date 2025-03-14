@@ -93,33 +93,29 @@ class BracketAnalysis:
                 
                 # IMPORTANT: Add moderate upset factor to actual tournament results
                 for game in actual_bracket.games:
-                    game.upset_factor = 0.25  # More realistic tournament has upsets
+                    game.upset_factor = 0.0  # More realistic tournament has upsets
                     
                 pool = Pool(actual_bracket)
                 
                 # Create entries with varying upset factors
-                # Create a realistic distribution of upset factors
-                upset_factors = []
+                # Create a normal distribution centered around 0 with standard deviation 0.3
+                upset_factors = np.random.normal(0, 0.3, entries_per_pool)
                 
-                # Add some low upset factors (chalk-like)
-                low_count = max(1, int(entries_per_pool * 0.1))  # 10% of entries
-                for j in range(low_count):
-                    upset_factors.append(0.05 + (j / low_count) * 0.1)  # 0.05 to 0.15
-                    
-                # Add majority in the "sweet spot" range
-                mid_count = max(1, int(entries_per_pool * 0.7))  # 70% of entries
-                for j in range(mid_count):
-                    upset_factors.append(0.15 + (j / mid_count) * 0.15)  # 0.15 to 0.3
-                    
-                # Add some high upset factors
-                high_count = entries_per_pool - low_count - mid_count  # Remaining entries
-                for j in range(high_count):
-                    upset_factors.append(0.3 + (j / max(1, high_count)) * 0.2)  # 0.3 to 0.5
-                    
-                # Shuffle the factors to avoid systematic bias
-                np.random.shuffle(upset_factors)
+                # Clip values to stay within -1.0 to 1.0 range
+                upset_factors = np.clip(upset_factors, -1.0, 1.0)
                 
-                # Use upset_factors list instead of linear distribution
+                # Ensure we include some extreme values for variety
+                if entries_per_pool >= 10:
+                    # Include at least one strong chalk picker
+                    upset_factors[0] = -0.8
+                    # Include at least one strong upset picker
+                    upset_factors[1] = 0.8
+                    # Include at least one pure elo-based picker
+                    upset_factors[2] = 0.0
+                    # Shuffle to randomize positions
+                    np.random.shuffle(upset_factors)
+                
+                # Use upset_factors list instead of the old approach
                 for j, upset_factor in enumerate(upset_factors):
                     try:
                         entry_bracket = create_teams_from_standings(self.standings)

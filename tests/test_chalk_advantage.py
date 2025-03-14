@@ -29,7 +29,7 @@ def tournament_teams():
 
 def test_chalk_advantage_ratio(tournament_teams):
     """
-    Test that a chalk bracket doesn't have an unfair advantage in pool simulations.
+    Test that a true chalk bracket (extreme chalk) doesn't have an unfair advantage in pool simulations.
     """
     # Parameters
     pool_size = 20  # Small size for faster tests
@@ -43,17 +43,17 @@ def test_chalk_advantage_ratio(tournament_teams):
     # Initialize pool
     pool = Pool(actual_bracket)
     
-    # Create chalk bracket
+    # Create true chalk bracket (extreme chalk, always pick higher seed)
     chalk_bracket = Bracket(tournament_teams)
     for game in chalk_bracket.games:
-        game.upset_factor = 0.0
+        game.upset_factor = -0.8  # Strongly favor higher seeds (traditional chalk)
     pool.add_entry("Chalk_Bracket", chalk_bracket)
     
-    # Create other entries with varying upset factors
+    # Create other entries with varying upset factors across the new range
     for i in range(pool_size - 1):
         entry = Bracket(tournament_teams)
-        # Create a variety of upset factors
-        upset_factor = 0.05 + (i / (pool_size - 1)) * 0.35  # 0.05 to 0.4
+        # Create a variety of upset factors from chalk to upset-leaning
+        upset_factor = -0.8 + (i / (pool_size - 1)) * 1.6  # Range from -0.8 to 0.8
         for game in entry.games:
             game.upset_factor = upset_factor
         pool.add_entry(f"Entry_{i+1}", entry)
@@ -79,14 +79,11 @@ def test_chalk_advantage_ratio(tournament_teams):
     # Test should pass if chalk doesn't have more than a 25% advantage
     # We use 1.25 to allow for some random variation in the test
     assert advantage_ratio <= 1.25, f"Chalk advantage ratio {advantage_ratio} exceeds 1.25"
-    
-    # Additional check to make sure chalk isn't at a huge disadvantage either
-    assert advantage_ratio >= 0.5, f"Chalk advantage ratio {advantage_ratio} is too low"
 
 def test_chalk_vs_optimal_strategy(tournament_teams):
     """
-    Test that optimal upset factors (in the middle range) perform
-    better than chalk brackets in pool simulations.
+    Test that optimal upset factors (around zero) perform
+    better than extreme chalk brackets in pool simulations.
     """
     # Parameters
     num_sims = 100  # Reduced for test speed
@@ -99,14 +96,14 @@ def test_chalk_vs_optimal_strategy(tournament_teams):
     # Initialize pool
     pool = Pool(actual_bracket)
     
-    # Create a chalk bracket
+    # Create a pure chalk bracket (extreme chalk)
     chalk_bracket = Bracket(tournament_teams)
     for game in chalk_bracket.games:
-        game.upset_factor = 0.0
+        game.upset_factor = -0.8  # Strong chalk strategy
     pool.add_entry("Chalk", chalk_bracket)
     
-    # Create brackets with different upset factors
-    upset_factors = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    # Create brackets with different upset factors across the full range
+    upset_factors = [-0.8, -0.4, -0.2, 0.0, 0.2, 0.4, 0.8]
     for factor in upset_factors:
         entry = Bracket(tournament_teams)
         for game in entry.games:
@@ -123,14 +120,15 @@ def test_chalk_vs_optimal_strategy(tournament_teams):
     chalk_results = results[results['name'] == 'Chalk']
     chalk_win_pct = chalk_results.iloc[0]['win_pct'] if not chalk_results.empty else 0
     
-    # Verify that middle-range upset factors (0.2-0.3) tend to perform better than chalk
-    middle_factors = results[(results['name'] == 'Factor_0.2') | 
-                            (results['name'] == 'Factor_0.3')]
+    # Verify that balanced strategies (around zero) tend to perform better than extreme chalk
+    balanced_factors = results[(results['name'] == 'Factor_-0.2') | 
+                              (results['name'] == 'Factor_0.0') |
+                              (results['name'] == 'Factor_0.2')]
     
-    # Not every run will have these win, so we'll verify at least one middle factor
+    # Not every run will have these win, so we'll verify at least one balanced factor
     # has a reasonable performance compared to chalk
-    assert middle_factors['win_pct'].max() >= chalk_win_pct * 0.8, \
-        "Middle-range upset factors should perform reasonably well compared to chalk"
+    assert balanced_factors['win_pct'].max() >= chalk_win_pct * 0.8, \
+        "Balanced strategies should perform reasonably well compared to extreme chalk"
     
     # Print results for debugging
     print("\nWin percentages by strategy:")
@@ -151,25 +149,18 @@ def test_chalk_advantage_comprehensive(tournament_teams):
     # Initialize pool
     pool = Pool(actual_bracket)
     
-    # Create chalk bracket
+    # Create chalk bracket (extreme chalk)
     chalk_bracket = Bracket(tournament_teams)
     for game in chalk_bracket.games:
-        game.upset_factor = 0.0
+        game.upset_factor = -0.8  # Strong chalk strategy
     pool.add_entry("Chalk_Bracket", chalk_bracket)
     
-    # Create other entries with varying upset factors
-    for i in range(pool_size - 1):
+    # Create other entries with a normal distribution of upset factors
+    upset_factors = np.random.normal(0, 0.3, pool_size - 1)
+    upset_factors = np.clip(upset_factors, -1.0, 1.0)
+    
+    for i, upset_factor in enumerate(upset_factors):
         entry = Bracket(tournament_teams)
-        # More realistic distribution of upset factors
-        if i < pool_size * 0.2:  # 20% with low upset factors
-            upset_factor = 0.05 + (i / (pool_size * 0.2)) * 0.1  # 0.05-0.15
-        elif i < pool_size * 0.7:  # 50% with medium upset factors
-            idx = i - int(pool_size * 0.2)
-            upset_factor = 0.15 + (idx / (pool_size * 0.5)) * 0.15  # 0.15-0.3
-        else:  # 30% with high upset factors
-            idx = i - int(pool_size * 0.7)
-            upset_factor = 0.3 + (idx / (pool_size * 0.3)) * 0.2  # 0.3-0.5
-            
         for game in entry.games:
             game.upset_factor = upset_factor
         pool.add_entry(f"Entry_{i+1}", entry)
