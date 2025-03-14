@@ -282,34 +282,43 @@ def test_reproducibility(sample_teams):
     assert results1["Champion"].name == results2["Champion"].name
 
 def test_upset_rates_at_different_factors(sample_teams):
-    """Test that the new upset_factor scale works as expected across the range from -1.0 to 1.0"""
+    """Test that the upset_factor scale works as expected across the range from -1.0 to 1.0"""
     # Test upset factors across the full spectrum
-    upset_factors = [-0.8, -0.4, 0.0, 0.4, 0.8]
+    # upset_factors = [-1.0, -0.5, 0.0, 0.5, 1.0]
+    upset_factors = np.arange(-1.0, 1.01, 0.1)
     upset_rates = []
     
+    num_brackets = 100  # Simulate 100 brackets for each upset factor to reduce noise
+    
     for upset_factor in upset_factors:
-        # Create a new bracket for each test to ensure independence
-        test_bracket = Bracket(sample_teams)
+        total_upsets = 0
         
-        # Set the upset factor on all games
-        for game in test_bracket.games:
-            game.upset_factor = upset_factor
+        # Simulate multiple brackets with this upset factor
+        for _ in range(num_brackets):
+            # Create a new bracket for each simulation
+            test_bracket = Bracket(sample_teams)
+            
+            # Set the upset factor on all games
+            for game in test_bracket.games:
+                game.upset_factor = upset_factor
+            
+            # Run tournament simulation
+            test_bracket.simulate_tournament()
+            
+            # Count upsets (underdogs winning)
+            total_upsets += test_bracket.total_underdogs()
         
-        # Run tournament simulation
-        test_bracket.simulate_tournament()
-        
-        # Count upsets (underdogs winning)
-        upsets = test_bracket.total_underdogs()
-        upset_rate = upsets / 63  # 63 total games in a 64-team tournament
-        upset_rates.append(upset_rate)
-        print(f"Upset factor: {upset_factor:.1f}, Upset rate: {upset_rate:.4f}")
+        # Calculate average upset rate across all simulations
+        avg_upset_rate = total_upsets / (63 * num_brackets)  # 63 total games per tournament
+        upset_rates.append(avg_upset_rate)
+        print(f"Upset factor: {upset_factor:.1f}, Avg upset rate: {avg_upset_rate:.4f}")
     
     print("\nAll upset rates:", upset_rates)
     
     # Check if rates generally increase with increasing upset factor
     # This should now be a monotonic relationship from low to high
     for i in range(1, len(upset_rates)):
-        assert upset_rates[i] > upset_rates[i-1] - 0.03, \
+        assert upset_rates[i] > upset_rates[i-1] - 0.01, \
             f"Upset rates should generally increase. Drop at {upset_factors[i]}: {upset_rates[i-1]:.4f} -> {upset_rates[i]:.4f}"
 
 def test_negative_upset_factor_behavior(sample_teams):
@@ -426,7 +435,9 @@ def test_pool_with_variable_upset_factors(sample_teams):
     pool = Pool(actual_bracket)
     
     # Add entries with different upset factors
-    upset_factors = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    # upset_factors = [-0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8]  # Include some negative values
+    upset_factors = np.arange(-1.0, 1.01, 0.1)
+
     for factor in upset_factors:
         entry = Bracket(sample_teams)
         # Set upset factor for all games
@@ -439,12 +450,22 @@ def test_pool_with_variable_upset_factors(sample_teams):
     
     # Print results
     print("\nPool results with different upset factors:")
-    print(results)
+    print(results[['name', 'avg_score', 'std_score', 'wins', 'win_pct']])
+
+    # results['upset_factor'] = results.name.str.split("_").str[-1].astype(float)
+    # results.sort_values(by="upset_factor",inplace=True)
+    # import matplotlib.pyplot as plt
+    # plt.figure()
+    # plt.plot(results.upset_factor,results.win_pct)
+    # plt.grid(True)
+    # plt.xlabel("Upset Factor")
+    # plt.ylabel("Win Pct")
+    # plt.savefig("UpsetFactorWinPcts.pdf")
     
     # Verify that winning entry has a reasonable upset factor
     winning_factor = float(results.iloc[0]['name'].split('_')[1])
     print(f"Winning upset factor: {winning_factor}")
     
-    # Verify that at least one non-zero upset factor performs better than pure chalk
-    non_zero_entries = results[results['name'] != "Entry_0.0"]
-    assert non_zero_entries.iloc[0]['win_pct'] >= results[results['name'] == "Entry_0.0"].iloc[0]['win_pct']
+    # Verify that at least one non-chalk upset factor performs better than pure chalk
+    nonchalk_entries = results[results['name'] != "Entry_-1.0"]
+    assert nonchalk_entries.iloc[0]['win_pct'] >= results[results['name'] == "Entry_-1.0"].iloc[0]['win_pct']
