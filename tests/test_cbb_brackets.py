@@ -414,7 +414,7 @@ def test_seeding_impact(sample_teams):
     # Loading and processing historical tournament data
     # Pulled from Andrew Sundberg's College Basketball Dataset on Kaggle
     # https://www.kaggle.com/datasets/andrewsundberg/college-basketball-dataset?resource=download
-    teams = pd.read_csv("../assets/cbb.csv")
+    teams = pd.read_csv("assets/cbb.csv")
     actual = teams.loc[~teams.SEED.isnull() & ~teams.POSTSEASON.isin(['R68'])]
     rounds = pd.DataFrame({"POSTSEASON":['R32', 'S16', 'E8', 'F4', '2ND', 'Champions'],"round_rank":[1,2,3,4,5,6]})
     actual = pd.merge(left=actual,right=rounds,how="inner",on=["POSTSEASON"])
