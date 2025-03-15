@@ -131,7 +131,7 @@ class Bracket:
         Args:
             game: Game to simulate
             upset_factor: Adjustment to probability (-1.0 to 1.0)
-                - If None, uses game.upset_factor if available, otherwise defaults to 0.2
+                - If None, uses game.upset_factor if available, otherwise defaults to 0.0
                 - negative values: favor chalk (reduce upsets)
                 - zero: pure rating-based probability
                 - positive values: favor underdogs (increase upsets)

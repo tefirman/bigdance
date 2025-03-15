@@ -377,9 +377,17 @@ def test_seeding_impact(sample_teams):
     """Test that seeding has appropriate impact on advancement probability"""
     results = {}
     
+    # Set a realistic upset factor to match historical upset rates
+    realistic_upset_factor = 0.3
+    
     # Run many simulations
     for _ in range(1000):
         bracket = Bracket(sample_teams)
+        
+        # Set a realistic upset factor for all games
+        for game in bracket.games:
+            game.upset_factor = realistic_upset_factor
+            
         outcomes = bracket.simulate_tournament()
         
         # Track which seeds reached each round
@@ -388,10 +396,7 @@ def test_seeding_impact(sample_teams):
                 results[round_name] = []
             
             # Handle both single Team objects and lists of Teams
-            if round_name == "Champion":
-                # Champion is a single Team object
-                results[round_name].append(teams_result.seed)
-            else:
+            if round_name != "Champion":
                 # Other rounds have lists of teams
                 for team in teams_result:
                     results[round_name].append(team.seed)
@@ -399,33 +404,68 @@ def test_seeding_impact(sample_teams):
     # Calculate advancement rates by seed, dividing by number of teams per seed (4)
     advancement_rates = {}
     for round_name, seeds in results.items():
-        if round_name not in ["Champion"]:  # Process rounds with multiple teams
+        if round_name != "Champion":  # Process rounds with multiple teams
             counts = {}
             for seed in range(1, 17):
                 # Divide by 4000 (4 teams per seed × 1000 simulations)
                 counts[seed] = seeds.count(seed) / 4000
             advancement_rates[round_name] = counts
-        else:
-            # Champion is just one team, so divide by 1000 simulations
-            counts = {}
-            for seed in range(1, 17):
-                counts[seed] = seeds.count(seed) / 1000
-            advancement_rates[round_name] = counts
     
+    # Loading and processing historical tournament data
+    # Pulled from Andrew Sundberg's College Basketball Dataset on Kaggle
+    # https://www.kaggle.com/datasets/andrewsundberg/college-basketball-dataset?resource=download
+    teams = pd.read_csv("../assets/cbb.csv")
+    actual = teams.loc[~teams.SEED.isnull() & ~teams.POSTSEASON.isin(['R68'])]
+    rounds = pd.DataFrame({"POSTSEASON":['R32', 'S16', 'E8', 'F4', '2ND', 'Champions'],"round_rank":[1,2,3,4,5,6]})
+    actual = pd.merge(left=actual,right=rounds,how="inner",on=["POSTSEASON"])
+    round_names = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship", "Champion"]
+    historical_rates = {}
+    for round_ind in range(rounds.shape[0]):
+        historical_rates[round_names[round_ind]] = (actual.loc[actual.round_rank > round_ind].groupby("SEED").size()/(4*actual.YEAR.nunique())).to_dict()
+        for seed in range(1,17):
+            if seed not in historical_rates[round_names[round_ind]]:
+                historical_rates[round_names[round_ind]][seed] = 0.0
+
     # Print advancement rates for analysis
-    print("\nAdvancement rates by seed:")
+    print(f"\nAdvancement rates by seed (with upset_factor = {realistic_upset_factor}):")
+    rmsd_expectation = {"First Round": 0.12, "Second Round": 0.1, "Sweet 16": 0.08, \
+                        "Elite 8":0.05, "Final Four": 0.05, "Championship": 0.05}
     for round_name, rates in advancement_rates.items():
-        print(f"\n{round_name}:")
+        square_diff = []
         for seed, rate in sorted(rates.items()):
-            print(f"Seed {seed}: {rate:.4f}")
-    
-    # Verification checks - general relationships that should hold
-    sweet_16_rates = advancement_rates["Sweet 16"]
-    assert sweet_16_rates[1] > sweet_16_rates[4] > sweet_16_rates[8]  # Higher seeds should advance more
-    
-    # Verify reasonable 1-seed advancement rates
-    assert 0.7 < advancement_rates["Sweet 16"][1] < 0.95  # 1 seeds should make Sweet 16 70-95% of time
-    assert 0.3 < advancement_rates["Final Four"][1] < 0.7  # 1 seeds should make Final Four 30-70% of time
+            square_diff.append((rate - historical_rates[round_name][seed])**2.0)
+        rmsd = (sum(square_diff)/len(square_diff))**0.5
+        print(f"{round_name} Root Mean Square Diff: {rmsd}")
+        assert rmsd < rmsd_expectation[round_name]
+
+    # # Optional: Create visualization comparing to historical data
+    # import matplotlib.pyplot as plt
+    # fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    # fig.suptitle(f'Tournament Advancement Rates: Simulation (upset_factor={realistic_upset_factor}) vs Historical', 
+    #             fontsize=16)
+    # rounds_to_plot = ["First Round", "Second Round", "Sweet 16", "Elite 8"]
+    # for i, round_name in enumerate(rounds_to_plot):
+    #     row, col = divmod(i, 2)
+    #     ax = axes[row, col]
+    #     # Get data for this round
+    #     sim_rates = [advancement_rates[round_name][seed] for seed in range(1, 17)]
+    #     hist_rates = [historical_rates[round_name][seed] for seed in range(1, 17)]
+    #     # Plot bar chart
+    #     x = np.arange(1, 17)
+    #     width = 0.35
+    #     ax.bar(x - width/2, sim_rates, width, label='Simulation', color='skyblue')
+    #     ax.bar(x + width/2, hist_rates, width, label='Historical', color='lightcoral')
+    #     # Add labels and formatting
+    #     ax.set_title(round_name)
+    #     ax.set_xlabel('Seed')
+    #     ax.set_ylabel('Advancement Rate')
+    #     ax.set_xticks(x)
+    #     ax.set_ylim(0, 1.0)
+    #     ax.legend()
+    #     ax.grid(True, linestyle='--', alpha=0.6)
+    # plt.tight_layout(rect=[0, 0, 1, 0.95])
+    # plt.savefig("seed_advancement_comparison.png", dpi=300, bbox_inches='tight')
+    # print("\nVisualization saved as 'seed_advancement_comparison.png'")
 
 def test_pool_with_variable_upset_factors(sample_teams):
     """Test that brackets with reasonable upset factors perform well"""
