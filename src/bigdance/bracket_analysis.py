@@ -4,7 +4,7 @@
 @File    :   bracket_analysis.py 
 @Time    :   2024/02/13
 @Author  :   Taylor Firman
-@Version :   0.1.0
+@Version :   0.2.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Analyzing trends in March Madness bracket pool simulations
 '''
@@ -17,12 +17,15 @@ from bigdance.wn_cbb_scraper import Standings
 from bigdance.cbb_brackets import Team, Pool, Bracket
 from bigdance.bigdance_integration import create_teams_from_standings
 from datetime import datetime
+from scipy.stats import ttest_ind as stats_ttest_ind
+import json
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from pathlib import Path
 import argparse
 import logging
+import sys
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -355,7 +358,6 @@ class BracketAnalysis:
         if not winning_total or not non_winning_total:
             print("Warning: Missing total upsets data, skipping total upsets plot")
             if save:
-                import json
                 with open(self.output_dir / "comparative_upset_distributions_data.json", 'w') as f:
                     json.dump(histogram_data, f, indent=2)
             plt.tight_layout(rect=[0, 0, 1, 0.96])
@@ -430,7 +432,6 @@ class BracketAnalysis:
         
         # Save the histogram data
         if save:
-            import json
             with open(self.output_dir / "comparative_upset_distributions_data.json", 'w') as f:
                 json.dump(histogram_data, f, indent=2)
         
@@ -547,7 +548,6 @@ class BracketAnalysis:
         if not winning_total or not non_winning_total:
             print("Warning: Missing total log probability data, skipping overall plot")
             if save:
-                import json
                 with open(self.output_dir / "comparative_log_probability_distributions_data.json", 'w') as f:
                     json.dump(histogram_data, f, indent=2)
             plt.tight_layout(rect=[0, 0, 1, 0.96])
@@ -618,7 +618,6 @@ class BracketAnalysis:
         
         # Save histogram data
         if save:
-            import json
             with open(self.output_dir / "comparative_log_probability_distributions_data.json", 'w') as f:
                 json.dump(histogram_data, f, indent=2)
         
@@ -709,9 +708,6 @@ class BracketAnalysis:
         """
         if not hasattr(self, 'winning_underdogs_by_round') or not self.winning_underdogs_by_round:
             raise ValueError("Must run simulations before analyzing upsets")
-        
-        # Import scipy only when needed to avoid dependency issues
-        from scipy.stats import ttest_ind as stats_ttest_ind
         
         # Check if we have data to compare
         if not self.winning_brackets or not self.non_winning_brackets:
@@ -832,9 +828,6 @@ class BracketAnalysis:
         """
         if not hasattr(self, 'winning_log_probs_by_round') or not self.winning_log_probs_by_round:
             raise ValueError("Must run simulations before analyzing log probabilities")
-        
-        # Import scipy only when needed
-        from scipy.stats import ttest_ind as stats_ttest_ind
         
         # Check if we have data to compare
         if not self.winning_log_probs or not self.non_winning_log_probs:
@@ -1412,5 +1405,4 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())
