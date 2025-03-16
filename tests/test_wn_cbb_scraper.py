@@ -1,9 +1,11 @@
-import pytest
-import pandas as pd
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
 from pathlib import Path
-from bigdance.wn_cbb_scraper import BaseScraper, Standings, Matchups, Schedule
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
+import pytest
+
+from bigdance.wn_cbb_scraper import BaseScraper, Matchups, Schedule, Standings
 
 SAMPLE_ELO_HTML = """
 <table class="normal-grid alternating-rows stats-table">
@@ -239,10 +241,11 @@ SAMPLE_BIG12_HTML = """
 </div>
 """
 
+
 @pytest.fixture
 def mock_session():
     """Fixture providing a mock requests session"""
-    with patch('requests.Session') as mock:
+    with patch("requests.Session") as mock:
         session = mock.return_value
         response = MagicMock()
         response.text = SAMPLE_MATCHUPS_HTML
@@ -250,73 +253,79 @@ def mock_session():
         session.get.return_value = response
         yield session
 
+
 @pytest.fixture
 def mock_elo_response():
     """Fixture providing mock ELO rankings page"""
-    with patch('requests.Session') as mock:
+    with patch("requests.Session") as mock:
         session = mock.return_value
         response = MagicMock()
         response.text = SAMPLE_ELO_HTML
         session.get.return_value = response
         yield session
 
+
 @pytest.fixture
 def mock_rank_response():
     """Fixture providing mock rankings page"""
-    with patch('requests.Session') as mock:
+    with patch("requests.Session") as mock:
         session = mock.return_value
         session.get.return_value.text = SAMPLE_RANKS_HTML
         session.get.return_value.raise_for_status = MagicMock()
         yield session
 
-@pytest.fixture 
+
+@pytest.fixture
 def mock_matchups_response():
     """Fixture providing mock matchups page"""
-    with patch('requests.Session') as mock:
+    with patch("requests.Session") as mock:
         session = mock.return_value
         response = MagicMock()
-        response.text = SAMPLE_MATCHUPS_HTML 
+        response.text = SAMPLE_MATCHUPS_HTML
         session.get.return_value = response
         yield session
+
 
 @pytest.fixture
 def mock_standings_responses():
     """Fixture providing mock responses for all Standings HTML requests"""
     mock = MagicMock()
-    
+
     def mock_get(url, **kwargs):
         print(f"Mock received request for URL: {url}")  # Debug URL
-        
+
         response = MagicMock()
         response.raise_for_status = MagicMock()
-        
-        if 'elo' in url:
+
+        if "elo" in url:
             response.text = SAMPLE_ELO_HTML
-        elif '/conferences' in url:
+        elif "/conferences" in url:
             response.text = SAMPLE_CONFERENCES_HTML
-        elif '/conference/ACC' in url:
+        elif "/conference/ACC" in url:
             response.text = SAMPLE_ACC_HTML
-        elif '/conference/Big-12' in url:
+        elif "/conference/Big-12" in url:
             response.text = SAMPLE_BIG12_HTML
-        elif '/polls-expanded' in url:
+        elif "/polls-expanded" in url:
             response.text = SAMPLE_RANKS_HTML
         else:
             response.text = ""
             print(f"WARNING: No mock response for URL: {url}")
-            
+
         return response
-    
+
     mock.get = MagicMock(side_effect=mock_get)
     mock.mount = MagicMock()
     mock.adapters = {}
-    
+
     return mock
+
 
 @pytest.fixture
 def clean_cache():
     """Fixture to provide a clean cache directory for each test"""
-    import shutil
     import os
+    import shutil
+
     cache_dir = "test_cache"
     if os.path.exists(cache_dir):
         shutil.rmtree(cache_dir)
@@ -325,6 +334,7 @@ def clean_cache():
     # Clean up after test
     if os.path.exists(cache_dir):
         shutil.rmtree(cache_dir)
+
 
 class TestBaseScraper:
     def test_initialization(self, mock_session):
@@ -335,51 +345,56 @@ class TestBaseScraper:
 
     def test_courteous_get(self, mock_session):
         """Test courteous GET request functionality"""
-        with patch('bigdance.wn_cbb_scraper.BaseScraper._create_session', return_value=mock_session):
+        with patch(
+            "bigdance.wn_cbb_scraper.BaseScraper._create_session",
+            return_value=mock_session,
+        ):
             # Set up the mock response
             mock_response = MagicMock()
             mock_response.text = "<html>Mock HTML</html>"
             mock_session.get.return_value = mock_response
-            
+
             scraper = BaseScraper(cache_dir="test_cache")
-            
+
             # Ensure cache miss by mocking get_cached_response
-            with patch.object(scraper, '_get_cached_response', return_value=None):
+            with patch.object(scraper, "_get_cached_response", return_value=None):
                 response = scraper.courteous_get("https://test.com", "test_key")
-                
+
                 # Verify response
                 assert response == "<html>Mock HTML</html>"
-                
+
                 # Verify get was called
                 mock_session.get.assert_called_once_with("https://test.com")
 
     def test_cache_handling(self, clean_cache):
         """Test cache read/write operations"""
         scraper = BaseScraper(cache_dir=clean_cache)
-        
+
         # Test cache miss
         cached = scraper._get_cached_response("https://test.com", "test_key")
         assert cached is None
-        
+
         # Test cache write
         scraper._cache_response("https://test.com", "test_key", "<html>Cached</html>")
-        
+
         # Test cache hit
         cached = scraper._get_cached_response("https://test.com", "test_key")
         assert cached == "<html>Cached</html>"
 
+
 class TestStandings:
     def test_initialization(self, mock_elo_response, mock_rank_response):
         """Test standings initialization"""
-        with patch('bigdance.wn_cbb_scraper.Standings._create_session') as mock_session:
+        with patch("bigdance.wn_cbb_scraper.Standings._create_session") as mock_session:
             # Configure mock to return different responses for ELO vs ranks
             def mock_get(url):
-                if 'elo' in url:
+                if "elo" in url:
                     return MagicMock(text=SAMPLE_ELO_HTML)
                 else:
                     return MagicMock(text=SAMPLE_RANKS_HTML)
+
             mock_session.return_value.get = MagicMock(side_effect=mock_get)
-            
+
             standings = Standings(season=2024)
             assert standings.season == 2024
             assert not standings.gender
@@ -387,45 +402,47 @@ class TestStandings:
 
     def test_elo_parsing(self, mock_elo_response):
         """Test parsing of ELO rankings"""
-        with patch('bigdance.wn_cbb_scraper.Standings._create_session') as mock_session:
+        with patch("bigdance.wn_cbb_scraper.Standings._create_session") as mock_session:
             mock_session.return_value.get.return_value = MagicMock(text=SAMPLE_ELO_HTML)
             standings = Standings(season=2024)
             assert len(standings.elo) == 2
-            assert standings.elo.iloc[0]['Team'] == 'Duke'
-            assert float(standings.elo.iloc[0]['ELO']) == 1750.50
-    
+            assert standings.elo.iloc[0]["Team"] == "Duke"
+            assert float(standings.elo.iloc[0]["ELO"]) == 1750.50
+
     def test_full_conference_list(self, mock_standings_responses):
         """Test parsing of full conference list"""
-        with patch('requests.Session', autospec=True) as mock_session_class:
+        with patch("requests.Session", autospec=True) as mock_session_class:
             # Configure the mock session to return our mock_standings_responses
             mock_session_class.return_value = mock_standings_responses
 
             # Add debug logging
             print("Mock session configured")
-            
+
             standings = Standings(season=2024)
-            
+
             # Add more debug logging
             print(f"Mock get calls: {mock_standings_responses.get.call_args_list}")
-            
+
             # Test that both conferences are found (from our sample HTML)
-            assert len(standings.conferences) == 2, f"Found conferences: {standings.conferences}"
+            assert (
+                len(standings.conferences) == 2
+            ), f"Found conferences: {standings.conferences}"
             assert "ACC" in standings.conferences
             assert "Big 12" in standings.conferences
 
     def test_conference_teams_parsing(self, mock_standings_responses):
         """Test parsing teams within a conference"""
-        with patch('requests.Session', autospec=True) as mock_session_class:
+        with patch("requests.Session", autospec=True) as mock_session_class:
             # Configure the mock session to return our mock_standings_responses
             mock_session_class.return_value = mock_standings_responses
 
             standings = Standings(season=2024)
             teams = standings.pull_conference_teams("ACC")
-            
+
             # Debug logging
             print(f"Mock get calls: {mock_standings_responses.get.call_args_list}")
             print(f"Found teams: {teams}")
-            
+
             # Verify expected teams are found
             assert len(teams) == 3, f"Found teams: {teams}"
             assert "Duke" in teams
@@ -434,107 +451,135 @@ class TestStandings:
 
     def test_conference_filtering(self, mock_standings_responses):
         """Test filtering standings by conference"""
-        with patch('requests.Session', autospec=True) as mock_session_class:
+        with patch("requests.Session", autospec=True) as mock_session_class:
             # Configure the mock session to return our mock_standings_responses
             mock_session_class.return_value = mock_standings_responses
-            
+
             # Add debug print to see initial data
             standings = Standings(season=2024, conference="ACC")
             print("\nInitial ELO data:")
             print("Number of teams:", len(standings.elo))
             print("First few rows:")
             print(standings.elo)
-            
+
             # Should only show the teams from our SAMPLE_ELO_HTML
-            assert len(standings.elo) == 2, "Should only have Duke and UNC from sample data"
+            assert (
+                len(standings.elo) == 2
+            ), "Should only have Duke and UNC from sample data"
             # Verify only ACC teams are included
             for _, row in standings.elo.iterrows():
-                assert row['Conference'] == 'ACC'
+                assert row["Conference"] == "ACC"
 
     def test_women_parameter(self, mock_elo_response):
         """Test women's basketball parameter"""
-        with patch('bigdance.wn_cbb_scraper.Standings._create_session', return_value=mock_elo_response):
+        with patch(
+            "bigdance.wn_cbb_scraper.Standings._create_session",
+            return_value=mock_elo_response,
+        ):
             standings = Standings(season=2024, women=True)
             assert standings.gender == "w"
             assert "basketballw" in standings.base_url
 
+
 class TestMatchups:
     def test_initialization(self, mock_matchups_response):
         """Test matchups initialization"""
-        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch(
+            "bigdance.wn_cbb_scraper.Matchups._create_session",
+            return_value=mock_matchups_response,
+        ):
             matchups = Matchups(date=datetime.now(), elos=False)  # Disable ELO addition
             assert isinstance(matchups.matchups, pd.DataFrame)
 
     def test_matchups_parsing(self, mock_matchups_response):
         """Test parsing of matchups data"""
-        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch(
+            "bigdance.wn_cbb_scraper.Matchups._create_session",
+            return_value=mock_matchups_response,
+        ):
             # Initialize without ELO calculations
             matchups = Matchups(date=datetime.now(), elos=False)
             assert len(matchups.matchups) == 1
-            assert matchups.matchups.iloc[0]['team1'] == 'Central Arkansas'  # Update expected team name
-            assert matchups.matchups.iloc[0]['score1'] == 65  # Update expected score
+            assert (
+                matchups.matchups.iloc[0]["team1"] == "Central Arkansas"
+            )  # Update expected team name
+            assert matchups.matchups.iloc[0]["score1"] == 65  # Update expected score
 
     def test_elo_addition(self, mock_matchups_response):
         """Test adding ELO ratings to matchups"""
-        with patch('bigdance.wn_cbb_scraper.Matchups._create_session', return_value=mock_matchups_response):
+        with patch(
+            "bigdance.wn_cbb_scraper.Matchups._create_session",
+            return_value=mock_matchups_response,
+        ):
             # Create matchups without initial ELO calculation
             matchups = Matchups(date=datetime.now(), elos=False)
-            
+
             # Create mock standings with matching team names
             mock_standings = MagicMock()
-            mock_standings.elo = pd.DataFrame({
-                'Team': ['Central Arkansas', 'North Alabama'],  # Update team names
-                'ELO': [1600, 1550]
-            })
-            
+            mock_standings.elo = pd.DataFrame(
+                {
+                    "Team": ["Central Arkansas", "North Alabama"],  # Update team names
+                    "ELO": [1600, 1550],
+                }
+            )
+
             matchups.add_elos(mock_standings)
-            assert 'elo1' in matchups.matchups.columns
-            assert 'elo2' in matchups.matchups.columns
-            assert matchups.matchups.iloc[0]['elo1'] == 1600
+            assert "elo1" in matchups.matchups.columns
+            assert "elo2" in matchups.matchups.columns
+            assert matchups.matchups.iloc[0]["elo1"] == 1600
+
 
 class TestSchedule:
     def test_initialization(self, mock_session):
         """Test schedule initialization"""
-        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch(
+            "bigdance.wn_cbb_scraper.Schedule._create_session",
+            return_value=mock_session,
+        ):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
-                start=start.strftime('%Y-%m-%d'),
-                stop=stop.strftime('%Y-%m-%d'),
-                elos=False  # Disable ELO calculations during testing
+                start=start.strftime("%Y-%m-%d"),
+                stop=stop.strftime("%Y-%m-%d"),
+                elos=False,  # Disable ELO calculations during testing
             )
-            assert schedule.start == pd.to_datetime(start.strftime('%Y-%m-%d'))
-            assert schedule.stop == pd.to_datetime(stop.strftime('%Y-%m-%d'))
+            assert schedule.start == pd.to_datetime(start.strftime("%Y-%m-%d"))
+            assert schedule.stop == pd.to_datetime(stop.strftime("%Y-%m-%d"))
 
     def test_date_validation(self):
         """Test date range validation"""
         with pytest.raises(ValueError):
             start = datetime.now()
             stop = start - timedelta(days=1)
-            Schedule(start=start.strftime('%Y-%m-%d'), 
-                    stop=stop.strftime('%Y-%m-%d'))
+            Schedule(start=start.strftime("%Y-%m-%d"), stop=stop.strftime("%Y-%m-%d"))
 
     def test_pull_games(self, mock_session):
         """Test game pulling functionality"""
-        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch(
+            "bigdance.wn_cbb_scraper.Schedule._create_session",
+            return_value=mock_session,
+        ):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
-                start=start.strftime('%Y-%m-%d'),
-                stop=stop.strftime('%Y-%m-%d'),
-                elos=False  # Disable ELO calculations
+                start=start.strftime("%Y-%m-%d"),
+                stop=stop.strftime("%Y-%m-%d"),
+                elos=False,  # Disable ELO calculations
             )
-            assert hasattr(schedule, 'games_per_day')
+            assert hasattr(schedule, "games_per_day")
 
     def test_women_parameter(self, mock_session):
         """Test women's basketball parameter"""
-        with patch('bigdance.wn_cbb_scraper.Schedule._create_session', return_value=mock_session):
+        with patch(
+            "bigdance.wn_cbb_scraper.Schedule._create_session",
+            return_value=mock_session,
+        ):
             start = datetime.now()
             stop = start + timedelta(days=7)
             schedule = Schedule(
-                start=start.strftime('%Y-%m-%d'),
-                stop=stop.strftime('%Y-%m-%d'),
+                start=start.strftime("%Y-%m-%d"),
+                stop=stop.strftime("%Y-%m-%d"),
                 women=True,
-                elos=False  # Disable ELO calculations
+                elos=False,  # Disable ELO calculations
             )
             assert schedule.gender == "w"
