@@ -1,0 +1,6 @@
+round,max_advantage_upsets,max_advantage,max_density_upsets,mode_upsets,mean_upsets
+First Round,2.0,0.29655555555555557,2.0,2,2.183
+Second Round,1.0,0.2772222222222222,1.0,1,2.016
+Sweet 16,1.0,0.3507777777777778,1.0,1,1.167
+Elite 8,0.0,0.36944444444444446,1.0,1,0.86
+Total Upsets,5.0,0.11811111111111111,5.0,5,6.416
