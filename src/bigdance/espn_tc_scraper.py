@@ -20,8 +20,9 @@ import json
 from bigdance import Standings
 from bigdance.cbb_brackets import Bracket, Team
 import numpy as np
+import optparse
 
-def get_espn_bracket():
+def get_espn_bracket(women: bool = False):
     """
     Use Selenium to access the ESPN men's basketball bracket page
     and extract the bracket information.
@@ -43,7 +44,8 @@ def get_espn_bracket():
     try:
         # Navigate to the ESPN bracket page
         # print("Accessing ESPN bracket page...")
-        driver.get("https://www.espn.com/mens-college-basketball/bracket")
+        gender = "womens" if women else "mens"
+        driver.get(f"https://www.espn.com/{gender}-college-basketball/bracket")
         
         # Wait for the page to fully load
         time.sleep(5)
@@ -114,7 +116,7 @@ def extract_first_round_from_json(bracket_json):
             first_round[ind]["competitorTwo"] = play_in["competitorOne"] # Just using competitorOne for now...
     return first_round
 
-def convert_espn_to_bigdance(first_round, ratings_source=None):
+def convert_espn_to_bigdance(first_round, ratings_source=None, women: bool = False):
     """
     Convert ESPN bracket data to bigdance Team objects for simulation.
     
@@ -129,7 +131,7 @@ def convert_espn_to_bigdance(first_round, ratings_source=None):
     # Get current team ratings if not provided
     if ratings_source is None:
         try:
-            ratings_source = Standings()
+            ratings_source = Standings(women=women)
             print(f"Successfully loaded {len(ratings_source.elo)} teams from Warren Nolan")
         except Exception as e:
             print(f"Warning: Could not load Standings: {e}")
@@ -245,8 +247,17 @@ def get_team_conference(ratings_source, team_name, default="Unknown"):
     return default
 
 def main():
+    parser = optparse.OptionParser()
+    parser.add_option(
+        "--women",
+        action="store_true",
+        dest="women",
+        help="whether to pull stats for the NCAAW instead of NCAAM",
+    )
+    options = parser.parse_args()[0]
+
     # Get HTML content
-    html_content = get_espn_bracket()
+    html_content = get_espn_bracket(options.women)
     
     if html_content is not None:
         # Save HTML for debugging
@@ -275,7 +286,7 @@ def main():
         print("Failed to extract JSON data, bailing...")
         sys.exit(1)
     
-    actual_bracket = convert_espn_to_bigdance(first_round)
+    actual_bracket = convert_espn_to_bigdance(first_round, women=options.women)
 
     # Apply a moderate upset factor to the actual tournament result
     # This ensures the actual tournament has a realistic amount of upsets
