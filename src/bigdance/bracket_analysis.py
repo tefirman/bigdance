@@ -29,7 +29,7 @@ from bigdance.bigdance_integration import create_teams_from_standings
 from bigdance.cbb_brackets import Bracket, Pool, Team
 from bigdance.wn_cbb_scraper import Standings
 
-from espn_tc_scraper import (
+from bigdance.espn_tc_scraper import (
     get_espn_bracket,
     extract_json_data,
     extract_first_round_from_json,
@@ -96,7 +96,7 @@ class BracketAnalysis:
             else:
                 # Scrape from ESPN website
                 logging.info("Fetching bracket from ESPN website...")
-                html_content = get_espn_bracket()
+                html_content = get_espn_bracket(self.women)
                 if not html_content:
                     logging.error("Failed to get HTML content from ESPN")
                     return None
@@ -115,7 +115,7 @@ class BracketAnalysis:
                 logging.info(f"First round matchups saved to {first_round_file}")
             
             # Convert to bigdance format
-            self.espn_bracket = convert_espn_to_bigdance(first_round, self.standings)
+            self.espn_bracket = convert_espn_to_bigdance(first_round, self.standings, self.women)
             logging.info("Successfully created bracket from ESPN data")
             
             return self.espn_bracket
