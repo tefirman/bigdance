@@ -67,56 +67,6 @@ def get_espn_bracket(women: bool = False, entry_id: str = ""):
         # Close the browser
         driver.quit()
 
-# def extract_json_data(html_content):
-#     """
-#     Extract the JSON data embedded in the HTML.
-#     This contains the complete bracket information.
-#     """
-#     soup = BeautifulSoup(html_content, 'html.parser')
-    
-#     # Find all script tags
-#     script_tags = soup.find_all('script')
-    
-#     bracket_json = None
-    
-#     # Look for script tags containing bracket data
-#     for script in script_tags:
-#         script_text = script.string
-#         if script_text and '"bracket":' in script_text:
-#             json_text = script_text.split("window['__espnfitt__']=")[-1]
-#             decoder = json.JSONDecoder()
-#             json_data = decoder.raw_decode(json_text)[0]
-#             bracket_json = json_data["page"]["content"]["bracket"]
-    
-#     return bracket_json
-
-# def extract_first_round_from_json(bracket_json):
-#     """
-#     Extract teams and matchups from the bracket JSON data
-#     Returns teams list and games list suitable for CSV output
-#     """
-#     # Get regions information if available
-#     regions = {}
-#     if 'regions' in bracket_json:
-#         for region in bracket_json['regions']:
-#             region_id = region.get('id')
-#             region_name = region.get('labelPrimary')
-#             if region_id and region_name:
-#                 regions[region_id] = region_name
-#         # print(f"Found regions in JSON: {regions}")
-    
-#     first_four = [game for game in bracket_json["matchups"] if game['roundId'] == 0]
-#     first_round = [game for game in bracket_json["matchups"] if game['roundId'] == 1]
-
-#     for ind in range(len(first_round)):
-#         first_round[ind]["regionId"] = (first_round[ind]["bracketLocation"] - 1)//8 + 1
-#         first_round[ind]["label"] = regions[first_round[ind]["regionId"]]
-#         if first_round[ind]["competitorTwo"]["name"] == "TBD":
-#             play_in = [game for game in first_four if game["label"] == first_round[ind]["label"] \
-#                 and game["competitorOne"]["seed"] == first_round[ind]["competitorTwo"]["seed"]][0]
-#             first_round[ind]["competitorTwo"] = play_in["competitorOne"] # Just using competitorOne for now...
-#     return first_round
-
 def extract_entry_bracket(html_content, ratings_source=None, women: bool = False):
     """
     Extract the pick data embedded in the HTML.
@@ -201,94 +151,6 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
 
     return bracket
 
-# def convert_espn_to_bigdance(first_round, ratings_source=None, women: bool = False):
-#     """
-#     Convert ESPN bracket data to bigdance Team objects for simulation.
-    
-#     Parameters:
-#         espn_json_file (str): Path to the ESPN first round matchups JSON file
-#         ratings_source (Standings, optional): A bigdance Standings object with team ratings
-#                                              If None, will create a new one
-                                             
-#     Returns:
-#         list: List of Team objects ready for bigdance Bracket creation
-#     """
-#     # Get current team ratings if not provided
-#     if ratings_source is None:
-#         try:
-#             ratings_source = Standings(women=women)
-#             print(f"Successfully loaded {len(ratings_source.elo)} teams from Warren Nolan")
-#         except Exception as e:
-#             print(f"Warning: Could not load Standings: {e}")
-#             print("Will use approximate ratings based on seeds")
-#             ratings_source = None
-    
-#     # Create mapping of region IDs to names
-#     region_names = {
-#         1: "South", 
-#         2: "West", 
-#         3: "East", 
-#         4: "Midwest"
-#     }
-    
-#     # Default conference if not available
-#     default_conference = "Unknown"
-    
-#     # List to store all teams
-#     teams = []
-    
-#     # Process each game to extract teams
-#     for game in first_round:
-#         region_id = game.get("regionId")
-#         region_name = region_names.get(region_id, "Unknown")
-        
-#         # Process first team
-#         team1_data = game.get("competitorOne", {})
-#         team1_name = team1_data.get("name")
-#         team1_seed = int(team1_data.get("seed", "16"))  # Default to 16 if not found
-        
-#         # Process second team
-#         team2_data = game.get("competitorTwo", {})
-#         team2_name = team2_data.get("name")
-#         team2_seed = int(team2_data.get("seed", "16"))  # Default to 16 if not found
-        
-#         # Lookup team ratings in Standings
-#         team1_rating = get_team_rating(ratings_source, team1_name, team1_seed)
-#         team2_rating = get_team_rating(ratings_source, team2_name, team2_seed)
-        
-#         # Get conference info if available
-#         team1_conference = get_team_conference(ratings_source, team1_name, default_conference)
-#         team2_conference = get_team_conference(ratings_source, team2_name, default_conference)
-        
-#         # Create Team objects
-#         team1 = Team(
-#             name=team1_name,
-#             seed=team1_seed,
-#             region=region_name,
-#             rating=team1_rating,
-#             conference=team1_conference
-#         )
-        
-#         team2 = Team(
-#             name=team2_name,
-#             seed=team2_seed,
-#             region=region_name,
-#             rating=team2_rating,
-#             conference=team2_conference
-#         )
-        
-#         # Add teams to list, checking for duplicates
-#         if not any(t.name == team1.name for t in teams):
-#             teams.append(team1)
-#         if not any(t.name == team2.name for t in teams):
-#             teams.append(team2)
-    
-#     # Verify we have exactly 64 teams
-#     if len(teams) != 64:
-#         print(f"Warning: Expected 64 teams, but got {len(teams)}. Bracket may be incomplete.")
-    
-#     return Bracket(teams)
-
 def get_team_rating(ratings_source, team_name, seed):
     """Get a team's rating from the Standings object or estimate based on seed."""
     name_corrections = {"UConn":"Connecticut", 
@@ -367,26 +229,6 @@ def main():
         print("Failed to extract bracket data")
         sys.exit(1)
     
-    # # Extract JSON data from HTML
-    # bracket_json = extract_json_data(html_content)
-    
-    # if bracket_json:
-    #     # Save JSON for debugging
-    #     with open("bracket_data.json", "w", encoding="utf-8") as f:
-    #         json.dump(bracket_json, f, indent=2)
-    #     print("JSON data saved to bracket_data.json")
-        
-    #     # Extract teams and games from JSON
-    #     first_round = extract_first_round_from_json(bracket_json)
-    #     with open("first_round_matchups.json", "w", encoding="utf-8") as f:
-    #         json.dump(first_round, f, indent=2)
-    #     print("JSON data saved to first_round_matchups.json")
-    # else:
-    #     print("Failed to extract JSON data, bailing...")
-    #     sys.exit(1)
-    
-    # actual_bracket = convert_espn_to_bigdance(first_round, women=options.women)
-
     if options.entry_id == "": # Pulling most recent results and simulating
         # Apply a moderate upset factor to the actual tournament result
         # This ensures the actual tournament has a realistic amount of upsets
