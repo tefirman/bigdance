@@ -31,9 +31,7 @@ from bigdance.wn_cbb_scraper import Standings
 
 from bigdance.espn_tc_scraper import (
     get_espn_bracket,
-    extract_json_data,
-    extract_first_round_from_json,
-    convert_espn_to_bigdance
+    extract_entry_bracket
 )
 
 class BracketAnalysis:
@@ -101,21 +99,9 @@ class BracketAnalysis:
                     logging.error("Failed to get HTML content from ESPN")
                     return None
                 
-                bracket_json = extract_json_data(html_content)
-                if not bracket_json:
-                    logging.error("Failed to extract JSON data from HTML")
-                    return None
-                
-                first_round = extract_first_round_from_json(bracket_json)
-                
-                # Save the first round data for future reference
-                first_round_file = self.output_dir / "first_round_matchups.json"
-                with open(first_round_file, "w", encoding="utf-8") as f:
-                    json.dump(first_round, f, indent=2)
-                logging.info(f"First round matchups saved to {first_round_file}")
-            
-            # Convert to bigdance format
-            self.espn_bracket = convert_espn_to_bigdance(first_round, self.standings, self.women)
+            # Extract bracket data from blank ESPN entry
+            self.espn_bracket = extract_entry_bracket(html_content, women=self.women)
+
             logging.info("Successfully created bracket from ESPN data")
             
             return self.espn_bracket
