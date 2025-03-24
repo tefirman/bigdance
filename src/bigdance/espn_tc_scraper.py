@@ -136,8 +136,8 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
     
     # Extract champion pick
     champ_tag = soup.find("span", attrs={"class":"PrintChampionshipPickBody-outcomeName"})
-    champion = champ_tag.text.replace("St.","St")
-    if champion:
+    if champ_tag:
+        champion = champ_tag.text.replace("St.","St")
         winner = next((t for t in teams if champion.startswith(t.name)), None)
         if winner:
             bracket.results["Championship"] = [winner]
@@ -229,6 +229,9 @@ def main():
         print("Failed to extract bracket data")
         sys.exit(1)
     
+    # Extract bracket info from HTML
+    actual_bracket = extract_entry_bracket(html_content, women=options.women)
+
     if options.entry_id == "": # Pulling most recent results and simulating
         # Apply a moderate upset factor to the actual tournament result
         # This ensures the actual tournament has a realistic amount of upsets
@@ -239,7 +242,6 @@ def main():
         print(f"Simulated Champion: {results["Champion"]}")
     else:
         # Extract bracket from raw HTML and pull elo ratings from Warren Nolan
-        actual_bracket = extract_entry_bracket(html_content, women=options.women)
         print(f"Selected Final Four: {actual_bracket.results["Elite 8"]}") # Technically the "results" of Elite 8
         print(f"Selected Champion: {actual_bracket.results["Champion"]}")
 
