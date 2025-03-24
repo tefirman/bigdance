@@ -14,15 +14,13 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-import sys
 from bs4 import BeautifulSoup
-import json
 from bigdance import Standings
-from bigdance.cbb_brackets import Bracket, Team
+from bigdance.cbb_brackets import Bracket, Team, Pool
 import numpy as np
 import optparse
 
-def get_espn_bracket(women: bool = False, entry_id: str = ""):
+def get_espn_page(url: str = ""):
     """
     Use Selenium to access the ESPN men's basketball bracket page
     and extract the bracket information.
@@ -43,9 +41,6 @@ def get_espn_bracket(women: bool = False, entry_id: str = ""):
     
     try:
         # Navigate to the ESPN bracket page
-        # Pulling a specific contestant's entry (or actual results if entry_id is empty)
-        gender = "-women" if women else ""
-        url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{gender}-2025/bracket?id={entry_id}"
         driver.get(url)
         
         # Wait for the page to fully load
@@ -54,9 +49,9 @@ def get_espn_bracket(women: bool = False, entry_id: str = ""):
         # Save the page source for debugging if needed
         html_content = driver.page_source
         
-        # Take a screenshot for debugging if needed
-        driver.save_screenshot("espn_bracket.png")
-        # print("Screenshot saved as espn_bracket.png")
+        # # Take a screenshot for debugging if needed
+        # driver.save_screenshot("espn_page.png")
+        # # print("Screenshot saved as espn_page.png")
         
         return html_content        
     except Exception as e:
@@ -66,6 +61,13 @@ def get_espn_bracket(women: bool = False, entry_id: str = ""):
     finally:
         # Close the browser
         driver.quit()
+
+def get_espn_bracket(entry_id: str = "", women: bool = False):
+    # Pulling a specific contestant's entry (or actual results if entry_id is empty)
+    gender = "-women" if women else ""
+    url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{gender}-2025/bracket?id={entry_id}"
+    html_content = get_espn_page(url)
+    return html_content
 
 def extract_entry_bracket(html_content, ratings_source=None, women: bool = False):
     """
@@ -113,8 +115,12 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
     bracket = Bracket(teams)
     
     # Extract picks made by user
-    pick_ids = [int(pick.find("img").attrs["src"].split("/")[-1].split(".")[0]) for pick in pick_tags]
-    picks = [name_mapping[id_val] for id_val in pick_ids]
+    try:
+        pick_ids = [int(pick.find("img").attrs["src"].split("/")[-1].split(".")[0]) for pick in pick_tags]
+        picks = [name_mapping[id_val] for id_val in pick_ids]
+    except:
+        print("Incomplete bracket, skipping...")
+        return None
 
     # Initialize results dictionary and round names list
     bracket.results = {}
@@ -200,6 +206,25 @@ def get_team_conference(ratings_source, team_name, default="Unknown"):
     
     return default
 
+def get_espn_pool(pool_id: str, women: bool = False):
+    # Pulling list of entries for a specific league
+    # Only works for smaller (<30 entries) leagues for right now...
+    gender = "-women" if women else ""
+    url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{gender}-2025/group?id={pool_id}"
+    html_content = get_espn_page(url)
+    return html_content
+
+def extract_entry_ids(html_content: str):
+    # Soupify the raw html
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Find all entries
+    entry_tags = soup.find_all('td',attrs={"class":"BracketEntryTable-column--entryName Table__TD"})
+
+    # Extract the entry ID's from the HTML
+    entry_ids = {entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1] for entry in entry_tags}
+    return entry_ids
+
 def main():
     parser = optparse.OptionParser()
     parser.add_option(
@@ -208,42 +233,83 @@ def main():
         dest="women",
         help="whether to pull stats for the NCAAW instead of NCAAM",
     )
+    # parser.add_option(
+    #     "--entry_id",
+    #     action="store",
+    #     dest="entry_id",
+    #     default="",
+    #     help="ESPN entry ID of the bracket of interest",
+    # )
     parser.add_option(
-        "--entry_id",
+        "--pool_id",
         action="store",
-        dest="entry_id",
-        default="",
-        help="ESPN entry ID of the bracket of interest",
+        dest="pool_id",
+        help="ESPN group ID of the bracket pool of interest",
     )
     options = parser.parse_args()[0]
 
     # Get HTML content
-    html_content = get_espn_bracket(options.women, options.entry_id)
-    
-    if html_content is not None:
-        # Save HTML for debugging
-        with open("espn_bracket.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print("HTML saved to espn_bracket.html")
-    else:
-        print("Failed to extract bracket data")
-        sys.exit(1)
-    
-    # Extract bracket info from HTML
-    actual_bracket = extract_entry_bracket(html_content, women=options.women)
+    html_content = get_espn_pool(options.pool_id, options.women)
 
-    if options.entry_id == "": # Pulling most recent results and simulating
-        # Apply a moderate upset factor to the actual tournament result
-        # This ensures the actual tournament has a realistic amount of upsets
-        for game in actual_bracket.games:
-            game.upset_factor = 0.25  # Moderate upset factor for actual tournament
-        results = actual_bracket.simulate_tournament()
-        print(f"Simulated Final Four: {results["Elite 8"]}") # Technically the "results" of Elite 8
-        print(f"Simulated Champion: {results["Champion"]}")
-    else:
-        # Extract bracket from raw HTML and pull elo ratings from Warren Nolan
-        print(f"Selected Final Four: {actual_bracket.results["Elite 8"]}") # Technically the "results" of Elite 8
-        print(f"Selected Champion: {actual_bracket.results["Champion"]}")
+    # Extract bracket ID's for each entry
+    entry_ids = extract_entry_ids(html_content) # Do we want to pull the pool name too???
+
+    # Pull standings initially to reduce number of pulls throughout
+    ratings_source = Standings(women=options.women)
+
+    # Pulling blank entry to get seedings
+    bracket_html = get_espn_bracket(women=options.women)
+    actual_bracket = extract_entry_bracket(bracket_html, ratings_source, options.women)
+
+    # IMPORTANT: Add moderate upset factor to actual tournament results
+    for game in actual_bracket.games:
+        game.upset_factor = 0.25  # More realistic tournament has upsets
+    
+    # Initializing simulation pool
+    pool_sim = Pool(actual_bracket)
+
+    # Pulling each of the brackets in the league
+    for entry_name in entry_ids:
+        print(entry_name)
+        entry_html = get_espn_bracket(entry_ids[entry_name], options.women)
+        entry_bracket = extract_entry_bracket(entry_html, ratings_source, options.women)
+        if entry_bracket:
+            pool_sim.add_entry(entry_name, entry_bracket, False)
+
+    # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
+    # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
+    # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
+
+    # Simulating pool
+    pool_results = pool_sim.simulate_pool(num_sims=1000)
+
+    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
+    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
+    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
+
+    # Printing results
+    top_entries = pool_results.sort_values("win_pct", ascending=False)
+    top_entries.to_csv("PoolSimResults.csv",index=False)
+    print(top_entries[["name", "avg_score", "std_score", "win_pct"]])
+
+    # # Get HTML content
+    # html_content = get_espn_bracket(options.entry_id, options.women)
+    
+    # # Extract bracket info from HTML
+    # actual_bracket = extract_entry_bracket(html_content, women=options.women)
+
+    # if options.entry_id == "": # Pulling most recent results and simulating
+    #     # Apply a moderate upset factor to the actual tournament result
+    #     # This ensures the actual tournament has a realistic amount of upsets
+    #     for game in actual_bracket.games:
+    #         game.upset_factor = 0.25  # Moderate upset factor for actual tournament
+    #     results = actual_bracket.simulate_tournament()
+    #     print(f"Simulated Final Four: {results["Elite 8"]}") # Technically the "results" of Elite 8
+    #     print(f"Simulated Champion: {results["Champion"]}")
+    # else:
+    #     # Extract bracket from raw HTML and pull elo ratings from Warren Nolan
+    #     print(f"Selected Final Four: {actual_bracket.results["Elite 8"]}") # Technically the "results" of Elite 8
+    #     print(f"Selected Champion: {actual_bracket.results["Champion"]}")
 
 if __name__ == "__main__":
     main()

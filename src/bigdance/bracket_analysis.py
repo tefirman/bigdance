@@ -94,7 +94,7 @@ class BracketAnalysis:
             else:
                 # Scrape from ESPN website
                 logging.info("Fetching bracket from ESPN website...")
-                html_content = get_espn_bracket(self.women)
+                html_content = get_espn_bracket(women=self.women)
                 if not html_content:
                     logging.error("Failed to get HTML content from ESPN")
                     return None
