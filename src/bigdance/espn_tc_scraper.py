@@ -94,17 +94,17 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
     seed_tags = soup.find_all("div", attrs={"class":"BracketOutcome-metadata"})
 
     # Extract actual bracket outcomes
-    regions = [region.text.title() for region in region_tags]
-    names = [team.text for team in team_tags][:64] # Focusing on first round for now
-    ids = [int(team.attrs["src"].split("/")[-1].split(".")[0]) for team in team_id_tags][:64] # Focusing on first round for now
-    seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1][:64] # Focusing on first round for now
+    regions = [region.text for region in region_tags]
+    names = [team.text for team in team_tags]
+    ids = [team.attrs["src"].split("/")[-1].split(".")[0] for team in team_id_tags]
+    seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1]
 
     # Create mapping between team names and ESPN id
     name_mapping = {ids[ind]: names[ind] for ind in range(len(ids))}
 
     # Creating list of team objects
     teams = []
-    for ind in range(len(names)):
+    for ind in range(64): # Focusing on first round here
         teams.append(Team(names[ind], 
                           seeds[ind], 
                           regions[ind//16], 
@@ -114,17 +114,20 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
     # Create an empty bracket with these teams
     bracket = Bracket(teams)
     
-    # Extract picks made by user
-    try:
-        pick_ids = [int(pick.find("img").attrs["src"].split("/")[-1].split(".")[0]) for pick in pick_tags]
-        picks = [name_mapping[id_val] for id_val in pick_ids]
-    except:
-        print("Incomplete bracket, skipping...")
-        return None
-
     # Initialize results dictionary and round names list
     bracket.results = {}
     round_names = ["First Round","Second Round","Sweet 16","Elite 8","Final Four"]
+
+    if len(pick_tags) == 0: # Reality
+        picks = names[64:]
+    else:
+        # Extract picks made by user
+        try:
+            pick_ids = [int(pick.find("img").attrs["src"].split("/")[-1].split(".")[0]) for pick in pick_tags]
+            picks = [name_mapping[id_val] for id_val in pick_ids]
+        except:
+            print("Incomplete bracket, skipping...")
+            return None
 
     # Parse each round's picks
     for round_ind in range(5):
@@ -162,7 +165,12 @@ def get_team_rating(ratings_source, team_name, seed):
     name_corrections = {"UConn":"Connecticut", 
                         "UNC Wilmington":"UNCW", 
                         "St John's":"Saint John's",
-                        "Mount St Marys":"Mount Saint Mary's"}
+                        "Mount St Marys":"Mount Saint Mary's",
+                        "NC State":"North Carolina State",
+                        "UNC Greensboro":"UNCG",
+                        "S Dakota St":"South Dakota State",
+                        "SF Austin":"Stephen F. Austin",
+                        "Fair Dickinson":"Fairleigh Dickinson"}
     if team_name in name_corrections:
         team_name = name_corrections[team_name]
     if ratings_source is not None:
@@ -233,13 +241,6 @@ def main():
         dest="women",
         help="whether to pull stats for the NCAAW instead of NCAAM",
     )
-    # parser.add_option(
-    #     "--entry_id",
-    #     action="store",
-    #     dest="entry_id",
-    #     default="",
-    #     help="ESPN entry ID of the bracket of interest",
-    # )
     parser.add_option(
         "--pool_id",
         action="store",
@@ -280,36 +281,17 @@ def main():
     # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
     # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
 
+    # ACCOUNT FOR GAME RESULTS THUS FAR???
+    # ACCOUNT FOR GAME RESULTS THUS FAR???
+    # ACCOUNT FOR GAME RESULTS THUS FAR???
+
     # Simulating pool
     pool_results = pool_sim.simulate_pool(num_sims=1000)
-
-    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
-    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
-    # NOT SURE IF THIS IS ACTUALLY SIMULATING CORRECTLY, MIGHT BE SHUFFLING PICKS...
 
     # Printing results
     top_entries = pool_results.sort_values("win_pct", ascending=False)
     top_entries.to_csv("PoolSimResults.csv",index=False)
     print(top_entries[["name", "avg_score", "std_score", "win_pct"]])
-
-    # # Get HTML content
-    # html_content = get_espn_bracket(options.entry_id, options.women)
-    
-    # # Extract bracket info from HTML
-    # actual_bracket = extract_entry_bracket(html_content, women=options.women)
-
-    # if options.entry_id == "": # Pulling most recent results and simulating
-    #     # Apply a moderate upset factor to the actual tournament result
-    #     # This ensures the actual tournament has a realistic amount of upsets
-    #     for game in actual_bracket.games:
-    #         game.upset_factor = 0.25  # Moderate upset factor for actual tournament
-    #     results = actual_bracket.simulate_tournament()
-    #     print(f"Simulated Final Four: {results["Elite 8"]}") # Technically the "results" of Elite 8
-    #     print(f"Simulated Champion: {results["Champion"]}")
-    # else:
-    #     # Extract bracket from raw HTML and pull elo ratings from Warren Nolan
-    #     print(f"Selected Final Four: {actual_bracket.results["Elite 8"]}") # Technically the "results" of Elite 8
-    #     print(f"Selected Champion: {actual_bracket.results["Champion"]}")
 
 if __name__ == "__main__":
     main()

@@ -95,16 +95,6 @@ class Bracket:
         if len(self.teams) != 64:
             raise ValueError("Tournament must have exactly 64 teams")
 
-        # Validate seeds and regions
-        regions = set()
-        for team in self.teams:
-            if not 1 <= team.seed <= 16:
-                raise ValueError(f"Invalid seed {team.seed} for {team.name}")
-            regions.add(team.region)
-
-        if len(regions) != 4:
-            raise ValueError("Tournament must have exactly 4 regions")
-
     def _create_initial_games(self):
         """Create first round matchups based on NCAA tournament seeding pattern"""
         if not self.teams:
@@ -122,8 +112,18 @@ class Bracket:
             (2, 15),
         ]
 
+        # Validate seeds and regions
+        regions = set()
+        for team in self.teams:
+            if not 1 <= team.seed <= 16:
+                raise ValueError(f"Invalid seed {team.seed} for {team.name}")
+            regions.add(team.region)
+
+        if len(regions) != 4:
+            raise ValueError("Tournament must have exactly 4 regions")
+
         # Create games for each region
-        for region in ["East", "West", "South", "Midwest"]:
+        for region in regions:
             # Get teams in this region
             region_teams = {t.seed: t for t in self.teams if t.region == region}
 
@@ -432,6 +432,11 @@ class Bracket:
 
         # First round
         for game in current_games:
+
+            # CHECK IF A WINNER HAS ALREADY BEEN GIVEN!!! Careful, don't want to make everything deterministic...
+            # CHECK IF A WINNER HAS ALREADY BEEN GIVEN!!! Careful, don't want to make everything deterministic...
+            # CHECK IF A WINNER HAS ALREADY BEEN GIVEN!!! Careful, don't want to make everything deterministic...
+
             game.winner = self.simulate_game(game)
         self.results["First Round"] = [g.winner for g in current_games]
 
@@ -445,6 +450,11 @@ class Bracket:
         ]:
             current_games = self.advance_round(current_games)
             for game in current_games:
+
+                # CHECK IF A WINNER HAS ALREADY BEEN GIVEN IN RESULTS!!! Careful, don't want to make everything deterministic...
+                # CHECK IF A WINNER HAS ALREADY BEEN GIVEN IN RESULTS!!! Careful, don't want to make everything deterministic...
+                # CHECK IF A WINNER HAS ALREADY BEEN GIVEN IN RESULTS!!! Careful, don't want to make everything deterministic...
+
                 if not game.winner:
                     game.winner = self.simulate_game(game)
 
