@@ -123,7 +123,7 @@ def extract_entry_bracket(html_content, ratings_source=None, women: bool = False
     else:
         # Extract picks made by user
         try:
-            pick_ids = [int(pick.find("img").attrs["src"].split("/")[-1].split(".")[0]) for pick in pick_tags]
+            pick_ids = [pick.find("img").attrs["src"].split("/")[-1].split(".")[0] for pick in pick_tags]
             picks = [name_mapping[id_val] for id_val in pick_ids]
         except:
             print("Incomplete bracket, skipping...")
@@ -247,6 +247,13 @@ def main():
         dest="pool_id",
         help="ESPN group ID of the bracket pool of interest",
     )
+    parser.add_option(
+        "--as_of",
+        action="store",
+        dest="as_of",
+        help='name of the round to simulate from ("First Round", ' + \
+            '"Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship")',
+    )
     options = parser.parse_args()[0]
 
     # Get HTML content
@@ -261,6 +268,19 @@ def main():
     # Pulling blank entry to get seedings
     bracket_html = get_espn_bracket(women=options.women)
     actual_bracket = extract_entry_bracket(bracket_html, ratings_source, options.women)
+
+    # If specified, erasing results from "as_of" round and beyond
+    round_names = ["First Round","Second Round","Sweet 16","Elite 8","Final Four","Championship"]
+    if options.as_of and options.as_of not in round_names:
+        print("Don't recognize the round name provided for as_of, simulating from current state...")
+        if options.as_of in ["First", "Second", "Sweet", "Elite", "Final"]:
+            print('Hot tip: make sure to put multi-word round names in quotes, i.e. `--as_of "Second Round"` (thanks bash)')
+        options.as_of = None
+    if options.as_of:
+        for round_name in round_names[round_names.index(options.as_of):]:
+            actual_bracket.results[round_name] = []
+        if "Champion" in actual_bracket.results:
+            del actual_bracket.results["Champion"]
 
     # IMPORTANT: Add moderate upset factor to actual tournament results
     for game in actual_bracket.games:
@@ -281,12 +301,8 @@ def main():
     # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
     # CACHE FOR ENTRIES SO WE'RE NOT PULLING IT A THOUSAND TIMES???
 
-    # ACCOUNT FOR GAME RESULTS THUS FAR???
-    # ACCOUNT FOR GAME RESULTS THUS FAR???
-    # ACCOUNT FOR GAME RESULTS THUS FAR???
-
     # Simulating pool
-    pool_results = pool_sim.simulate_pool(num_sims=1000)
+    pool_results = pool_sim.simulate_pool(num_sims=1000, fixed_winners=actual_bracket.results)
 
     # Printing results
     top_entries = pool_results.sort_values("win_pct", ascending=False)
