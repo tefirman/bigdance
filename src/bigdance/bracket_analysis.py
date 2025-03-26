@@ -53,7 +53,7 @@ class BracketAnalysis:
         output_dir: Optional[str] = None,
         use_espn: bool = False,
         women: bool = False,
-        espn_json_file: Optional[str] = None,
+        second_chance: bool = False
     ):
         self.standings = standings
         self.num_pools = num_pools
@@ -64,7 +64,7 @@ class BracketAnalysis:
         self.all_results = pd.DataFrame()
         self.espn_bracket = None
         self.use_espn = use_espn
-        self.espn_json_file = espn_json_file
+        self.second_chance = second_chance
 
         # Set up output directory for saving graphs and data
         if output_dir:
@@ -86,23 +86,25 @@ class BracketAnalysis:
             Optional[Bracket]: ESPN bracket converted to bigdance Bracket format, or None if unavailable
         """
         try:
-            if self.espn_json_file and os.path.exists(self.espn_json_file):
-                # Load from existing JSON file
-                logging.info(f"Loading bracket from file: {self.espn_json_file}")
-                with open(self.espn_json_file, 'r') as f:
-                    first_round = json.load(f)
-            else:
-                # Scrape from ESPN website
-                logging.info("Fetching bracket from ESPN website...")
-                html_content = get_espn_bracket(women=self.women)
-                if not html_content:
-                    logging.error("Failed to get HTML content from ESPN")
-                    return None
+            # Scrape from ESPN website
+            logging.info("Fetching bracket from ESPN website...")
+            html_content = get_espn_bracket(women=self.women)
+            if not html_content:
+                logging.error("Failed to get HTML content from ESPN")
+                return None
                 
             # Extract bracket data from blank ESPN entry
             self.espn_bracket = extract_entry_bracket(html_content, women=self.women)
 
             logging.info("Successfully created bracket from ESPN data")
+
+            # Resetting bracket to simulate from scratch
+            for round_name in ["First Round","Second Round","Sweet 16","Elite 8","Final Four","Championship"]:
+                if self.second_chance and round_name in ["First Round", "Second Round"]:
+                    continue
+                self.espn_bracket.results[round_name] = []
+            if "Champion" in self.espn_bracket.results:
+                del self.espn_bracket.results["Champion"]
             
             return self.espn_bracket
             
@@ -219,7 +221,7 @@ class BracketAnalysis:
 
                 # Simulate and store results
                 try:
-                    pool_results = pool.simulate_pool(num_sims=1000)
+                    pool_results = pool.simulate_pool(num_sims=1000, fixed_winners=self.espn_bracket.results)
 
                     # Find winning entry name(s)
                     top_entries = pool_results.sort_values("win_pct", ascending=False)
@@ -2081,10 +2083,9 @@ def main():
             help="Use actual ESPN bracket instead of Warren Nolan standings"
         )
         parser.add_argument(
-            "--espn_json_file",
-            type=str,
-            default=None,
-            help="Path to saved ESPN first round matchups JSON file (optional)"
+            "--second_chance", 
+            action="store_true",
+            help="Analyze picks from Sweet 16 onwards for Second Chance brackets"
         )
         args = parser.parse_args()
 
@@ -2108,10 +2109,11 @@ def main():
         # Set up output directory
         gender = "women" if args.women else "men"
         bracket_source = "espn" if args.use_espn else "wn"
+        second_chance = "_secondchance" if args.second_chance else ""
         output_dir = (
             args.output_dir
             if args.output_dir
-            else f"bracket_analysis_{args.entries_per_pool}entries_{bracket_source}_{gender}"
+            else f"bracket_analysis_{args.entries_per_pool}entries_{bracket_source}_{gender}{second_chance}"
         )
         os.makedirs(output_dir, exist_ok=True)
 
@@ -2127,7 +2129,7 @@ def main():
             output_dir=output_dir,
             use_espn=args.use_espn,
             women=args.women,
-            espn_json_file=args.espn_json_file
+            second_chance=args.second_chance
         )
 
         try:
