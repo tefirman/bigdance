@@ -29,21 +29,31 @@ import optparse
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Optional[str] = None):
+def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Optional[str] = None, 
+                  check_pagination: bool = False, max_pages: int = 10):
     """
-    Use Selenium to access the ESPN men's basketball bracket page
-    and extract the bracket information.
+    Use Selenium to access ESPN pages and extract content, with support for pagination.
     
     Args:
         url: URL to retrieve
         cache_dir: Directory to store cached responses
         cache_key: Key to use for caching
+        check_pagination: Whether to check for and navigate through paginated content
+        max_pages: Maximum number of pages to attempt to retrieve if paginated
         
     Returns:
-        HTML content of the page
+        HTML content of the page or dictionary of pages if paginated
     """
-    # Check cache first if cache parameters are provided
-    if cache_dir and cache_key:
+    # Check cache first for complete result if pagination is expected
+    if check_pagination and cache_dir and cache_key:
+        complete_cache_key = f"{cache_key}_complete"
+        cached_content = _get_cached_response(cache_dir, complete_cache_key)
+        if cached_content:
+            logger.info(f"Using cached complete response for {url} with key {complete_cache_key}")
+            return json.loads(cached_content)
+    
+    # Check cache for single page if not paginated
+    if not check_pagination and cache_dir and cache_key:
         cached_content = _get_cached_response(cache_dir, cache_key)
         if cached_content:
             logger.info(f"Using cached response for {url} with key {cache_key}")
@@ -64,22 +74,145 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
     try:
-        # Navigate to the ESPN bracket page
+        # Navigate to the URL
         driver.get(url)
         
         # Wait for the page to fully load
         time.sleep(5)
         
-        # Save the page source for debugging if needed
-        html_content = driver.page_source
+        if not check_pagination:
+            # Single page mode - return the page source directly
+            html_content = driver.page_source
+            
+            # Cache the content if cache parameters are provided
+            if cache_dir and cache_key:
+                _cache_response(cache_dir, cache_key, url, html_content)
+            
+            return html_content
+        else:
+            # Pagination mode - collect content from all pages
+            all_pages_content = {}
+            page_num = 1
+            
+            # Get the first page
+            all_pages_content[page_num] = driver.page_source
+            logger.info(f"Retrieved page {page_num}")
+            
+            # Check if pagination exists by looking for the pagination container
+            try:
+                # Use a more specific selector that might be more reliable
+                pagination_selectors = [
+                    ".Pagination",
+                    "nav[aria-label='Pagination']",
+                    ".pagination",
+                    "div[role='navigation']",
+                    "ul.pagination"
+                ]
+                
+                pagination = None
+                for selector in pagination_selectors:
+                    try:
+                        pagination = driver.find_element("css selector", selector)
+                        logger.info(f"Pagination found with selector: {selector}")
+                        break
+                    except:
+                        continue
+                
+                if pagination:
+                    logger.info("Pagination controls found - checking for multiple pages")
+                    
+                    # Look for pagination elements
+                    while page_num < max_pages:
+                        try:
+                            # Try different selectors for the next button
+                            next_button_selectors = [
+                                ".Pagination__Button--next",
+                                "button[aria-label='Next']",
+                                "button.pagination-next",
+                                "a.pagination-next",
+                                "button:contains('Next')",
+                                "//button[contains(@class, 'next') or contains(text(), 'Next')]"
+                            ]
+                            
+                            next_button = None
+                            for selector in next_button_selectors:
+                                try:
+                                    if selector.startswith("//"):
+                                        next_button = driver.find_element("xpath", selector)
+                                    else:
+                                        next_button = driver.find_element("css selector", selector)
+                                    logger.info(f"Next button found with selector: {selector}")
+                                    break
+                                except:
+                                    continue
+                            
+                            if not next_button:
+                                logger.info("No next button found")
+                                break
+                            
+                            # Check if the button is enabled/clickable (not disabled)
+                            if "disabled" in next_button.get_attribute("class") or next_button.get_attribute("disabled"):
+                                logger.info(f"Next button is disabled, reached last page ({page_num})")
+                                break
+                            
+                            # Scroll the button into view
+                            driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
+                            # Add a small delay after scrolling
+                            time.sleep(1)
+                            
+                            # Try to use JavaScript to click the button (more reliable)
+                            try:
+                                logger.info("Clicking next button with JavaScript")
+                                driver.execute_script("arguments[0].click();", next_button)
+                            except:
+                                # Fall back to regular click if JS click fails
+                                logger.info("Falling back to regular click")
+                                next_button.click()
+                            
+                            # Wait for the new page to load
+                            time.sleep(3)
+                            
+                            # Increment page number and store the page content
+                            page_num += 1
+                            all_pages_content[page_num] = driver.page_source
+                            logger.info(f"Retrieved page {page_num}")
+                            
+                        except Exception as e:
+                            logger.info(f"No more pages or error navigating: {e}")
+                            
+                            # Take a screenshot for debugging if there's an error
+                            if cache_dir:
+                                screenshot_path = Path(cache_dir) / f"pagination_error_{cache_key}_{page_num}.png"
+                                driver.save_screenshot(str(screenshot_path))
+                                logger.info(f"Saved error screenshot to {screenshot_path}")
+                            break
+                else:
+                    logger.info("No pagination controls found")
+                        
+            except Exception as e:
+                logger.info(f"Error detecting pagination: {e}")
+                # If we can't find pagination, we already have the single page content
+                if cache_dir:
+                    screenshot_path = Path(cache_dir) / f"pagination_detection_error_{cache_key}.png"
+                    driver.save_screenshot(str(screenshot_path))
+                    logger.info(f"Saved error screenshot to {screenshot_path}")
+            
+            # Cache the complete result
+            if cache_dir and cache_key:
+                complete_cache_key = f"{cache_key}_complete"
+                _cache_response(cache_dir, complete_cache_key, url, json.dumps(all_pages_content))
+            
+            return all_pages_content
         
-        # Cache the content if cache parameters are provided
-        if cache_dir and cache_key:
-            _cache_response(cache_dir, cache_key, url, html_content)
-        
-        return html_content        
     except Exception as e:
         logger.error(f"An error occurred retrieving {url}: {e}")
+        if cache_dir:
+            screenshot_path = Path(cache_dir) / f"general_error_{cache_key}.png"
+            try:
+                driver.save_screenshot(str(screenshot_path))
+                logger.info(f"Saved error screenshot to {screenshot_path}")
+            except:
+                pass
         return None
     
     finally:
@@ -169,11 +302,10 @@ def get_espn_bracket(entry_id: str = "", women: bool = False, cache_dir: Optiona
     url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{gender}-2025/bracket?id={entry_id}"
     
     # Create cache key
-    cache_key = f"bracket_{"women" if women else "men"}_{entry_id if entry_id else "blank"}"
+    cache_key = f"bracket_{'women' if women else 'men'}_{entry_id if entry_id else 'blank'}"
     
-    # Get the page content with caching
-    html_content = get_espn_page(url, cache_dir, cache_key)
-    return html_content
+    # Get the page content with caching, explicitly not checking pagination
+    return get_espn_page(url, cache_dir, cache_key, check_pagination=False)
 
 def extract_entry_bracket(html_content, ratings_source=None, women: bool = False):
     """
@@ -330,8 +462,7 @@ def get_team_conference(ratings_source, team_name, default="Unknown"):
 
 def get_espn_pool(pool_id: str, women: bool = False, cache_dir: Optional[str] = None):
     """
-    Pull list of entries for a specific league.
-    Only works for smaller (<30 entries) leagues for right now...
+    Pull list of entries for a specific league, supporting pagination for larger pools.
     
     Args:
         pool_id: ESPN pool ID to retrieve
@@ -339,37 +470,54 @@ def get_espn_pool(pool_id: str, women: bool = False, cache_dir: Optional[str] = 
         cache_dir: Directory to store cached responses
         
     Returns:
-        HTML content of the pool page
+        Dictionary containing HTML content of all pages in the pool
     """
     gender = "-women" if women else ""
     url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{gender}-2025/group?id={pool_id}"
     
     # Create cache key
-    cache_key = f"pool_{"women" if women else "men"}_{pool_id}"
+    cache_key = f"pool_{'women' if women else 'men'}_{pool_id}"
     
-    # Get the page content with caching
-    html_content = get_espn_page(url, cache_dir, cache_key)
-    return html_content
+    # Get the page content with caching, enabling pagination check
+    return get_espn_page(url, cache_dir, cache_key, check_pagination=True)
 
-def extract_entry_ids(html_content: str):
+def extract_entry_ids(html_content):
     """
     Extract entry IDs from pool HTML.
     
     Args:
-        html_content: HTML content of the pool page
+        html_content: HTML content of the pool page,
+                     or dictionary of HTML content from multiple pages
         
     Returns:
         Dictionary mapping entry names to entry IDs
     """
+    entry_ids = {}
+    
+    # Handle both single page and paginated content
+    if isinstance(html_content, dict):
+        # Process each page
+        for page_num, page_html in html_content.items():
+            page_entries = _extract_entries_from_html(page_html)
+            entry_ids.update(page_entries)
+            logger.info(f"Found {len(page_entries)} entries on page {page_num}")
+    else:
+        # Single page as string
+        entry_ids = _extract_entries_from_html(html_content)
+    
+    return entry_ids
+
+def _extract_entries_from_html(html):
+    """Helper function to extract entries from a single HTML page"""
     # Soupify the raw html
-    soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(html, 'html.parser')
     
     # Find all entries
-    entry_tags = soup.find_all('td',attrs={"class":"BracketEntryTable-column--entryName Table__TD"})
+    entry_tags = soup.find_all('td', attrs={"class":"BracketEntryTable-column--entryName Table__TD"})
 
     # Extract the entry ID's from the HTML
-    entry_ids = {entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1] for entry in entry_tags}
-    return entry_ids
+    return {entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1] 
+            for entry in entry_tags if entry.find("a")}
 
 def main():
     parser = optparse.OptionParser()
