@@ -26,6 +26,10 @@ from bigdance.cbb_brackets import Bracket, Team, Pool
 import numpy as np
 import optparse
 
+import pandas as pd
+import logging
+from copy import deepcopy
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -519,6 +523,264 @@ def _extract_entries_from_html(html):
     return {entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1] 
             for entry in entry_tags if entry.find("a")}
 
+def analyze_game_importance(pool_sim, current_round, num_sims=1000):
+    """
+    Analyze the relative importance of each game in the current round of a tournament.
+    
+    For each game in the current round:
+    1. Simulate the tournament with Team A fixed as the winner
+    2. Simulate the tournament with Team B fixed as the winner
+    3. Calculate the difference in win percentages for each entry
+    
+    Args:
+        pool_sim: Pool object containing entries and actual bracket
+        current_round: Name of the current tournament round (e.g., "Sweet 16")
+        num_sims: Number of simulations to run for each scenario
+        
+    Returns:
+        Dictionary mapping game IDs to their importance metrics
+    """
+    # Validate current round
+    valid_rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+    if current_round not in valid_rounds:
+        raise ValueError(f"Invalid round name: {current_round}. Must be one of {valid_rounds}")
+    
+    # Get the actual bracket from the pool
+    actual_bracket = pool_sim.actual_results
+    
+    # Get teams that have advanced to the current round
+    if current_round not in actual_bracket.results:
+        raise ValueError(f"No results found for {current_round} in the actual bracket")
+    
+    # Find games to analyze based on the teams in the current round
+    # We need to construct matchups by pairing teams
+    teams_in_round = actual_bracket.results[current_round]
+    if len(teams_in_round) < 2:
+        raise ValueError(f"Insufficient teams in {current_round} to create matchups")
+    
+    # Create matchups by pairing teams (assuming they're already in the correct order)
+    matchups = []
+    for i in range(0, len(teams_in_round), 2):
+        if i + 1 < len(teams_in_round):
+            team1, team2 = teams_in_round[i], teams_in_round[i + 1]
+            matchup_id = f"{current_round}_{team1.region}_{team1.seed}_{team2.seed}"
+            matchups.append({
+                "id": matchup_id,
+                "round": current_round,
+                "region": team1.region if team1.region == team2.region else "Final Four",
+                "team1": team1,
+                "team2": team2,
+                "team1_name": team1.name,
+                "team2_name": team2.name,
+                "team1_seed": team1.seed,
+                "team2_seed": team2.seed
+            })
+    
+    logger.info(f"Analyzing {len(matchups)} games in {current_round}")
+    
+    # Dictionary to store importance metrics for each game
+    game_importance = {}
+    
+    # For each matchup, simulate with each team winning
+    for matchup in matchups:
+        logger.info(f"Analyzing matchup: {matchup['team1_name']} (#{matchup['team1_seed']}) vs {matchup['team2_name']} (#{matchup['team2_seed']})")
+        
+        # Create fixed winners dictionary for Team 1 winning
+        fixed_winners_team1 = deepcopy(actual_bracket.results)
+        
+        # Get next round name
+        current_round_idx = valid_rounds.index(current_round)
+        if current_round_idx >= len(valid_rounds) - 1:
+            # Championship is the last round
+            next_round = None
+        else:
+            next_round = valid_rounds[current_round_idx + 1]
+        
+        # Update fixed winners with Team 1 winning
+        if next_round and next_round in fixed_winners_team1:
+            # Replace team2 with team1 in the next round's results if present
+            next_round_teams = []
+            for team in fixed_winners_team1[next_round]:
+                if team.name == matchup['team2_name']:
+                    next_round_teams.append(matchup['team1'])
+                else:
+                    next_round_teams.append(team)
+            fixed_winners_team1[next_round] = next_round_teams
+            
+            # Clear results for rounds after the next round
+            for i in range(current_round_idx + 2, len(valid_rounds)):
+                if valid_rounds[i] in fixed_winners_team1:
+                    fixed_winners_team1[valid_rounds[i]] = []
+            if "Champion" in fixed_winners_team1:
+                fixed_winners_team1["Champion"] = None
+        
+        # Run simulation with Team 1 as winner
+        logger.info(f"Simulating with {matchup['team1_name']} winning...")
+        results_team1 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners_team1)
+        
+        # Create fixed winners dictionary for Team 2 winning
+        fixed_winners_team2 = deepcopy(actual_bracket.results)
+        
+        # Update fixed winners with Team 2 winning
+        if next_round and next_round in fixed_winners_team2:
+            # Replace team1 with team2 in the next round's results if present
+            next_round_teams = []
+            for team in fixed_winners_team2[next_round]:
+                if team.name == matchup['team1_name']:
+                    next_round_teams.append(matchup['team2'])
+                else:
+                    next_round_teams.append(team)
+            fixed_winners_team2[next_round] = next_round_teams
+            
+            # Clear results for rounds after the next round
+            for i in range(current_round_idx + 2, len(valid_rounds)):
+                if valid_rounds[i] in fixed_winners_team2:
+                    fixed_winners_team2[valid_rounds[i]] = []
+            if "Champion" in fixed_winners_team2:
+                fixed_winners_team2["Champion"] = None
+        
+        # Run simulation with Team 2 as winner
+        logger.info(f"Simulating with {matchup['team2_name']} winning...")
+        results_team2 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners_team2)
+        
+        # Merge results to calculate the impact of each game on each entry
+        merged_results = pd.merge(
+            results_team1[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team1"}),
+            results_team2[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team2"}),
+            on="name",
+            how="inner"
+        )
+        
+        # Calculate impact (absolute difference in win percentage)
+        merged_results["impact"] = abs(merged_results["win_pct_team1"] - merged_results["win_pct_team2"])
+        
+        # Calculate max impact for any entry (key metric for this game's importance)
+        max_impact = merged_results["impact"].max()
+        avg_impact = merged_results["impact"].mean()
+        
+        # Find the entry with the biggest impact
+        max_impact_entry = merged_results.loc[merged_results["impact"].idxmax()]
+        
+        # Store game importance metrics
+        game_importance[matchup["id"]] = {
+            "matchup": f"{matchup['team1_name']} vs {matchup['team2_name']}",
+            "region": matchup["region"],
+            "team1": {
+                "name": matchup["team1_name"],
+                "seed": matchup["team1_seed"]
+            },
+            "team2": {
+                "name": matchup["team2_name"],
+                "seed": matchup["team2_seed"]
+            },
+            "max_impact": max_impact,
+            "avg_impact": avg_impact,
+            "max_impact_entry": max_impact_entry["name"],
+            "entry_win_pct_diff": {
+                max_impact_entry["name"]: {
+                    "team1_wins": max_impact_entry["win_pct_team1"],
+                    "team2_wins": max_impact_entry["win_pct_team2"],
+                    "impact": max_impact_entry["impact"]
+                }
+            },
+            "all_entries_impact": merged_results.to_dict(orient="records")
+        }
+        
+        logger.info(f"Matchup impact: {max_impact:.4f} (max), {avg_impact:.4f} (avg)")
+    
+    # Sort games by max impact
+    sorted_games = sorted(
+        game_importance.items(),
+        key=lambda x: x[1]["max_impact"],
+        reverse=True
+    )
+    
+    # Create sorted result dictionary
+    sorted_game_importance = {game_id: details for game_id, details in sorted_games}
+    
+    return sorted_game_importance
+
+def print_game_importance_summary(game_importance, entry_name=None):
+    """
+    Print a summary of the game importance analysis.
+    
+    Args:
+        game_importance: Dictionary of game importance metrics from analyze_game_importance
+        entry_name: Optional name of a specific entry to focus on. If None, shows the max impact entry for each game.
+    """
+    if not game_importance:
+        print("No games analyzed.")
+        return
+    
+    # Check if the specified entry exists in the data
+    if entry_name:
+        entry_exists = False
+        for game_id, details in game_importance.items():
+            for entry_record in details['all_entries_impact']:
+                if entry_record['name'] == entry_name:
+                    entry_exists = True
+                    break
+            if entry_exists:
+                break
+        
+        if not entry_exists:
+            print(f"Warning: Entry '{entry_name}' not found in the analysis data.")
+            print("Defaulting to maximum impact entries for each game.")
+            entry_name = None
+    
+    print("\n=== GAME IMPORTANCE SUMMARY ===")
+    if entry_name:
+        print(f"Focusing on entry: {entry_name}")
+    print(f"Analyzed {len(game_importance)} games\n")
+    
+    for i, (game_id, details) in enumerate(game_importance.items()):
+        print(f"GAME #{i+1}: {details['matchup']} (Region: {details['region']})")
+        print(f"  Max Impact: {details['max_impact']:.4f} | Avg Impact: {details['avg_impact']:.4f}")
+        
+        if entry_name:
+            # Find the specified entry's impact for this game
+            entry_impact = None
+            for entry_record in details['all_entries_impact']:
+                if entry_record['name'] == entry_name:
+                    entry_impact = {
+                        'team1_wins': entry_record['win_pct_team1'],
+                        'team2_wins': entry_record['win_pct_team2'],
+                        'impact': entry_record['impact']
+                    }
+                    break
+            
+            if not entry_impact:
+                print(f"  Note: Could not find impact data for {entry_name} on this game")
+                continue
+                
+            print(f"  Impact for {entry_name}: {entry_impact['impact']:.4f}")
+        else:
+            # Show the most affected entry
+            print(f"  Most affected entry: {details['max_impact_entry']}")
+            entry_impact = details['entry_win_pct_diff'][details['max_impact_entry']]
+        
+        # Calculate percentages
+        team1_pct = entry_impact['team1_wins'] * 100
+        team2_pct = entry_impact['team2_wins'] * 100
+        
+        # Determine which team benefits this entry
+        if team1_pct > team2_pct:
+            better_team = details['team1']['name']
+            better_pct = team1_pct
+            worse_team = details['team2']['name']
+            worse_pct = team2_pct
+        else:
+            better_team = details['team2']['name']
+            better_pct = team2_pct
+            worse_team = details['team1']['name']
+            worse_pct = team1_pct
+        
+        print(f"    Win chances: {better_pct:.1f}% if {better_team} wins vs {worse_pct:.1f}% if {worse_team} wins")
+        print(f"    Difference: {abs(team1_pct - team2_pct):.1f}%")
+        print()
+    
+    print("=== END OF SUMMARY ===")
+
 def main():
     parser = optparse.OptionParser()
     parser.add_option(
@@ -598,6 +860,13 @@ def main():
     top_entries = pool_results.sort_values("win_pct", ascending=False)
     top_entries.to_csv("PoolSimResults.csv",index=False)
     print(top_entries[["name", "avg_score", "std_score", "win_pct"]])
+
+    if options.importance:
+
+        # Assessing importance of each game in the current round
+        importance = analyze_game_importance(pool_sim, "Sweet 16")
+        # Print summary focused on the entry specified
+        print_game_importance_summary(importance, options.my_bracket)
 
 if __name__ == "__main__":
     # Set up basic logging configuration
