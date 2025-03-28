@@ -515,7 +515,32 @@ class Bracket:
         self.identify_underdogs()
         
         return self.results
-
+    
+    def infer_current_round(self):
+        """
+        Infer the current tournament round based on the number of teams in each round's results.
+        Used mainly for in progress tournament simulations.
+        
+        Returns:
+            The name of the current round, or None if it cannot be determined
+        """
+        # Check rounds in reverse order (from Championship back to First Round)
+        # The first round with incomplete results is likely the current round
+        round_order = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+        for round_ind, round_name in enumerate(round_order):
+            # If round hasn't been generated yet and the previous round is complete, likely this round
+            if round_name not in self.results:
+                return round_name
+                
+            actual_count = len(self.results[round_name])
+            expected_count = 2**(5 - round_ind) # 32, 16, 8, 4, 2, 1
+            
+            # If this round has fewer teams than expected, it's likely the current round
+            if actual_count < expected_count:
+                return round_name
+        
+        # If the tournament is finished, return None
+        return None
 
 class Pool:
     """
