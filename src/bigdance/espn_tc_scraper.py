@@ -53,14 +53,14 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
         complete_cache_key = f"{cache_key}_complete"
         cached_content = _get_cached_response(cache_dir, complete_cache_key)
         if cached_content:
-            logger.info(f"Using cached complete response for {url} with key {complete_cache_key}")
+            logger.debug(f"Using cached complete response for {url} with key {complete_cache_key}")
             return json.loads(cached_content)
     
     # Check cache for single page if not paginated
     if not check_pagination and cache_dir and cache_key:
         cached_content = _get_cached_response(cache_dir, cache_key)
         if cached_content:
-            logger.info(f"Using cached response for {url} with key {cache_key}")
+            logger.debug(f"Using cached response for {url} with key {cache_key}")
             return cached_content
     
     # Set up Chrome options
@@ -100,7 +100,7 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
             
             # Get the first page
             all_pages_content[page_num] = driver.page_source
-            logger.info(f"Retrieved page {page_num}")
+            logger.debug(f"Retrieved page {page_num}")
             
             # Check if pagination exists by looking for the pagination container
             try:
@@ -117,13 +117,13 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
                 for selector in pagination_selectors:
                     try:
                         pagination = driver.find_element("css selector", selector)
-                        logger.info(f"Pagination found with selector: {selector}")
+                        logger.debug(f"Pagination found with selector: {selector}")
                         break
                     except:
                         continue
                 
                 if pagination:
-                    logger.info("Pagination controls found - checking for multiple pages")
+                    logger.debug("Pagination controls found - checking for multiple pages")
                     
                     # Look for pagination elements
                     while page_num < max_pages:
@@ -145,18 +145,18 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
                                         next_button = driver.find_element("xpath", selector)
                                     else:
                                         next_button = driver.find_element("css selector", selector)
-                                    logger.info(f"Next button found with selector: {selector}")
+                                    logger.debug(f"Next button found with selector: {selector}")
                                     break
                                 except:
                                     continue
                             
                             if not next_button:
-                                logger.info("No next button found")
+                                logger.debug("No next button found")
                                 break
                             
                             # Check if the button is enabled/clickable (not disabled)
                             if "disabled" in next_button.get_attribute("class") or next_button.get_attribute("disabled"):
-                                logger.info(f"Next button is disabled, reached last page ({page_num})")
+                                logger.debug(f"Next button is disabled, reached last page ({page_num})")
                                 break
                             
                             # Scroll the button into view
@@ -166,11 +166,11 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
                             
                             # Try to use JavaScript to click the button (more reliable)
                             try:
-                                logger.info("Clicking next button with JavaScript")
+                                logger.debug("Clicking next button with JavaScript")
                                 driver.execute_script("arguments[0].click();", next_button)
                             except:
                                 # Fall back to regular click if JS click fails
-                                logger.info("Falling back to regular click")
+                                logger.debug("Falling back to regular click")
                                 next_button.click()
                             
                             # Wait for the new page to load
@@ -179,27 +179,27 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
                             # Increment page number and store the page content
                             page_num += 1
                             all_pages_content[page_num] = driver.page_source
-                            logger.info(f"Retrieved page {page_num}")
+                            logger.debug(f"Retrieved page {page_num}")
                             
                         except Exception as e:
-                            logger.info(f"No more pages or error navigating: {e}")
+                            logger.debug(f"No more pages or error navigating: {e}")
                             
                             # Take a screenshot for debugging if there's an error
                             if cache_dir:
                                 screenshot_path = Path(cache_dir) / f"pagination_error_{cache_key}_{page_num}.png"
                                 driver.save_screenshot(str(screenshot_path))
-                                logger.info(f"Saved error screenshot to {screenshot_path}")
+                                logger.debug(f"Saved error screenshot to {screenshot_path}")
                             break
                 else:
-                    logger.info("No pagination controls found")
+                    logger.debug("No pagination controls found")
                         
             except Exception as e:
-                logger.info(f"Error detecting pagination: {e}")
+                logger.debug(f"Error detecting pagination: {e}")
                 # If we can't find pagination, we already have the single page content
                 if cache_dir:
                     screenshot_path = Path(cache_dir) / f"pagination_detection_error_{cache_key}.png"
                     driver.save_screenshot(str(screenshot_path))
-                    logger.info(f"Saved error screenshot to {screenshot_path}")
+                    logger.debug(f"Saved error screenshot to {screenshot_path}")
             
             # Cache the complete result
             if cache_dir and cache_key:
@@ -214,7 +214,7 @@ def get_espn_page(url: str = "", cache_dir: Optional[str] = None, cache_key: Opt
             screenshot_path = Path(cache_dir) / f"general_error_{cache_key}.png"
             try:
                 driver.save_screenshot(str(screenshot_path))
-                logger.info(f"Saved error screenshot to {screenshot_path}")
+                logger.debug(f"Saved error screenshot to {screenshot_path}")
             except:
                 pass
         return None
@@ -250,7 +250,7 @@ def _get_cached_response(cache_dir: str, cache_key: str) -> Optional[str]:
         # Check if cache is fresh (less than 1 hour old for actual results, 1 day old for entries)
         time_since = (datetime.now() - datetime.fromisoformat(cache_data["timestamp"])).total_seconds()
         if (cache_key.endswith("_blank") and time_since > 3600) or time_since > 86400:
-            logger.info(f"Cache expired for key {cache_key}")
+            logger.debug(f"Cache expired for key {cache_key}")
             return None
         else:
             return cache_data["content"]
@@ -285,7 +285,7 @@ def _cache_response(cache_dir: str, cache_key: str, url: str, content: str):
         cache_file = cache_path / f"{cache_key}.json"
         cache_file.write_text(json.dumps(cache_data))
         
-        logger.info(f"Cached response to {cache_file}")
+        logger.debug(f"Cached response to {cache_file}")
     
     except Exception as e:
         logger.warning(f"Error caching response for {cache_key}: {e}")
@@ -523,126 +523,71 @@ def _extract_entries_from_html(html):
     return {entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1] 
             for entry in entry_tags if entry.find("a")}
 
-def analyze_game_importance(pool_sim, current_round, num_sims=1000):
+def analyze_win_importance(pool_sim, current_round=None, num_sims=1000):
     """
-    Analyze the relative importance of each game in the current round of a tournament.
+    Analyze the relative importance of each win in the current round of a tournament.
     
-    For each game in the current round:
-    1. Simulate the tournament with Team A fixed as the winner
-    2. Simulate the tournament with Team B fixed as the winner
-    3. Calculate the difference in win percentages for each entry
+    For each possible win in the current round:
+    1. Simulate the tournament with that team fixed as the winner
+    2. Calculate the difference in win percentages compared to baseline
     
     Args:
         pool_sim: Pool object containing entries and actual bracket
-        current_round: Name of the current tournament round (e.g., "Sweet 16")
+        current_round: Optional name of the current tournament round (e.g., "Sweet 16").
+                      If None, the function will attempt to infer the current round.
         num_sims: Number of simulations to run for each scenario
         
     Returns:
         Dictionary mapping game IDs to their importance metrics
     """
+    actual_bracket = deepcopy(pool_sim.actual_results)
+
+    # If current_round is not provided, try to infer it
+    if current_round is None:
+        current_round = actual_bracket.infer_current_round()
+        logger.info(f"Inferred current round: {current_round}")
+    
     # Validate current round
     valid_rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
     if current_round not in valid_rounds:
         raise ValueError(f"Invalid round name: {current_round}. Must be one of {valid_rounds}")
     
-    # Get the actual bracket from the pool
-    actual_bracket = pool_sim.actual_results
+    # Identify teams that advanced to the current round
+    teams_in_round = []
+    if current_round == "First Round":
+        for game in actual_bracket.games:
+            teams_in_round.extend([game.team1, game.team2])
+    else:
+        prev_round = valid_rounds[valid_rounds.index(current_round) - 1]
+        teams_in_round = actual_bracket.results[prev_round]
+
+    logger.info(f"Analyzing {len(teams_in_round)//2} games in {current_round}")
     
-    # Get teams that have advanced to the current round
-    if current_round not in actual_bracket.results:
-        raise ValueError(f"No results found for {current_round} in the actual bracket")
-    
-    # Find games to analyze based on the teams in the current round
-    # We need to construct matchups by pairing teams
-    teams_in_round = actual_bracket.results[current_round]
-    if len(teams_in_round) < 2:
-        raise ValueError(f"Insufficient teams in {current_round} to create matchups")
-    
-    # Create matchups by pairing teams (assuming they're already in the correct order)
-    matchups = []
-    for i in range(0, len(teams_in_round), 2):
-        if i + 1 < len(teams_in_round):
-            team1, team2 = teams_in_round[i], teams_in_round[i + 1]
-            matchup_id = f"{current_round}_{team1.region}_{team1.seed}_{team2.seed}"
-            matchups.append({
-                "id": matchup_id,
-                "round": current_round,
-                "region": team1.region if team1.region == team2.region else "Final Four",
-                "team1": team1,
-                "team2": team2,
-                "team1_name": team1.name,
-                "team2_name": team2.name,
-                "team1_seed": team1.seed,
-                "team2_seed": team2.seed
-            })
-    
-    logger.info(f"Analyzing {len(matchups)} games in {current_round}")
-    
-    # Dictionary to store importance metrics for each game
-    game_importance = {}
-    
-    # For each matchup, simulate with each team winning
-    for matchup in matchups:
-        logger.info(f"Analyzing matchup: {matchup['team1_name']} (#{matchup['team1_seed']}) vs {matchup['team2_name']} (#{matchup['team2_seed']})")
-        
-        # Create fixed winners dictionary for Team 1 winning
-        fixed_winners_team1 = deepcopy(actual_bracket.results)
-        
-        # Get next round name
-        current_round_idx = valid_rounds.index(current_round)
-        if current_round_idx >= len(valid_rounds) - 1:
-            # Championship is the last round
-            next_round = None
-        else:
-            next_round = valid_rounds[current_round_idx + 1]
-        
-        # Update fixed winners with Team 1 winning
-        if next_round and next_round in fixed_winners_team1:
-            # Replace team2 with team1 in the next round's results if present
-            next_round_teams = []
-            for team in fixed_winners_team1[next_round]:
-                if team.name == matchup['team2_name']:
-                    next_round_teams.append(matchup['team1'])
-                else:
-                    next_round_teams.append(team)
-            fixed_winners_team1[next_round] = next_round_teams
-            
-            # Clear results for rounds after the next round
-            for i in range(current_round_idx + 2, len(valid_rounds)):
-                if valid_rounds[i] in fixed_winners_team1:
-                    fixed_winners_team1[valid_rounds[i]] = []
-            if "Champion" in fixed_winners_team1:
-                fixed_winners_team1["Champion"] = None
-        
+    # Simulating baseline results
+    logger.debug(f"Simulating baseline...")
+    fixed_winners = deepcopy(actual_bracket.results)
+    baseline = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners)
+
+    game_importance = []
+    for game_ind in range(len(teams_in_round)//2):
+        # Create fixed winners dictionary
+        team1 = teams_in_round[game_ind*2]
+        fixed_winners = deepcopy(actual_bracket.results)
+        fixed_winners[current_round].append(team1)
+
         # Run simulation with Team 1 as winner
-        logger.info(f"Simulating with {matchup['team1_name']} winning...")
-        results_team1 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners_team1)
-        
-        # Create fixed winners dictionary for Team 2 winning
-        fixed_winners_team2 = deepcopy(actual_bracket.results)
-        
-        # Update fixed winners with Team 2 winning
-        if next_round and next_round in fixed_winners_team2:
-            # Replace team1 with team2 in the next round's results if present
-            next_round_teams = []
-            for team in fixed_winners_team2[next_round]:
-                if team.name == matchup['team1_name']:
-                    next_round_teams.append(matchup['team2'])
-                else:
-                    next_round_teams.append(team)
-            fixed_winners_team2[next_round] = next_round_teams
-            
-            # Clear results for rounds after the next round
-            for i in range(current_round_idx + 2, len(valid_rounds)):
-                if valid_rounds[i] in fixed_winners_team2:
-                    fixed_winners_team2[valid_rounds[i]] = []
-            if "Champion" in fixed_winners_team2:
-                fixed_winners_team2["Champion"] = None
-        
+        logger.debug(f"Simulating with {team1.name} winning...")
+        results_team1 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners)
+
+        # Create fixed winners dictionary
+        team2 = teams_in_round[game_ind*2 + 1]
+        fixed_winners = deepcopy(actual_bracket.results)
+        fixed_winners[current_round].append(team2)
+
         # Run simulation with Team 2 as winner
-        logger.info(f"Simulating with {matchup['team2_name']} winning...")
-        results_team2 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners_team2)
-        
+        logger.debug(f"Simulating with {team2.name} winning...")
+        results_team2 = pool_sim.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners)
+
         # Merge results to calculate the impact of each game on each entry
         merged_results = pd.merge(
             results_team1[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team1"}),
@@ -650,7 +595,13 @@ def analyze_game_importance(pool_sim, current_round, num_sims=1000):
             on="name",
             how="inner"
         )
-        
+        merged_results = pd.merge(
+            merged_results,
+            baseline[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_baseline"}),
+            on="name",
+            how="inner"
+        )
+
         # Calculate impact (absolute difference in win percentage)
         merged_results["impact"] = abs(merged_results["win_pct_team1"] - merged_results["win_pct_team2"])
         
@@ -662,16 +613,16 @@ def analyze_game_importance(pool_sim, current_round, num_sims=1000):
         max_impact_entry = merged_results.loc[merged_results["impact"].idxmax()]
         
         # Store game importance metrics
-        game_importance[matchup["id"]] = {
-            "matchup": f"{matchup['team1_name']} vs {matchup['team2_name']}",
-            "region": matchup["region"],
+        game_importance.append({
+            "matchup": f"{team1.name} vs {team2.name}",
+            "region": team1.region,
             "team1": {
-                "name": matchup["team1_name"],
-                "seed": matchup["team1_seed"]
+                "name": team1.name,
+                "seed": team1.seed
             },
             "team2": {
-                "name": matchup["team2_name"],
-                "seed": matchup["team2_seed"]
+                "name": team2.name,
+                "seed": team2.seed
             },
             "max_impact": max_impact,
             "avg_impact": avg_impact,
@@ -680,25 +631,16 @@ def analyze_game_importance(pool_sim, current_round, num_sims=1000):
                 max_impact_entry["name"]: {
                     "team1_wins": max_impact_entry["win_pct_team1"],
                     "team2_wins": max_impact_entry["win_pct_team2"],
+                    "baseline": max_impact_entry["win_pct_baseline"],
                     "impact": max_impact_entry["impact"]
                 }
             },
             "all_entries_impact": merged_results.to_dict(orient="records")
-        }
+        })
         
-        logger.info(f"Matchup impact: {max_impact:.4f} (max), {avg_impact:.4f} (avg)")
-    
-    # Sort games by max impact
-    sorted_games = sorted(
-        game_importance.items(),
-        key=lambda x: x[1]["max_impact"],
-        reverse=True
-    )
-    
-    # Create sorted result dictionary
-    sorted_game_importance = {game_id: details for game_id, details in sorted_games}
-    
-    return sorted_game_importance
+        logger.debug(f"Matchup impact: {max_impact:.4f} (max), {avg_impact:.4f} (avg)")
+
+    return game_importance
 
 def print_game_importance_summary(game_importance, entry_name=None):
     """
@@ -715,7 +657,7 @@ def print_game_importance_summary(game_importance, entry_name=None):
     # Check if the specified entry exists in the data
     if entry_name:
         entry_exists = False
-        for game_id, details in game_importance.items():
+        for details in game_importance:
             for entry_record in details['all_entries_impact']:
                 if entry_record['name'] == entry_name:
                     entry_exists = True
@@ -733,7 +675,7 @@ def print_game_importance_summary(game_importance, entry_name=None):
         print(f"Focusing on entry: {entry_name}")
     print(f"Analyzed {len(game_importance)} games\n")
     
-    for i, (game_id, details) in enumerate(game_importance.items()):
+    for i, details in enumerate(game_importance):
         print(f"GAME #{i+1}: {details['matchup']} (Region: {details['region']})")
         print(f"  Max Impact: {details['max_impact']:.4f} | Avg Impact: {details['avg_impact']:.4f}")
         
@@ -745,6 +687,7 @@ def print_game_importance_summary(game_importance, entry_name=None):
                     entry_impact = {
                         'team1_wins': entry_record['win_pct_team1'],
                         'team2_wins': entry_record['win_pct_team2'],
+                        'baseline': entry_record['win_pct_baseline'],
                         'impact': entry_record['impact']
                     }
                     break
@@ -762,6 +705,7 @@ def print_game_importance_summary(game_importance, entry_name=None):
         # Calculate percentages
         team1_pct = entry_impact['team1_wins'] * 100
         team2_pct = entry_impact['team2_wins'] * 100
+        baseline_pct = entry_impact['baseline'] * 100
         
         # Determine which team benefits this entry
         if team1_pct > team2_pct:
@@ -775,7 +719,7 @@ def print_game_importance_summary(game_importance, entry_name=None):
             worse_team = details['team1']['name']
             worse_pct = team1_pct
         
-        print(f"    Win chances: {better_pct:.1f}% if {better_team} wins vs {worse_pct:.1f}% if {worse_team} wins")
+        print(f"    Win chances: {better_pct:.1f}% if {better_team} wins vs {worse_pct:.1f}% if {worse_team} wins (currently at {baseline_pct:.1f}%)")
         print(f"    Difference: {abs(team1_pct - team2_pct):.1f}%")
         print()
     
@@ -803,13 +747,37 @@ def main():
             '"Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship")',
     )
     parser.add_option(
+        "--importance",
+        action="store_true",
+        dest="importance",
+        help="whether to assess the importance of each team winning in the current round",
+    )
+    parser.add_option(
+        "--my_bracket",
+        action="store",
+        dest="my_bracket",
+        help="name of the specific bracket to focus on in importance analysis",
+    )
+    parser.add_option(
         "--cache_dir",
         action="store",
         dest="cache_dir",
-        default="espn_cache",
+        default=".cache",
         help="location of html cache directory",
     )
+    parser.add_option(
+        "--verbose",
+        action="store_true",
+        dest="verbose",
+        help="show all debugging messages",
+    )
     options = parser.parse_args()[0]
+
+    # Set up basic logging configuration
+    logging.basicConfig(
+        level=logging.DEBUG if options.verbose else logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
     # Get HTML content with caching
     html_content = get_espn_pool(options.pool_id, options.women, options.cache_dir)
@@ -818,7 +786,7 @@ def main():
     entry_ids = extract_entry_ids(html_content) # Do we want to pull the pool name too???
 
     # Pull standings initially to reduce number of pulls throughout
-    ratings_source = Standings(women=options.women)
+    ratings_source = Standings(women=options.women, cache_dir=options.cache_dir)
 
     # Pulling blank entry to get seedings
     bracket_html = get_espn_bracket(women=options.women, cache_dir=options.cache_dir)
@@ -852,6 +820,10 @@ def main():
         if entry_bracket:
             pool_sim.add_entry(entry_name, entry_bracket, False)
 
+    # Creating separate copy of the pool for importance calculation
+    if options.importance:
+        importance_pool = deepcopy(pool_sim)
+
     # Simulating pool
     logger.info(f"Simulating pool with {len(pool_sim.entries)} entries")
     pool_results = pool_sim.simulate_pool(num_sims=1000, fixed_winners=actual_bracket.results)
@@ -862,16 +834,10 @@ def main():
     print(top_entries[["name", "avg_score", "std_score", "win_pct"]])
 
     if options.importance:
-
         # Assessing importance of each game in the current round
-        importance = analyze_game_importance(pool_sim, "Sweet 16")
+        importance = analyze_win_importance(importance_pool, options.as_of)
         # Print summary focused on the entry specified
         print_game_importance_summary(importance, options.my_bracket)
 
 if __name__ == "__main__":
-    # Set up basic logging configuration
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
     main()
