@@ -30,8 +30,8 @@ from bigdance.cbb_brackets import Bracket, Pool, Team
 from bigdance.wn_cbb_scraper import Standings
 
 from bigdance.espn_tc_scraper import (
-    get_espn_bracket,
-    extract_entry_bracket
+    ESPNScraper,
+    ESPNBracket
 )
 
 class BracketAnalysis:
@@ -88,13 +88,15 @@ class BracketAnalysis:
         try:
             # Scrape from ESPN website
             logging.info("Fetching bracket from ESPN website...")
-            html_content = get_espn_bracket(women=self.women)
+            scraper = ESPNScraper(self.women)
+            html_content = scraper.get_bracket()
             if not html_content:
                 logging.error("Failed to get HTML content from ESPN")
                 return None
                 
             # Extract bracket data from blank ESPN entry
-            self.espn_bracket = extract_entry_bracket(html_content, women=self.women)
+            handler = ESPNBracket(self.women)
+            self.espn_bracket = handler.extract_bracket(html_content)
 
             logging.info("Successfully created bracket from ESPN data")
 
