@@ -442,7 +442,7 @@ class Bracket:
             team_dict = {team.name: team for team in self.teams}
             
             for round_name, winners in fixed_winners.items():
-                if not winners:
+                if not winners or round_name == "Champion":
                     continue
                     
                 # Determine if winners are strings (names) or Team objects
