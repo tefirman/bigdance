@@ -423,28 +423,28 @@ class Bracket:
     def simulate_tournament(self, fixed_winners=None) -> Dict[str, List[Team]]:
         """
         Simulate entire tournament and store results, respecting any fixed outcomes provided.
-        
+
         Args:
             fixed_winners: Optional dictionary mapping round names to either:
                         - lists of Team objects that should win, or
                         - lists of team names (strings) that should win
-        
+
         Returns:
             Dictionary mapping round names to lists of winning teams
         """
         self.results = {}  # Reset results
         self.underdogs_by_round = {}  # Reset underdogs tracking
-        
+
         # Process fixed winners if provided
         processed_fixed_winners = {}
         if fixed_winners:
             # Create a lookup dictionary for team objects by name
             team_dict = {team.name: team for team in self.teams}
-            
+
             for round_name, winners in fixed_winners.items():
                 if not winners or round_name == "Champion":
                     continue
-                    
+
                 # Determine if winners are strings (names) or Team objects
                 if all(isinstance(w, str) for w in winners):
                     # Convert names to Team objects
@@ -457,27 +457,34 @@ class Bracket:
                 else:
                     # Mixed types, skip this round
                     continue
-        
+
         # Define all rounds to simulate
-        rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
-        
+        rounds = [
+            "First Round",
+            "Second Round",
+            "Sweet 16",
+            "Elite 8",
+            "Final Four",
+            "Championship",
+        ]
+
         # Start with first round games
         current_games = self.games.copy()
-        
+
         # Simulate each round
         for round_idx, round_name in enumerate(rounds):
             round_winners = []
-            
+
             # Process each game in the current round
             for game in current_games:
                 # Check if we have fixed outcomes for this round
                 if processed_fixed_winners and round_name in processed_fixed_winners:
                     fixed_winners_list = processed_fixed_winners[round_name]
-                    
+
                     # Check if either team in this game is in the fixed winners list
                     team1_fixed = game.team1 in fixed_winners_list
                     team2_fixed = game.team2 in fixed_winners_list
-                    
+
                     if team1_fixed and not team2_fixed:
                         game.winner = game.team1
                     elif team2_fixed and not team1_fixed:
@@ -486,61 +493,71 @@ class Bracket:
                         # Both teams can't advance - prioritize the one listed first
                         first_idx = fixed_winners_list.index(game.team1)
                         second_idx = fixed_winners_list.index(game.team2)
-                        game.winner = game.team1 if first_idx < second_idx else game.team2
+                        game.winner = (
+                            game.team1 if first_idx < second_idx else game.team2
+                        )
                     else:
                         # No fixed winner, simulate normally
                         game.winner = self.simulate_game(game)
                 else:
                     # No fixed outcomes for this round, simulate normally
                     game.winner = self.simulate_game(game)
-                
+
                 # Add winner to the round results
                 round_winners.append(game.winner)
-            
+
             # Store the round results
             if round_name == "Championship":
                 self.results[round_name] = [round_winners[0]] if round_winners else []
                 self.results["Champion"] = round_winners[0] if round_winners else None
             else:
                 self.results[round_name] = round_winners
-            
+
             # Check if we need to create games for the next round
             if round_idx < len(rounds) - 1:
                 current_games = self.advance_round(current_games)
-        
+
         # Calculate log probability of final bracket
         self.log_probability = self.calculate_log_probability()
-        
+
         # Identify underdogs in the results
         self.identify_underdogs()
-        
+
         return self.results
-    
+
     def infer_current_round(self):
         """
         Infer the current tournament round based on the number of teams in each round's results.
         Used mainly for in progress tournament simulations.
-        
+
         Returns:
             The name of the current round, or None if it cannot be determined
         """
         # Check rounds in reverse order (from Championship back to First Round)
         # The first round with incomplete results is likely the current round
-        round_order = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+        round_order = [
+            "First Round",
+            "Second Round",
+            "Sweet 16",
+            "Elite 8",
+            "Final Four",
+            "Championship",
+        ]
         for round_ind, round_name in enumerate(round_order):
             # If round hasn't been generated yet and the previous round is complete, likely this round
             if round_name not in self.results:
                 return round_name
-                
+
             actual_count = len(self.results[round_name])
-            expected_count = 2**(5 - round_ind) # 32, 16, 8, 4, 2, 1
+            expected_count = 2 ** (5 - round_ind)  # 32, 16, 8, 4, 2, 1
 
             # If this round has fewer teams than expected, it's likely the current round
             if actual_count < expected_count:
                 return round_name
-        
+
         # If the tournament is finished, return None
         return None
+
 
 class Pool:
     """
@@ -634,7 +651,9 @@ class Pool:
 
         for sim in range(num_sims):
             # Simulate actual tournament once per simulation with fixed winners
-            self.actual_tournament = self.actual_results.simulate_tournament(fixed_winners)
+            self.actual_tournament = self.actual_results.simulate_tournament(
+                fixed_winners
+            )
 
             scores = []
             for name, entry, should_simulate in self.entries:

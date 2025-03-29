@@ -18,7 +18,10 @@ Main components:
 - BracketAnalysis: Analyze winning strategies across multiple pools
 """
 
-from .bigdance_integration import create_teams_from_standings, simulate_hypothetical_bracket_pool
+from .bigdance_integration import (
+    create_teams_from_standings,
+    simulate_hypothetical_bracket_pool,
+)
 from .cbb_brackets import Bracket, Game, Pool, Team
 from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
 from .espn_tc_scraper import ESPNScraper, ESPNBracket, ESPNPool, GameImportanceAnalyzer

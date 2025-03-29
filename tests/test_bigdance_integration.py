@@ -194,7 +194,9 @@ def test_create_teams_validation(mock_standings):
 def test_simulate_hypothetical_bracket_pool(mock_standings):
     """Test bracket pool simulation"""
     num_entries = 5
-    results = simulate_hypothetical_bracket_pool(mock_standings, num_entries=num_entries)
+    results = simulate_hypothetical_bracket_pool(
+        mock_standings, num_entries=num_entries
+    )
 
     # Check basic structure of results
     assert len(results) == num_entries

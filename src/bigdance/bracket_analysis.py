@@ -29,10 +29,8 @@ from bigdance.bigdance_integration import create_teams_from_standings
 from bigdance.cbb_brackets import Bracket, Pool, Team
 from bigdance.wn_cbb_scraper import Standings
 
-from bigdance.espn_tc_scraper import (
-    ESPNScraper,
-    ESPNBracket
-)
+from bigdance.espn_tc_scraper import ESPNScraper, ESPNBracket
+
 
 class BracketAnalysis:
     """Class for analyzing trends across multiple bracket pool simulations"""
@@ -53,7 +51,7 @@ class BracketAnalysis:
         output_dir: Optional[str] = None,
         use_espn: bool = False,
         women: bool = False,
-        second_chance: bool = False
+        second_chance: bool = False,
     ):
         self.standings = standings
         self.num_pools = num_pools
@@ -81,7 +79,7 @@ class BracketAnalysis:
     def fetch_espn_bracket(self) -> Optional[Bracket]:
         """
         Fetch the ESPN bracket either from the web or from a provided JSON file.
-        
+
         Returns:
             Optional[Bracket]: ESPN bracket converted to bigdance Bracket format, or None if unavailable
         """
@@ -93,7 +91,7 @@ class BracketAnalysis:
             if not html_content:
                 logging.error("Failed to get HTML content from ESPN")
                 return None
-                
+
             # Extract bracket data from blank ESPN entry
             handler = ESPNBracket(self.women)
             self.espn_bracket = handler.extract_bracket(html_content)
@@ -101,15 +99,22 @@ class BracketAnalysis:
             logging.info("Successfully created bracket from ESPN data")
 
             # Resetting bracket to simulate from scratch
-            for round_name in ["First Round","Second Round","Sweet 16","Elite 8","Final Four","Championship"]:
+            for round_name in [
+                "First Round",
+                "Second Round",
+                "Sweet 16",
+                "Elite 8",
+                "Final Four",
+                "Championship",
+            ]:
                 if self.second_chance and round_name in ["First Round", "Second Round"]:
                     continue
                 self.espn_bracket.results[round_name] = []
             if "Champion" in self.espn_bracket.results:
                 del self.espn_bracket.results["Champion"]
-            
+
             return self.espn_bracket
-            
+
         except Exception as e:
             logging.error(f"Error fetching ESPN bracket: {str(e)}")
             return None
@@ -203,7 +208,7 @@ class BracketAnalysis:
                             entry_bracket = Bracket(self.espn_bracket.teams)
                         else:
                             entry_bracket = create_teams_from_standings(self.standings)
-                        
+
                         for game in entry_bracket.games:
                             game.upset_factor = upset_factor
                         entry_name = f"Entry_{j+1}"
@@ -223,7 +228,9 @@ class BracketAnalysis:
 
                 # Simulate and store results
                 try:
-                    pool_results = pool.simulate_pool(num_sims=1000, fixed_winners=self.espn_bracket.results)
+                    pool_results = pool.simulate_pool(
+                        num_sims=1000, fixed_winners=self.espn_bracket.results
+                    )
 
                     # Find winning entry name(s)
                     top_entries = pool_results.sort_values("win_pct", ascending=False)
@@ -1612,16 +1619,27 @@ class BracketAnalysis:
             - freq_diff: Difference in frequency (positive means winners picked this upset more)
             - relative_advantage: Relative advantage of picking this upset (freq_diff / non_winning_freq)
         """
-        if not hasattr(self, "winning_brackets") or not hasattr(self, "non_winning_brackets"):
+        if not hasattr(self, "winning_brackets") or not hasattr(
+            self, "non_winning_brackets"
+        ):
             raise ValueError("Must run simulations before comparing specific upsets")
 
         # Check if we have data to compare
         if not self.winning_brackets or not self.non_winning_brackets:
-            print("Warning: Missing bracket data for comparison. Make sure both winning and non-winning brackets were tracked.")
+            print(
+                "Warning: Missing bracket data for comparison. Make sure both winning and non-winning brackets were tracked."
+            )
             return pd.DataFrame(
                 columns=[
-                    "round", "seed", "team", "opponent_seed", "opponent", 
-                    "winning_freq", "non_winning_freq", "freq_diff", "relative_advantage"
+                    "round",
+                    "seed",
+                    "team",
+                    "opponent_seed",
+                    "opponent",
+                    "winning_freq",
+                    "non_winning_freq",
+                    "freq_diff",
+                    "relative_advantage",
                 ]
             )
 
@@ -1634,12 +1652,12 @@ class BracketAnalysis:
         for bracket in self.winning_brackets:
             if not hasattr(bracket, "results") or not bracket.results:
                 continue
-                
+
             # Check each round
             for round_name in self.ROUND_ORDER:
                 if round_name not in bracket.results:
                     continue
-                    
+
                 # For each team that advanced in this round
                 for team in bracket.results[round_name]:
                     # Check if this team is an underdog for this round
@@ -1654,12 +1672,12 @@ class BracketAnalysis:
         for bracket in self.non_winning_brackets:
             if not hasattr(bracket, "results") or not bracket.results:
                 continue
-                
+
             # Check each round
             for round_name in self.ROUND_ORDER:
                 if round_name not in bracket.results:
                     continue
-                    
+
                 # For each team that advanced in this round
                 for team in bracket.results[round_name]:
                     # Check if this team is an underdog for this round
@@ -1674,66 +1692,78 @@ class BracketAnalysis:
 
         # Build results dataframe
         results = []
-        
+
         # Get all unique upset keys from both dictionaries
         all_upsets = set(list(winning_upsets.keys()) + list(non_winning_upsets.keys()))
-        
+
         for upset_key in all_upsets:
             round_name, seed, team_name = upset_key
-            
+
             # Calculate frequencies
             winning_count = winning_upsets.get(upset_key, 0)
             non_winning_count = non_winning_upsets.get(upset_key, 0)
-            
+
             winning_freq = winning_count / winning_total if winning_total > 0 else 0
-            non_winning_freq = non_winning_count / non_winning_total if non_winning_total > 0 else 0
-            
+            non_winning_freq = (
+                non_winning_count / non_winning_total if non_winning_total > 0 else 0
+            )
+
             # Calculate advantage (how much more likely winners pick this upset)
             freq_diff = winning_freq - non_winning_freq
-            
+
             # Calculate relative advantage
             # (how many times more likely winners are to pick this upset)
-            relative_advantage = freq_diff / non_winning_freq if non_winning_freq > 0 else float('inf')
-            
+            relative_advantage = (
+                freq_diff / non_winning_freq if non_winning_freq > 0 else float("inf")
+            )
+
             # Determine round number for sorting later
             round_order = {name: i for i, name in enumerate(self.ROUND_ORDER)}
             round_number = round_order.get(round_name, 99)
-            
+
             # Create a row for this upset
-            results.append({
-                "round": round_name,
-                "round_number": round_number,  # For sorting
-                "seed": seed,
-                "team": team_name,
-                "winning_count": winning_count,
-                "non_winning_count": non_winning_count,
-                "winning_freq": winning_freq,
-                "non_winning_freq": non_winning_freq,
-                "freq_diff": freq_diff,
-                "relative_advantage": relative_advantage
-            })
-        
+            results.append(
+                {
+                    "round": round_name,
+                    "round_number": round_number,  # For sorting
+                    "seed": seed,
+                    "team": team_name,
+                    "winning_count": winning_count,
+                    "non_winning_count": non_winning_count,
+                    "winning_freq": winning_freq,
+                    "non_winning_freq": non_winning_freq,
+                    "freq_diff": freq_diff,
+                    "relative_advantage": relative_advantage,
+                }
+            )
+
         # Convert to DataFrame
         if not results:
             print("No upsets found in the data")
             return pd.DataFrame(
                 columns=[
-                    "round", "seed", "team", 
-                    "winning_freq", "non_winning_freq", "freq_diff", "relative_advantage"
+                    "round",
+                    "seed",
+                    "team",
+                    "winning_freq",
+                    "non_winning_freq",
+                    "freq_diff",
+                    "relative_advantage",
                 ]
             )
-            
+
         results_df = pd.DataFrame(results)
-        
+
         # Sort by round first, then by frequency difference (most advantage first)
         results_df = results_df.sort_values(
-            ["round_number", "freq_diff"], 
-            ascending=[True, False]
+            ["round_number", "freq_diff"], ascending=[True, False]
         ).drop("round_number", axis=1)
-        
+
         # Save results
-        results_df.to_csv(self.output_dir / "specific_upset_comparison.csv", index=False)
-        
+        results_df.to_csv(
+            self.output_dir / "specific_upset_comparison.csv", index=False
+        )
+
         return results_df
 
     def save_all_comparative_data(self):
@@ -1898,10 +1928,12 @@ class BracketAnalysis:
 
         try:
             top_champions = self.compare_champion_distributions().head(5)
-            champion_comparison = top_champions[top_champions["relative_advantage"] > 0.0]
+            champion_comparison = top_champions[
+                top_champions["relative_advantage"] > 0.0
+            ]
         except Exception:
             champion_comparison = pd.DataFrame()
-            
+
         # NEW: Get specific upsets comparison
         try:
             specific_upsets = (
@@ -1910,9 +1942,11 @@ class BracketAnalysis:
                 else pd.DataFrame()
             )
             # Get top upsets with significant advantage for winners (relative_advantage > 0.0)
-            top_upsets = specific_upsets[
-                specific_upsets["relative_advantage"] > 0.0
-            ].sort_values("freq_diff", ascending=False).head(10)
+            top_upsets = (
+                specific_upsets[specific_upsets["relative_advantage"] > 0.0]
+                .sort_values("freq_diff", ascending=False)
+                .head(10)
+            )
         except Exception:
             specific_upsets = pd.DataFrame()
             top_upsets = pd.DataFrame()
@@ -2080,14 +2114,14 @@ def main():
             "--debug", action="store_true", help="Enable additional debug output"
         )
         parser.add_argument(
-            "--use_espn", 
+            "--use_espn",
             action="store_true",
-            help="Use actual ESPN bracket instead of Warren Nolan standings"
+            help="Use actual ESPN bracket instead of Warren Nolan standings",
         )
         parser.add_argument(
-            "--second_chance", 
+            "--second_chance",
             action="store_true",
-            help="Analyze picks from Sweet 16 onwards for Second Chance brackets"
+            help="Analyze picks from Sweet 16 onwards for Second Chance brackets",
         )
         args = parser.parse_args()
 
@@ -2123,15 +2157,17 @@ def main():
         logging.info(
             f"Starting analysis for {args.entries_per_pool} entries over {args.num_pools} pools"
         )
-        logging.info(f"Using {'ESPN bracket' if args.use_espn else 'Warren Nolan standings'}")
-        
+        logging.info(
+            f"Using {'ESPN bracket' if args.use_espn else 'Warren Nolan standings'}"
+        )
+
         analyzer = BracketAnalysis(
-            standings=standings, 
-            num_pools=args.num_pools, 
+            standings=standings,
+            num_pools=args.num_pools,
             output_dir=output_dir,
             use_espn=args.use_espn,
             women=args.women,
-            second_chance=args.second_chance
+            second_chance=args.second_chance,
         )
 
         try:
