@@ -232,14 +232,15 @@ def create_bracket_with_picks(teams, picks_by_round):
     return bracket
 
 
-def simulate_bracket_pool(
+def simulate_hypothetical_bracket_pool(
     standings: Optional[Standings] = None,
     num_entries: int = 100,
     upset_factors: Optional[List[float]] = None,
     women: bool = False,
 ) -> pd.DataFrame:
     """
-    Simulate a bracket pool using Warren Nolan ratings.
+    Illustrative example of how to create and customize your own bracket pool
+    using the framework described in cbb_brackets.
 
     Args:
         standings: Standings object containing team ratings and info.
@@ -362,7 +363,7 @@ def main():
         upset_factors = [args.upset_min]  # Just use minimum for a single entry
 
     # Create and simulate bracket pool
-    results = simulate_bracket_pool(
+    results = simulate_hypothetical_bracket_pool(
         standings=standings,
         num_entries=args.num_entries,
         upset_factors=upset_factors,

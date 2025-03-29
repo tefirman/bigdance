@@ -5,7 +5,7 @@ import pytest
 
 from bigdance.bigdance_integration import (
     create_teams_from_standings,
-    simulate_bracket_pool,
+    simulate_hypothetical_bracket_pool,
 )
 from bigdance.wn_cbb_scraper import Standings
 
@@ -191,10 +191,10 @@ def test_create_teams_validation(mock_standings):
         create_teams_from_standings(mock_standings, regions=invalid_regions)
 
 
-def test_simulate_bracket_pool(mock_standings):
+def test_simulate_hypothetical_bracket_pool(mock_standings):
     """Test bracket pool simulation"""
     num_entries = 5
-    results = simulate_bracket_pool(mock_standings, num_entries=num_entries)
+    results = simulate_hypothetical_bracket_pool(mock_standings, num_entries=num_entries)
 
     # Check basic structure of results
     assert len(results) == num_entries
@@ -207,13 +207,13 @@ def test_simulate_bracket_pool(mock_standings):
     assert abs(results["win_pct"].sum() - 1.0) < 0.01
 
 
-def test_simulate_bracket_pool_with_upset_factors(mock_standings):
+def test_simulate_hypothetical_bracket_pool_with_upset_factors(mock_standings):
     """Test bracket pool simulation with custom upset factors"""
     num_entries = 3
     upset_factors = [0.1, 0.2, 0.3]
 
     # Just verify that the simulation runs with custom upset factors
-    results = simulate_bracket_pool(
+    results = simulate_hypothetical_bracket_pool(
         mock_standings, num_entries=num_entries, upset_factors=upset_factors
     )
 
@@ -236,7 +236,7 @@ def test_integration_with_real_standings(mock_standings):
         mock_standings_class.return_value = mock_standings
 
         # Try running the main simulation
-        results = simulate_bracket_pool(Standings(), num_entries=5)
+        results = simulate_hypothetical_bracket_pool(Standings(), num_entries=5)
 
         assert len(results) == 5
         assert all(
@@ -245,14 +245,14 @@ def test_integration_with_real_standings(mock_standings):
         )
 
 
-def test_simulate_bracket_pool_with_full_upset_range(mock_standings):
+def test_simulate_hypothetical_bracket_pool_with_full_upset_range(mock_standings):
     """Test bracket pool simulation with the full range of upset factors (-1.0 to 1.0)"""
     num_entries = 5
     # Include a full range from extreme chalk to coin flip
     upset_factors = [-0.8, -0.4, 0.0, 0.4, 0.8]
 
     # Just verify that the simulation runs with the new upset factor range
-    results = simulate_bracket_pool(
+    results = simulate_hypothetical_bracket_pool(
         mock_standings, num_entries=num_entries, upset_factors=upset_factors
     )
 
@@ -270,7 +270,7 @@ def test_simulate_bracket_pool_with_full_upset_range(mock_standings):
     # Verify the simulation runs with out-of-bounds values by clipping them
     # This tests the robustness of the implementation
     extreme_factors = [-2.0, -0.5, 0.5, 2.0, 0.0]
-    results_extreme = simulate_bracket_pool(
+    results_extreme = simulate_hypothetical_bracket_pool(
         mock_standings, num_entries=num_entries, upset_factors=extreme_factors
     )
     assert len(results_extreme) == num_entries

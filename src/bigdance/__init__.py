@@ -13,11 +13,11 @@ Main components:
 - Pool: Simulate tournament pools with multiple entries
 """
 
-from .bigdance_integration import create_teams_from_standings, simulate_bracket_pool
+from .bigdance_integration import create_teams_from_standings
 from .cbb_brackets import Bracket, Game, Pool, Team
 from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Taylor Firman"
 __email__ = "tefirman@gmail.com"
 
