@@ -752,7 +752,7 @@ class ESPNPool:
             for page_num, page_html in html_content.items():
                 page_entries = self._extract_entries_from_html(page_html)
                 entry_ids.update(page_entries)
-                logger.info(f"Found {len(page_entries)} entries on page {page_num}")
+                logger.debug(f"Found {len(page_entries)} entries on page {page_num}")
         else:
             # Single page as string
             entry_ids = self._extract_entries_from_html(html_content)
@@ -1256,7 +1256,13 @@ def main():
     # Printing results
     top_entries = pool_results.sort_values("win_pct", ascending=False)
     top_entries.to_csv("PoolSimResults.csv", index=False)
-    print(top_entries[["name", "avg_score", "std_score", "win_pct"]])
+    print()
+    print(
+        top_entries[["name", "avg_score", "std_score", "win_pct"]].to_string(
+            index=False
+        )
+    )
+    print()
 
     # Analyze game importance if requested
     if options.importance:
