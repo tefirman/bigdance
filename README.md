@@ -16,12 +16,13 @@
 
 `bigdance` is a comprehensive Python package for simulating NCAA basketball tournament brackets. It provides tools for:
 
-- Pulling real-time college basketball team ratings and matchups from [Warren Nolan](https://www.warrennolan.com/) and [ESPN's Tournament Challenge](https://fantasy.espn.com/games/tournament-challenge-bracket-2025/)
+- Pulling real-time college basketball team ratings and matchups from [Warren Nolan](https://www.warrennolan.com/)
+- Creating and simulating hypothetical tournament brackets with in-season rankings
+- Extracting and simulating real bracket pools from [ESPN's Tournament Challenge](https://fantasy.espn.com/games/tournament-challenge-bracket-2025/)
 - Simulating tournament outcomes with adjustable "upset factors"
 - Analyzing bracket pools to determine winning strategies
 - Visualizing results and generating insights on optimal bracket selection
 - Analyzing the importance of specific games in a tournament
-- Creating and simulating hypothetical tournament brackets with in-season rankings
 
 Whether you're a fan looking to improve your bracket picks, a data scientist analyzing tournament patterns, or a researcher studying sports predictions, `bigdance` offers powerful, customizable tools to help you simulate and analyze the Big Dance of March Madness.
 
