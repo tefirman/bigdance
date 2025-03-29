@@ -3,7 +3,7 @@
   <td><img src="https://github.com/tefirman/bigdance/blob/main/assets/DancingHex.png?raw=true" width="400" alt="bigdance logo"></td>
   <td>
     <h1>bigdance</h1>
-    <p>A Python package for NCAA March Madness bracket simulation combining real-time ratings from Warren Nolan with customizable tournament simulations.</p>
+    <p>A Python package for NCAA March Madness bracket simulation combining real-time ratings with customizable tournament simulations.</p>
   </td>
 </tr>
 </table>
@@ -16,13 +16,14 @@
 
 `bigdance` is a comprehensive Python package for simulating NCAA basketball tournament brackets. It provides tools for:
 
-- Pulling real-time college basketball team ratings and statistics from Warren Nolan
-- Creating realistic tournament brackets with automatic bids and seeding
+- Pulling real-time college basketball team ratings and matchups from [Warren Nolan](https://www.warrennolan.com/) and [ESPN's Tournament Challenge](https://fantasy.espn.com/games/tournament-challenge-bracket-2025/)
 - Simulating tournament outcomes with adjustable "upset factors"
 - Analyzing bracket pools to determine winning strategies
 - Visualizing results and generating insights on optimal bracket selection
+- Analyzing the importance of specific games in a tournament
+- Creating and simulating hypothetical tournament brackets with in-season rankings
 
-Whether you're a fan looking to improve your bracket picks, a data scientist analyzing tournament patterns, or a researcher studying sports predictions, `bigdance` offers powerful, customizable tools to help you simulate and analyze March Madness.
+Whether you're a fan looking to improve your bracket picks, a data scientist analyzing tournament patterns, or a researcher studying sports predictions, `bigdance` offers powerful, customizable tools to help you simulate and analyze the Big Dance of March Madness.
 
 ## Installation
 
@@ -32,15 +33,10 @@ pip install bigdance
 
 ## Quick Start
 
-```python
-from bigdance import Standings, simulate_bracket_pool
-
-# Get current team ratings
-standings = Standings()
-
-# Simulate a bracket pool
-results = simulate_bracket_pool(standings, num_entries=100)
-print(results)
+From the command line:
+```bash
+# Analyze a bracket pool from ESPN, pool ID found in the URL after "bracket?id="
+python -m bigdance.espn_tc_scraper --pool_id 1234567
 ```
 
 ## Key Features
@@ -68,9 +64,9 @@ acc_teams = Standings(conference="ACC")
 print(standings.elo.sort_values("ELO", ascending=False).head(10))
 ```
 
-### Tournament Bracket Creation and Simulation
+### Hypothetical Tournament Simulation Before Bracket Release
 
-Create and simulate entire tournament brackets:
+Create a bracket based on current Warren Nolan rankings and accounting for automatic conference bids:
 
 ```python
 from bigdance import create_teams_from_standings, Standings
@@ -116,31 +112,60 @@ for game in bracket.games:
 results = bracket.simulate_tournament()
 ```
 
-### Bracket Pool Simulation
+### ESPN Tournament Challenge Bracket Pool Simulation
 
-Simulate entire bracket pools with multiple entries:
+Pull brackets directly from ESPN Tournament Challenge:
 
 ```python
-from bigdance import simulate_bracket_pool, Standings
+from bigdance.espn_tc_scraper import ESPNBracket, ESPNPool
 
-# Get current standings
-standings = Standings()
+# Create a bracket handler for men's tournament (use women=True for women's tournament)
+bracket_handler = ESPNBracket()
 
-# Simulate pool with 100 entries using varying upset factors
-results = simulate_bracket_pool(
-    standings,
-    num_entries=100,
-    # Optional: provide specific upset factors 
-    # upset_factors=[0.1, 0.2, 0.3, ...],
-)
+# Get the current tournament bracket
+bracket_html = bracket_handler.get_bracket()
+actual_bracket = bracket_handler.extract_bracket(bracket_html)
 
-# Print winning entries
+# Load a pool and all its entries
+pool_manager = ESPNPool()
+pool_id = "1234567"  # ESPN pool ID found in the URL after "bracket?id="
+entries = pool_manager.load_pool_entries(pool_id)
+
+# Create a simulation pool from ESPN entries
+pool_sim = pool_manager.create_simulation_pool(pool_id)
+
+# Simulate and display top entries
+results = pool_sim.simulate_pool(num_sims=1000)
 print(results.head(10))
+```
+
+### Game Importance Analysis
+
+Analyze which games have the most impact on a pool's outcome:
+
+```python
+from bigdance.espn_tc_scraper import ESPNPool, GameImportanceAnalyzer
+
+# Load a pool from ESPN
+pool_manager = ESPNPool()
+pool_sim = pool_manager.create_simulation_pool("1234567") # ESPN pool ID
+
+# Create analyzer
+analyzer = GameImportanceAnalyzer(pool_sim)
+
+# Analyze the importance of each remaining game
+importance = analyzer.analyze_win_importance()
+
+# Print human-readable summary
+analyzer.print_importance_summary(importance)
+
+# Focus on impact for a specific entry
+analyzer.print_importance_summary(importance, entry_name="My Bracket")
 ```
 
 ### Advanced Analysis
 
-Analyze winning strategies and optimal upset selections:
+Analyze winning strategies and optimal upset selections using a hypothetical bracket based on current Warren Nolan rankings:
 
 ```python
 from bigdance import Standings
@@ -170,7 +195,22 @@ print(underdogs)
 analyzer.save_all_comparative_data()
 ```
 
-### Historical Scheduling and Results
+Or after the bracket is released, you can integrate with ESPN Tournament Challenge to work with the real tournament bracket and analyze winning strategies:
+
+```python
+from bigdance.bracket_analysis import BracketAnalysis
+
+# Use ESPN data instead of Warren Nolan
+analyzer = BracketAnalysis(use_espn=True, women=False, num_pools=100)
+
+# For Second Chance brackets (starting from Sweet 16)
+analyzer = BracketAnalysis(use_espn=True, second_chance=True, num_pools=100)
+
+# Run simulations with ESPN data as the reference bracket
+analyzer.simulate_pools(entries_per_pool=10)
+```
+
+## Historical Scheduling and Results
 
 Access game schedules and results:
 
@@ -192,60 +232,19 @@ for day_games in schedule.games_per_day:
     print(day_games.matchups)
 ```
 
-## Advanced Usage Examples
+## Command Line Tools
 
-### Creating a Custom Bracket with Specific Picks
+The package includes command-line tools for accessing functionality:
 
-```python
-from bigdance import Standings, create_teams_from_standings
-from bigdance.bigdance_integration import create_bracket_with_picks
+```bash
+# Analyze a bracket pool from ESPN
+python -m bigdance.espn_tc_scraper --pool_id 1234567
 
-# Get team data
-standings = Standings()
-teams = create_teams_from_standings(standings).teams
+# Find most important remaining games
+python -m bigdance.espn_tc_scraper --pool_id 1234567 --importance
 
-# Define your picks (team names by round)
-picks = {
-    "First Round": ["Duke", "North Carolina", "Kansas", ...],
-    "Second Round": ["Duke", "Kansas", ...],
-    "Sweet 16": ["Duke", "Purdue", ...],
-    "Elite 8": ["Duke", "UConn"],
-    "Final Four": ["Duke"],
-    "Championship": ["Duke"]
-}
-
-# Create bracket with your picks
-my_bracket = create_bracket_with_picks(teams, picks)
-
-# Check bracket details
-print(f"Champion: {my_bracket.results['Champion'].name}")
-```
-
-### Finding the Optimal Upset Factor
-
-```python
-from bigdance import Standings, create_teams_from_standings, Pool
-import numpy as np
-
-# Get team data
-standings = Standings()
-actual_bracket = create_teams_from_standings(standings)
-
-# Create pool
-pool = Pool(actual_bracket)
-
-# Try different upset factors
-upset_factors = np.arange(-0.8, 0.81, 0.1)
-
-for factor in upset_factors:
-    entry = create_teams_from_standings(standings)
-    for game in entry.games:
-        game.upset_factor = factor
-    pool.add_entry(f"Factor_{factor:.1f}", entry)
-
-# Simulate and find best factor
-results = pool.simulate_pool(num_sims=1000)
-print(results[["name", "win_pct", "avg_score"]].sort_values("win_pct", ascending=False))
+# Run bracket analysis with ESPN data
+python -m bigdance.bracket_analysis --use_espn --num_pools 100
 ```
 
 ## Development
@@ -280,7 +279,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Warren Nolan website for providing college basketball data (no affiliation)
-- Andrew Sundberg for historical tournament data used in testing
+- ESPN Tournament Challenge for tournament brackets (no affiliation)
+- Andrew Sundberg for [historical tournament data](https://www.kaggle.com/datasets/andrewsundberg/college-basketball-dataset/) used in testing
 
 ## Author
 
