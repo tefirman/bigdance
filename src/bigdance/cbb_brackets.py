@@ -4,7 +4,7 @@
 @File    :   cbb_brackets.py
 @Time    :   2024/01/11
 @Author  :   Taylor Firman
-@Version :   0.2.0
+@Version :   0.3.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Generalized March Madness bracket simulation package
 """
@@ -534,7 +534,7 @@ class Bracket:
                 
             actual_count = len(self.results[round_name])
             expected_count = 2**(5 - round_ind) # 32, 16, 8, 4, 2, 1
-            
+
             # If this round has fewer teams than expected, it's likely the current round
             if actual_count < expected_count:
                 return round_name
