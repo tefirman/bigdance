@@ -905,14 +905,17 @@ class GameImportanceAnalyzer:
             results_team1[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team1"}),
             results_team2[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team2"}),
             on="name",
-            how="inner"
+            how="outer"
         )
         merged_results = pd.merge(
             merged_results,
             baseline[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_baseline"}),
             on="name",
-            how="inner"
+            how="outer"
         )
+        merged_results.win_pct_team1 = merged_results.win_pct_team1.fillna(0.0)
+        merged_results.win_pct_team2 = merged_results.win_pct_team2.fillna(0.0)
+        merged_results.win_pct_baseline = merged_results.win_pct_baseline.fillna(0.0)
         
         # Calculate impact metrics
         merged_results["impact"] = abs(merged_results["win_pct_team1"] - merged_results["win_pct_team2"])
