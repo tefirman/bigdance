@@ -386,7 +386,7 @@ class ESPNScraper(BaseScraper):
                 element = driver.find_element("css selector", selector)
                 logger.debug(f"Pagination found with selector: {selector}")
                 return element
-            except:
+            except Exception:
                 continue
         return None
 
@@ -400,7 +400,7 @@ class ESPNScraper(BaseScraper):
                     element = driver.find_element("css selector", selector)
                 logger.debug(f"Next button found with selector: {selector}")
                 return element
-            except:
+            except Exception:
                 continue
         return None
 
@@ -420,7 +420,7 @@ class ESPNScraper(BaseScraper):
         try:
             logger.debug("Clicking next button with JavaScript")
             driver.execute_script("arguments[0].click();", button)
-        except:
+        except Exception:
             # Fall back to regular click
             logger.debug("Falling back to regular click")
             button.click()
