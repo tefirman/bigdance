@@ -37,7 +37,22 @@ pip install bigdance
 From the command line:
 ```bash
 # Analyze a bracket pool from ESPN, pool ID found in the URL after "bracket?id="
-python -m bigdance.espn_tc_scraper --pool_id 1234567
+python espn_tc_scraper.py --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890
+```
+
+Example output:
+```
+                     name  avg_score  std_score  win_pct
+     Marclemore's Picks 1 120.912833  26.688279   0.3825
+                    Tyler 138.386617  25.299976   0.2690
+Taylor's Educated Guesses 127.950943  20.279894   0.2650
+      trev_wood's Picks 1 152.396226   9.261873   0.0530
+        dsutt06's Picks 1 149.655738   9.498921   0.0305
+```
+
+You can also run detailed game importance analysis:
+```bash
+python -m bigdance.espn_tc_scraper --pool_id 1234567 --importance
 ```
 
 ## Key Features
