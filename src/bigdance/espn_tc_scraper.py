@@ -888,7 +888,7 @@ class GameImportanceAnalyzer:
         # Infer current round if not provided
         if current_round is None:
             current_round = actual_bracket.infer_current_round()
-            logger.info(f"Inferred current round: {current_round}")
+            logger.debug(f"Inferred current round: {current_round}")
 
         # Validate current round
         valid_rounds = [
@@ -906,7 +906,7 @@ class GameImportanceAnalyzer:
 
         # Get teams in the current round
         teams_in_round = self._get_teams_in_round(actual_bracket, current_round)
-        logger.info(f"Analyzing {len(teams_in_round)//2} games in {current_round}")
+        logger.debug(f"Analyzing {len(teams_in_round)//2} games in {current_round}")
 
         # Simulate baseline results
         logger.debug("Simulating baseline...")
@@ -1089,10 +1089,9 @@ class GameImportanceAnalyzer:
                 print("Defaulting to maximum impact entries for each game.")
                 entry_name = None
 
-        print("\n=== GAME IMPORTANCE SUMMARY ===")
+        print("\n=== GAME IMPORTANCE SUMMARY ===\n")
         if entry_name:
             print(f"Focusing on entry: {entry_name}")
-        print(f"Analyzed {len(game_importance)} games\n")
 
         for i, details in enumerate(game_importance):
             print(f"GAME #{i+1}: {details['matchup']} (Region: {details['region']})")

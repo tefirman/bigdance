@@ -43,16 +43,40 @@ python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c689
 Example output:
 ```
                      name  avg_score  std_score  win_pct
-     Marclemore's Picks 1 120.912833  26.688279   0.3825
-                    Tyler 138.386617  25.299976   0.2690
-Taylor's Educated Guesses 127.950943  20.279894   0.2650
-      trev_wood's Picks 1 152.396226   9.261873   0.0530
-        dsutt06's Picks 1 149.655738   9.498921   0.0305
+Taylor's Educated Guesses  89.963768  28.193593 0.265083
+   Crazylegs329's Picks 1  79.592105  23.647902 0.146500
+     Marclemore's Picks 1  75.286765  26.658584 0.123583
+      trev_wood's Picks 1  80.643411  32.009227 0.112583
+                    Tyler  82.548077  29.134399 0.097500
+        ddehart's Picks 1  82.314815  29.403620 0.096083
+     KyleStokes's Picks 1  81.021978  27.432737 0.088000
+        dsutt06's Picks 1  84.612500  28.695474 0.070667
 ```
 
 You can also run detailed game importance analysis:
 ```bash
-python -m bigdance.espn_tc_scraper --pool_id 1234567 --importance
+python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890 --importance
+```
+
+Example output:
+```
+=== GAME IMPORTANCE SUMMARY ===
+
+GAME #1: Auburn vs Florida (Region: SOUTH)
+  Max Impact: 0.5330 | Avg Impact: 0.2665
+  Most affected entry: Tyler
+    Win chances: 72.7% if Auburn wins vs 19.4% if Florida wins
+    Currently at: 43.0% baseline win probability
+    Difference: 53.3%
+
+GAME #2: Duke vs Houston (Region: EAST)
+  Max Impact: 0.4750 | Avg Impact: 0.2375
+  Most affected entry: Tyler
+    Win chances: 69.6% if Duke wins vs 22.1% if Houston wins
+    Currently at: 43.0% baseline win probability
+    Difference: 47.5%
+
+=== END OF SUMMARY ===
 ```
 
 ## Key Features
