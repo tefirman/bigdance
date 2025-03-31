@@ -4,7 +4,7 @@
 @File    :   cbb_brackets.py
 @Time    :   2024/01/11
 @Author  :   Taylor Firman
-@Version :   0.3.0
+@Version :   0.3.1
 @Contact :   tefirman@gmail.com
 @Desc    :   Generalized March Madness bracket simulation package
 """
