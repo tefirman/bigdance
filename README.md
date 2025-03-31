@@ -37,7 +37,7 @@ pip install bigdance
 From the command line:
 ```bash
 # Analyze a bracket pool from ESPN, pool ID found in the URL after "bracket?id="
-python espn_tc_scraper.py --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890
+python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890
 ```
 
 Example output:
