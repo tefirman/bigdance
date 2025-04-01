@@ -228,6 +228,11 @@ class Bracket:
                 game.winner = self.simulate_game(game)
             winners.append(game.winner)
 
+        # Ensuring correct Final Four matchups
+        if len(winners) == 4:
+            regions = list(dict.fromkeys([team.region for team in self.teams]))
+            winners = sorted(winners, key=lambda x: regions.index(x.region))
+
         # Create next round matchups
         if len(winners) > 1:  # Not championship game
             for i in range(0, len(winners), 2):
@@ -683,13 +688,13 @@ class Pool:
 
             # In case of ties, split the win
             win_share = 1.0 / len(winners)
-            for name in winners:
+            for name in scores_df.name.unique():
                 results.append(
                     {
                         "simulation": sim,
                         "name": name,
                         "score": scores_df[scores_df["name"] == name]["score"].iloc[0],
-                        "win_share": win_share,
+                        "win_share": win_share if name in winners else 0.0,
                     }
                 )
 
@@ -703,6 +708,7 @@ class Pool:
 
         summary.columns = ["name", "avg_score", "std_score", "wins"]
         summary["win_pct"] = summary["wins"] / num_sims
+        summary["win_prob"] = summary["win_pct"].apply(lambda x: "{:.1f}%".format(x * 100))
 
         # Add per-round log probability statistics to the summary
         for round_name in [

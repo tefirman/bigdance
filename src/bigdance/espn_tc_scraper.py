@@ -1027,9 +1027,6 @@ class GameImportanceAnalyzer:
             on="name",
             how="outer",
         )
-        merged_results.win_pct_team1 = merged_results.win_pct_team1.fillna(0.0)
-        merged_results.win_pct_team2 = merged_results.win_pct_team2.fillna(0.0)
-        merged_results.win_pct_baseline = merged_results.win_pct_baseline.fillna(0.0)
 
         # Calculate impact metrics
         merged_results["impact"] = abs(
@@ -1257,7 +1254,7 @@ def main():
     top_entries.to_csv("PoolSimResults.csv", index=False)
     print()
     print(
-        top_entries[["name", "avg_score", "std_score", "win_pct"]].to_string(
+        top_entries[["name", "avg_score", "std_score", "win_prob"]].to_string(
             index=False
         )
     )
@@ -1266,7 +1263,7 @@ def main():
     # Analyze game importance if requested
     if options.importance:
         analyzer = GameImportanceAnalyzer(importance_sim)
-        importance = analyzer.analyze_win_importance(options.as_of)
+        importance = analyzer.analyze_win_importance(options.as_of, 1000)
         analyzer.print_importance_summary(importance, options.my_bracket)
 
     return 0

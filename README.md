@@ -42,15 +42,15 @@ python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c689
 
 Example output:
 ```
-                     name  avg_score  std_score  win_pct
-Taylor's Educated Guesses  89.963768  28.193593 0.265083
-   Crazylegs329's Picks 1  79.592105  23.647902 0.146500
-     Marclemore's Picks 1  75.286765  26.658584 0.123583
-      trev_wood's Picks 1  80.643411  32.009227 0.112583
-                    Tyler  82.548077  29.134399 0.097500
-        ddehart's Picks 1  82.314815  29.403620 0.096083
-     KyleStokes's Picks 1  81.021978  27.432737 0.088000
-        dsutt06's Picks 1  84.612500  28.695474 0.070667
+                     name  avg_score  std_score win_prob
+                    Tyler    137.760  21.439824    47.2%
+Taylor's Educated Guesses    108.968  21.589281    28.3%
+     Marclemore's Picks 1    124.376  20.652679    12.2%
+        dsutt06's Picks 1    124.376  20.652679    12.2%
+   Crazylegs329's Picks 1     93.536  20.058990     0.0%
+     KyleStokes's Picks 1    107.376  20.652679     0.0%
+        ddehart's Picks 1    120.760  21.439824     0.0%
+      trev_wood's Picks 1    120.376  20.652679     0.0%
 ```
 
 You can also run detailed game importance analysis:
@@ -63,18 +63,18 @@ Example output:
 === GAME IMPORTANCE SUMMARY ===
 
 GAME #1: Auburn vs Florida (Region: SOUTH)
-  Max Impact: 0.5330 | Avg Impact: 0.2665
+  Max Impact: 0.4470 | Avg Impact: 0.1250
   Most affected entry: Tyler
-    Win chances: 72.7% if Auburn wins vs 19.4% if Florida wins
-    Currently at: 43.0% baseline win probability
-    Difference: 53.3%
+    Win chances: 66.6% if Auburn wins vs 21.9% if Florida wins
+    Currently at: 45.1% baseline win probability
+    Difference: 44.7%
 
 GAME #2: Duke vs Houston (Region: EAST)
-  Max Impact: 0.4750 | Avg Impact: 0.2375
-  Most affected entry: Tyler
-    Win chances: 69.6% if Duke wins vs 22.1% if Houston wins
-    Currently at: 43.0% baseline win probability
-    Difference: 47.5%
+  Max Impact: 0.5270 | Avg Impact: 0.1318
+  Most affected entry: Taylor's Educated Guesses
+    Win chances: 52.7% if Houston wins vs 0.0% if Duke wins
+    Currently at: 29.9% baseline win probability
+    Difference: 52.7%
 
 === END OF SUMMARY ===
 ```
