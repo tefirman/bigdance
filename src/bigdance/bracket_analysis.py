@@ -2083,7 +2083,7 @@ class BracketAnalysis:
         return report
 
 
-def main():
+def main(argv=None):
     """Run bracket analysis with winning vs non-winning comparisons, with robust error handling"""
     try:
         # Set up argument parser
@@ -2123,7 +2123,7 @@ def main():
             action="store_true",
             help="Analyze picks from Sweet 16 onwards for Second Chance brackets",
         )
-        args = parser.parse_args()
+        args = parser.parse_args(argv)
 
         # Set up logging
         log_level = logging.DEBUG if args.debug else logging.INFO

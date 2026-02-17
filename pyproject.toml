@@ -6,20 +6,20 @@ build-backend = "setuptools.build_meta"
 name = "bigdance"
 version = "0.3.2"
 dependencies = [
-  "numpy",
-  "pandas",
-  "beautifulsoup4",
-  "requests",
-  "lxml",
-  "urllib3",
-  "html5lib",
-  "seaborn",
-  "matplotlib",
-  "scipy",
-  "selenium",
-  "webdriver_manager",
+  "numpy>=1.23",
+  "pandas>=1.5",
+  "beautifulsoup4>=4.11",
+  "requests>=2.28",
+  "lxml>=4.9",
+  "urllib3>=1.26",
+  "html5lib>=1.1",
+  "seaborn>=0.12",
+  "matplotlib>=3.6",
+  "scipy>=1.9",
+  "selenium>=4.8",
+  "webdriver_manager>=4.0",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 authors = [
   {name = "Taylor Firman", email = "tefirman@gmail.com"},
 ]
@@ -32,7 +32,6 @@ license = {file = "LICENSE"}
 keywords = ["college basketball", "march madness", "bracket", "warren nolan", "espn", "tournament challenge"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -42,6 +41,9 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
+[project.scripts]
+bigdance = "bigdance.cli:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=7.0",
@@ -50,6 +52,7 @@ dev = [
   "isort",
   "ruff",
   "pre-commit",
+  "mypy>=1.0",
 ]
 
 [project.urls]
@@ -73,3 +76,52 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "pass",
 ]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bigdance"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["bigdance"]
+src_paths = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[tool.setuptools.package-data]
+bigdance = ["py.typed"]

@@ -66,7 +66,7 @@ class Game:
     team2: Team
     round: int
     region: str
-    upset_factor: float = None
+    upset_factor: Optional[float] = None
     winner: Optional[Team] = None
     actual_winner: Optional[Team] = None  # For comparing to real results
 
@@ -143,7 +143,7 @@ class Bracket:
                     )
                 )
 
-    def simulate_game(self, game: Game, upset_factor: float = None) -> Team:
+    def simulate_game(self, game: Game, upset_factor: Optional[float] = None) -> Team:
         """
         Simulate single game outcome with upset factor adjustment.
 
@@ -590,7 +590,9 @@ class Pool:
         self.entries.append((name, bracket, simulate))
 
     def score_bracket(
-        self, entry_results: Dict[str, List[Team]], round_values: Dict[str, int] = None
+        self,
+        entry_results: Dict[str, List[Team]],
+        round_values: Optional[Dict[str, int]] = None,
     ) -> int:
         """
         Score a bracket against actual results

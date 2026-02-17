@@ -305,7 +305,7 @@ def simulate_hypothetical_bracket_pool(
     return results
 
 
-def main():
+def main(argv=None):
     """Example usage of integration module with command-line arguments"""
     parser = argparse.ArgumentParser(description="Simulate March Madness bracket pool")
     parser.add_argument(
@@ -337,7 +337,7 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Print verbose output")
 
     # Parse arguments
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.verbose:
         print("Running with the following settings:")

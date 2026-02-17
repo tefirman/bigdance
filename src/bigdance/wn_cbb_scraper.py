@@ -154,7 +154,7 @@ class Standings(BaseScraper):
     def __init__(
         self,
         season: int = (datetime.now() + timedelta(days=90)).year,
-        conference: str = None,
+        conference: Optional[str] = None,
         women: bool = False,
         cache_dir: Optional[str] = None,
     ):
@@ -443,7 +443,7 @@ class Matchups(BaseScraper):
 
     def add_elos(
         self,
-        s: Standings = None,
+        s: Optional[Standings] = None,
         base_elo: float = 1500.0,
         scale: float = 1.0,
         homefield: float = 100.0,
@@ -523,7 +523,7 @@ def elo_prob(
     return prob1
 
 
-def main():
+def main(argv=None):
     # Initializing command line inputs
     parser = optparse.OptionParser()
     parser.add_option(
@@ -565,7 +565,7 @@ def main():
         dest="cache_dir",
         help="location of html cache",
     )
-    options = parser.parse_args()[0]
+    options = parser.parse_args(argv)[0]
     if options.debug:
         logging.basicConfig(level=logging.DEBUG)
     options.date = pd.to_datetime(options.date)

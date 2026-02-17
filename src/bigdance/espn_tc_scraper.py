@@ -1150,7 +1150,7 @@ class GameImportanceAnalyzer:
         print("=== END OF SUMMARY ===")
 
 
-def main():
+def main(argv=None):
     """Command line interface for the module"""
     parser = optparse.OptionParser()
     parser.add_option(
@@ -1197,7 +1197,7 @@ def main():
         dest="verbose",
         help="show all debugging messages",
     )
-    options = parser.parse_args()[0]
+    options = parser.parse_args(argv)[0]
 
     # Set up logging
     logging.basicConfig(
