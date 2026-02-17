@@ -1,18 +1,20 @@
-import pytest
+import contextlib
 import json
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 from pathlib import Path
-import pandas as pd
+from unittest.mock import MagicMock, patch
 
+import pandas as pd
+import pytest
+
+from bigdance.cbb_brackets import Bracket, Pool, Team
 from bigdance.espn_tc_scraper import (
     BaseScraper,
-    ESPNScraper,
     ESPNBracket,
     ESPNPool,
+    ESPNScraper,
     GameImportanceAnalyzer,
 )
-from bigdance.cbb_brackets import Bracket, Team, Pool
 
 # Sample HTML content for testing
 SAMPLE_BLANK_BRACKET_HTML = """
@@ -164,8 +166,7 @@ class TestESPNScraper:
         assert scraper.women is False
         assert scraper.gender_suffix == ""
         assert (
-            scraper.base_url
-            == "https://fantasy.espn.com/games/tournament-challenge-bracket-2025"
+            scraper.base_url == "https://fantasy.espn.com/games/tournament-challenge-bracket-2025"
         )
 
         # Test women's tournament initialization
@@ -180,51 +181,53 @@ class TestESPNScraper:
     @patch("selenium.webdriver.Chrome")
     def test_get_page(self, mock_chrome, sample_cache_dir):
         """Test page retrieval with Selenium"""
-        with patch("selenium.webdriver.chrome.service.Service"):
-            with patch("webdriver_manager.chrome.ChromeDriverManager"):
-                with patch("selenium.webdriver.chrome.options.Options"):
-                    # Configure mock driver
-                    driver_instance = mock_chrome.return_value
-                    driver_instance.page_source = SAMPLE_BLANK_BRACKET_HTML
+        with (
+            patch("selenium.webdriver.chrome.service.Service"),
+            patch("webdriver_manager.chrome.ChromeDriverManager"),
+            patch("selenium.webdriver.chrome.options.Options"),
+        ):
+            # Configure mock driver
+            driver_instance = mock_chrome.return_value
+            driver_instance.page_source = SAMPLE_BLANK_BRACKET_HTML
 
-                    scraper = ESPNScraper(cache_dir=sample_cache_dir)
-                    url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/bracket"
+            scraper = ESPNScraper(cache_dir=sample_cache_dir)
+            url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/bracket"
 
-                    # Test page retrieval
-                    content = scraper.get_page(url, cache_key="test_page")
-                    assert content is not None
-                    assert "BracketPropositionHeaderDesktop" in content
+            # Test page retrieval
+            content = scraper.get_page(url, cache_key="test_page")
+            assert content is not None
+            assert "BracketPropositionHeaderDesktop" in content
 
     @patch("selenium.webdriver.Chrome")
     def test_get_page_with_pagination(self, mock_chrome, sample_cache_dir):
         """Test page retrieval with pagination"""
-        with patch("selenium.webdriver.chrome.service.Service"):
-            with patch("webdriver_manager.chrome.ChromeDriverManager"):
-                with patch("selenium.webdriver.chrome.options.Options"):
-                    # Configure mock driver
-                    driver_instance = mock_chrome.return_value
-                    driver_instance.page_source = SAMPLE_POOL_HTML
+        with (
+            patch("selenium.webdriver.chrome.service.Service"),
+            patch("webdriver_manager.chrome.ChromeDriverManager"),
+            patch("selenium.webdriver.chrome.options.Options"),
+        ):
+            # Configure mock driver
+            driver_instance = mock_chrome.return_value
+            driver_instance.page_source = SAMPLE_POOL_HTML
 
-                    # Simulate a situation where pagination methods work successfully
-                    # by directly returning a dictionary of pages
-                    with patch.object(ESPNScraper, "_retrieve_page") as mock_retrieve:
-                        mock_retrieve.return_value = {
-                            1: SAMPLE_POOL_HTML,
-                            2: "<html>Page 2</html>",
-                        }
+            # Simulate a situation where pagination methods work successfully
+            # by directly returning a dictionary of pages
+            with patch.object(ESPNScraper, "_retrieve_page") as mock_retrieve:
+                mock_retrieve.return_value = {
+                    1: SAMPLE_POOL_HTML,
+                    2: "<html>Page 2</html>",
+                }
 
-                        scraper = ESPNScraper(cache_dir=sample_cache_dir)
-                        url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/group"
+                scraper = ESPNScraper(cache_dir=sample_cache_dir)
+                url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/group"
 
-                        # Test paginated retrieval
-                        pages = scraper.get_page(
-                            url, cache_key="test_pool", check_pagination=True
-                        )
+                # Test paginated retrieval
+                pages = scraper.get_page(url, cache_key="test_pool", check_pagination=True)
 
-                        # Should return a dictionary with pages
-                        assert isinstance(pages, dict)
-                        assert 1 in pages  # Page 1 should exist
-                        assert 2 in pages  # Page 2 should exist
+                # Should return a dictionary with pages
+                assert isinstance(pages, dict)
+                assert 1 in pages  # Page 1 should exist
+                assert 2 in pages  # Page 2 should exist
 
     def test_get_bracket(self, sample_cache_dir):
         """Test bracket page retrieval"""
@@ -292,9 +295,7 @@ class TestESPNScraper:
             assert url_found, "Pool URL not found in call arguments"
 
             # Check other parameters are present somewhere
-            assert "pool_men_9876" in str(call_args) or "pool_men_9876" in str(
-                call_kwargs
-            )
+            assert "pool_men_9876" in str(call_args) or "pool_men_9876" in str(call_kwargs)
             assert True in call_args or call_kwargs.get("check_pagination") is True
 
 
@@ -352,9 +353,7 @@ class TestESPNBracket:
             assert rating == 1800
 
             # Test name correction
-            with patch.dict(
-                "bigdance.espn_tc_scraper.NAME_CORRECTIONS", {"UNC": "North Carolina"}
-            ):
+            with patch.dict("bigdance.espn_tc_scraper.NAME_CORRECTIONS", {"UNC": "North Carolina"}):
                 rating = bracket_handler._get_team_rating("UNC", 3)
                 assert rating == 1725
 
@@ -387,11 +386,8 @@ class TestESPNBracket:
                 wraps=bracket_handler.extract_bracket,
             ) as mock_method:
                 # This is just used to verify the method was called
-                try:
+                with contextlib.suppress(Exception):
                     mock_method(SAMPLE_BLANK_BRACKET_HTML)
-                except Exception:
-                    # We expect an exception because we haven't fully mocked the internals
-                    pass
 
                 # The method should have been called once with our HTML
                 mock_method.assert_called_once_with(SAMPLE_BLANK_BRACKET_HTML)
@@ -435,9 +431,7 @@ class TestESPNPool:
             with patch.object(ESPNBracket, "get_bracket") as mock_get_bracket:
                 mock_get_bracket.return_value = SAMPLE_BLANK_BRACKET_HTML
 
-                with patch.object(
-                    ESPNBracket, "extract_bracket"
-                ) as mock_extract_bracket:
+                with patch.object(ESPNBracket, "extract_bracket") as mock_extract_bracket:
                     # Return an actual valid bracket
                     mock_extract_bracket.return_value = mock_bracket_with_teams
 
@@ -460,9 +454,7 @@ class TestESPNPool:
 
                 # Mock load_pool_entries to avoid complexity
                 with patch.object(ESPNPool, "load_pool_entries") as mock_load_entries:
-                    mock_load_entries.return_value = {
-                        "Entry 1": mock_bracket_with_teams
-                    }
+                    mock_load_entries.return_value = {"Entry 1": mock_bracket_with_teams}
 
                     pool_manager = ESPNPool(cache_dir=sample_cache_dir)
                     pool = pool_manager.create_simulation_pool("9876")
@@ -599,9 +591,7 @@ class TestGameImportanceAnalyzer:
 
         # Test with non-existent entry
         with patch("builtins.print") as mock_print:
-            analyzer.print_importance_summary(
-                game_importance, entry_name="NonExistentEntry"
-            )
+            analyzer.print_importance_summary(game_importance, entry_name="NonExistentEntry")
             # Should print a warning and fall back to max impact entries
             mock_print.assert_any_call(
                 "Warning: Entry 'NonExistentEntry' not found in the analysis data."

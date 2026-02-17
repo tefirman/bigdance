@@ -150,7 +150,7 @@ def test_create_teams_basic(mock_standings):
     }
 
     tournament_teams = [team.name for team in bracket.teams]
-    for conference, expected_champ in conference_champs.items():
+    for _conference, expected_champ in conference_champs.items():
         assert expected_champ in tournament_teams
 
 
@@ -194,15 +194,12 @@ def test_create_teams_validation(mock_standings):
 def test_simulate_hypothetical_bracket_pool(mock_standings):
     """Test bracket pool simulation"""
     num_entries = 5
-    results = simulate_hypothetical_bracket_pool(
-        mock_standings, num_entries=num_entries
-    )
+    results = simulate_hypothetical_bracket_pool(mock_standings, num_entries=num_entries)
 
     # Check basic structure of results
     assert len(results) == num_entries
     assert all(
-        col in results.columns
-        for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
+        col in results.columns for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
     )
 
     # Check win percentages sum to approximately 1
@@ -222,8 +219,7 @@ def test_simulate_hypothetical_bracket_pool_with_upset_factors(mock_standings):
     # Check basic structure and requirements
     assert len(results) == num_entries
     assert all(
-        col in results.columns
-        for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
+        col in results.columns for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
     )
     assert abs(results["win_pct"].sum() - 1.0) < 0.01  # Win percentages should sum to 1
 
@@ -242,8 +238,7 @@ def test_integration_with_real_standings(mock_standings):
 
         assert len(results) == 5
         assert all(
-            col in results.columns
-            for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
+            col in results.columns for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
         )
 
 
@@ -261,8 +256,7 @@ def test_simulate_hypothetical_bracket_pool_with_full_upset_range(mock_standings
     # Check basic structure and requirements
     assert len(results) == num_entries
     assert all(
-        col in results.columns
-        for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
+        col in results.columns for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
     )
     assert abs(results["win_pct"].sum() - 1.0) < 0.01  # Win percentages should sum to 1
 

@@ -22,7 +22,7 @@ def sample_teams():
                     seed=seed,
                     region=region,
                     rating=rating,
-                    conference=f"Conference {(seed-1)//4 + 1}",
+                    conference=f"Conference {(seed - 1) // 4 + 1}",
                 )
             )
     return teams
@@ -110,17 +110,13 @@ def test_bracket_validation():
     """Test bracket validation rules"""
     # Test with wrong number of teams
     with pytest.raises(ValueError):
-        Bracket(
-            [Team("Test", 1, "East", 2000.0, "Conf") for _ in range(63)]
-        )  # One team short
+        Bracket([Team("Test", 1, "East", 2000.0, "Conf") for _ in range(63)])  # One team short
 
     # Test with invalid number of regions
     invalid_teams = []
     for seed in range(1, 17):
         for region in ["East", "West", "South"]:  # Missing one region
-            invalid_teams.append(
-                Team(f"Team {seed}{region}", seed, region, 2000.0, "Conf")
-            )
+            invalid_teams.append(Team(f"Team {seed}{region}", seed, region, 2000.0, "Conf"))
     with pytest.raises(ValueError):
         Bracket(invalid_teams * 2)  # Multiply to get to 64 teams
 
@@ -203,9 +199,7 @@ def test_advance_round(sample_bracket):
 
     # Verify each region has 4 games
     for region, matchups in region_matchups.items():
-        assert (
-            len(matchups) == 4
-        ), f"{region} region has {len(matchups)} games (should be 4)"
+        assert len(matchups) == 4, f"{region} region has {len(matchups)} games (should be 4)"
 
 
 def test_tournament_simulation(sample_bracket):
@@ -245,7 +239,7 @@ def test_pool_simulation(sample_teams):
     # Add some entries
     for i in range(5):
         entry = Bracket(sample_teams)
-        pool.add_entry(f"Entry {i+1}", entry)
+        pool.add_entry(f"Entry {i + 1}", entry)
 
     # Run pool simulation
     results = pool.simulate_pool(num_sims=100)
@@ -253,8 +247,7 @@ def test_pool_simulation(sample_teams):
     # Check results structure
     assert isinstance(results, pd.DataFrame)
     assert all(
-        col in results.columns
-        for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
+        col in results.columns for col in ["name", "avg_score", "std_score", "wins", "win_pct"]
     )
 
     # Check win percentage totals to 1
@@ -364,9 +357,7 @@ def test_upset_rates_at_different_factors(sample_teams):
             total_upsets += test_bracket.total_underdogs()
 
         # Calculate average upset rate across all simulations
-        avg_upset_rate = total_upsets / (
-            63 * num_brackets
-        )  # 63 total games per tournament
+        avg_upset_rate = total_upsets / (63 * num_brackets)  # 63 total games per tournament
         upset_rates.append(avg_upset_rate)
         print(f"Upset factor: {upset_factor:.1f}, Avg upset rate: {avg_upset_rate:.4f}")
 
@@ -375,9 +366,9 @@ def test_upset_rates_at_different_factors(sample_teams):
     # Check if rates generally increase with increasing upset factor
     # This should now be a monotonic relationship from low to high
     for i in range(1, len(upset_rates)):
-        assert (
-            upset_rates[i] > upset_rates[i - 1] - 0.01
-        ), f"Upset rates should generally increase. Drop at {upset_factors[i]}: {upset_rates[i-1]:.4f} -> {upset_rates[i]:.4f}"
+        assert upset_rates[i] > upset_rates[i - 1] - 0.01, (
+            f"Upset rates should generally increase. Drop at {upset_factors[i]}: {upset_rates[i - 1]:.4f} -> {upset_rates[i]:.4f}"
+        )
 
 
 def test_negative_upset_factor_behavior(sample_teams):
@@ -425,14 +416,14 @@ def test_negative_upset_factor_behavior(sample_teams):
     print(f"Average upsets with pure elo (0.0): {avg_elo_upsets:.2f}")
 
     # Extreme chalk should produce significantly fewer upsets than elo-based
-    assert (
-        avg_chalk_upsets < avg_elo_upsets * 0.7
-    ), "Extreme chalk should generate far fewer upsets than elo-based picks"
+    assert avg_chalk_upsets < avg_elo_upsets * 0.7, (
+        "Extreme chalk should generate far fewer upsets than elo-based picks"
+    )
 
     # For extreme chalk (-1.0), expect very few upsets overall
-    assert (
-        avg_chalk_upsets < 1.0
-    ), f"Extreme chalk should produce very few upsets, got {avg_chalk_upsets:.2f}"
+    assert avg_chalk_upsets < 1.0, (
+        f"Extreme chalk should produce very few upsets, got {avg_chalk_upsets:.2f}"
+    )
 
 
 def test_seeding_impact(sample_teams):
@@ -505,9 +496,7 @@ def test_seeding_impact(sample_teams):
                 historical_rates[round_names[round_ind]][seed] = 0.0
 
     # Print advancement rates for analysis
-    print(
-        f"\nAdvancement rates by seed (with upset_factor = {realistic_upset_factor}):"
-    )
+    print(f"\nAdvancement rates by seed (with upset_factor = {realistic_upset_factor}):")
     rmsd_expectation = {
         "First Round": 0.12,
         "Second Round": 0.1,

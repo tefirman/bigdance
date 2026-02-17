@@ -424,9 +424,7 @@ class TestStandings:
             print(f"Mock get calls: {mock_standings_responses.get.call_args_list}")
 
             # Test that both conferences are found (from our sample HTML)
-            assert (
-                len(standings.conferences) == 2
-            ), f"Found conferences: {standings.conferences}"
+            assert len(standings.conferences) == 2, f"Found conferences: {standings.conferences}"
             assert "ACC" in standings.conferences
             assert "Big 12" in standings.conferences
 
@@ -463,9 +461,7 @@ class TestStandings:
             print(standings.elo)
 
             # Should only show the teams from our SAMPLE_ELO_HTML
-            assert (
-                len(standings.elo) == 2
-            ), "Should only have Duke and UNC from sample data"
+            assert len(standings.elo) == 2, "Should only have Duke and UNC from sample data"
             # Verify only ACC teams are included
             for _, row in standings.elo.iterrows():
                 assert row["Conference"] == "ACC"
