@@ -3,7 +3,7 @@
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.3.2
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Class-based implementation for extracting bracket data from ESPN Tournament Challenge
 """
