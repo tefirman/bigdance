@@ -37,7 +37,7 @@ pip install bigdance
 From the command line:
 ```bash
 # Analyze a bracket pool from ESPN, pool ID found in the URL after "bracket?id="
-python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890
+bigdance espn --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890
 ```
 
 Example output:
@@ -55,7 +55,7 @@ Taylor's Educated Guesses    108.968  21.589281    28.3%
 
 You can also run detailed game importance analysis:
 ```bash
-python -m bigdance.espn_tc_scraper --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890 --importance
+bigdance espn --pool_id 77268ce6-7989-4e01-97dc-6681c63c6890 --importance
 ```
 
 Example output:
@@ -274,18 +274,26 @@ for day_games in schedule.games_per_day:
 
 ## Command Line Tools
 
-The package includes command-line tools for accessing functionality:
+The package provides a unified `bigdance` CLI with subcommands:
 
 ```bash
+# Get current team standings and ratings
+bigdance standings
+
+# Simulate a hypothetical bracket pool
+bigdance simulate --num_entries 50 --num_sims 1000
+
 # Analyze a bracket pool from ESPN
-python -m bigdance.espn_tc_scraper --pool_id 1234567
+bigdance espn --pool_id 1234567
 
 # Find most important remaining games
-python -m bigdance.espn_tc_scraper --pool_id 1234567 --importance
+bigdance espn --pool_id 1234567 --importance
 
 # Run bracket analysis with ESPN data
-python -m bigdance.bracket_analysis --use_espn --num_pools 100
+bigdance analyze --use_espn --num_pools 100
 ```
+
+Use `bigdance <command> --help` for full options on each subcommand. The legacy `python -m bigdance.<module>` invocations also still work.
 
 ## Development
 
