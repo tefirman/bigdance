@@ -27,8 +27,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-from bigdance import Standings
 from bigdance.cbb_brackets import Bracket, Pool, Team
+from bigdance.wn_cbb_scraper import Standings
 
 # Set up logging
 logger = logging.getLogger(__name__)
