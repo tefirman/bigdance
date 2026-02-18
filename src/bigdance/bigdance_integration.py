@@ -193,7 +193,7 @@ def create_bracket_with_picks(teams, picks_by_round):
 
         # Special case for championship
         if round_name == "Championship" and winners_for_round:
-            bracket.results["Champion"] = winners_for_round[0]
+            bracket.results["Champion"] = winners_for_round[0]  # type: ignore[assignment]
 
         # Create next round matchups for subsequent rounds
         if len(winners_for_round) > 1:
@@ -259,21 +259,23 @@ def simulate_hypothetical_bracket_pool(
     if upset_factors is None:
         # Create a normal distribution centered around 0 with standard deviation 0.3
         # This gives us a realistic mix of chalk-leaning and upset-leaning entries
-        upset_factors = np.random.normal(0, 0.3, num_entries)
+        factors_array = np.random.normal(0, 0.3, num_entries)
 
         # Clip values to stay within -1.0 to 1.0 range
-        upset_factors = np.clip(upset_factors, -1.0, 1.0)
+        factors_array = np.clip(factors_array, -1.0, 1.0)
 
         # Ensure we include some extreme values for variety
         if num_entries >= 10:
             # Include at least one strong chalk picker
-            upset_factors[0] = -0.8
+            factors_array[0] = -0.8
             # Include at least one strong upset picker
-            upset_factors[1] = 0.8
+            factors_array[1] = 0.8
             # Include at least one pure elo-based picker
-            upset_factors[2] = 0.0
+            factors_array[2] = 0.0
             # Shuffle to randomize positions
-            np.random.shuffle(upset_factors)
+            np.random.shuffle(factors_array)
+
+        upset_factors = factors_array.tolist()
 
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")

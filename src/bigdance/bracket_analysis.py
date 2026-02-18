@@ -58,7 +58,7 @@ class BracketAnalysis:
         self.winning_results: list[dict[str, list[Team]]] = []
         self.winning_brackets: list[Bracket] = []
         self.all_results = pd.DataFrame()
-        self.espn_bracket = None
+        self.espn_bracket: Optional[Bracket] = None
         self.use_espn = use_espn
         self.second_chance = second_chance
 
@@ -97,19 +97,20 @@ class BracketAnalysis:
             logging.info("Successfully created bracket from ESPN data")
 
             # Resetting bracket to simulate from scratch
-            for round_name in [
-                "First Round",
-                "Second Round",
-                "Sweet 16",
-                "Elite 8",
-                "Final Four",
-                "Championship",
-            ]:
-                if self.second_chance and round_name in ["First Round", "Second Round"]:
-                    continue
-                self.espn_bracket.results[round_name] = []
-            if "Champion" in self.espn_bracket.results:
-                del self.espn_bracket.results["Champion"]
+            if self.espn_bracket is not None:
+                for round_name in [
+                    "First Round",
+                    "Second Round",
+                    "Sweet 16",
+                    "Elite 8",
+                    "Final Four",
+                    "Championship",
+                ]:
+                    if self.second_chance and round_name in ["First Round", "Second Round"]:
+                        continue
+                    self.espn_bracket.results[round_name] = []
+                if "Champion" in self.espn_bracket.results:
+                    del self.espn_bracket.results["Champion"]
 
             return self.espn_bracket
 
@@ -140,12 +141,20 @@ class BracketAnalysis:
         self.non_winning_log_probs = []
 
         # Track log probabilities by round
-        self.winning_log_probs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
-        self.non_winning_log_probs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
+        self.winning_log_probs_by_round: dict[str, list[float]] = {
+            round_name: [] for round_name in self.ROUND_ORDER
+        }
+        self.non_winning_log_probs_by_round: dict[str, list[float]] = {
+            round_name: [] for round_name in self.ROUND_ORDER
+        }
 
         # Track underdogs by round
-        self.winning_underdogs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
-        self.non_winning_underdogs_by_round = {round_name: [] for round_name in self.ROUND_ORDER}
+        self.winning_underdogs_by_round: dict[str, list[int]] = {
+            round_name: [] for round_name in self.ROUND_ORDER
+        }
+        self.non_winning_underdogs_by_round: dict[str, list[int]] = {
+            round_name: [] for round_name in self.ROUND_ORDER
+        }
 
         # Track total underdogs
         self.winning_total_underdogs = []
@@ -196,8 +205,10 @@ class BracketAnalysis:
                         # Create a new bracket with the same teams
                         if self.use_espn and self.espn_bracket:
                             entry_bracket = Bracket(self.espn_bracket.teams)
-                        else:
+                        elif self.standings:
                             entry_bracket = create_teams_from_standings(self.standings)
+                        else:
+                            raise ValueError("No standings available for simulation")
 
                         for game in entry_bracket.games:
                             game.upset_factor = upset_factor
@@ -216,9 +227,8 @@ class BracketAnalysis:
 
                 # Simulate and store results
                 try:
-                    pool_results = pool.simulate_pool(
-                        num_sims=1000, fixed_winners=self.espn_bracket.results
-                    )
+                    fixed = self.espn_bracket.results if self.espn_bracket else None
+                    pool_results = pool.simulate_pool(num_sims=1000, fixed_winners=fixed)
 
                     # Find winning entry name(s)
                     top_entries = pool_results.sort_values("win_pct", ascending=False)
@@ -341,7 +351,7 @@ class BracketAnalysis:
         self.log_probs_by_round = self.winning_log_probs_by_round
         self.all_log_probs = self.winning_log_probs
 
-    def plot_comparative_upset_distributions(self, save: bool = True) -> plt.Figure:
+    def plot_comparative_upset_distributions(self, save: bool = True) -> Optional[plt.Figure]:
         """
         Plot comparative distributions of upsets per round for winning vs. non-winning brackets.
 
@@ -447,8 +457,8 @@ class BracketAnalysis:
             }
 
             # Add mean lines
-            winning_mean = np.mean(winning_data)
-            non_winning_mean = np.mean(non_winning_data)
+            winning_mean = float(np.mean(winning_data))
+            non_winning_mean = float(np.mean(non_winning_data))
 
             ax.axvline(
                 winning_mean,
@@ -484,7 +494,7 @@ class BracketAnalysis:
             if save:
                 with open(self.output_dir / "comparative_upset_distributions_data.json", "w") as f:
                     json.dump(histogram_data, f, indent=2)
-            plt.tight_layout(rect=[0, 0, 1, 0.96])
+            plt.tight_layout(rect=(0, 0, 1, 0.96))
             if save:
                 plt.savefig(
                     self.output_dir / "comparative_upset_distributions.png",
@@ -550,8 +560,8 @@ class BracketAnalysis:
         }
 
         # Add mean lines
-        winning_mean = np.mean(winning_total)
-        non_winning_mean = np.mean(non_winning_total)
+        winning_mean = float(np.mean(winning_total))
+        non_winning_mean = float(np.mean(non_winning_total))
 
         ax_total.axvline(
             winning_mean,
@@ -567,10 +577,10 @@ class BracketAnalysis:
         )
 
         # Add percentile lines
-        winning_q25 = np.percentile(winning_total, 25)
-        winning_q75 = np.percentile(winning_total, 75)
-        non_winning_q25 = np.percentile(non_winning_total, 25)
-        non_winning_q75 = np.percentile(non_winning_total, 75)
+        winning_q25 = float(np.percentile(winning_total, 25))
+        winning_q75 = float(np.percentile(winning_total, 75))
+        non_winning_q25 = float(np.percentile(non_winning_total, 25))
+        non_winning_q75 = float(np.percentile(non_winning_total, 75))
 
         ax_total.axvline(
             winning_q25,
@@ -610,7 +620,7 @@ class BracketAnalysis:
                 json.dump(histogram_data, f, indent=2)
 
         # Adjust layout and save figure
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.tight_layout(rect=(0, 0, 1, 0.96))
         if save:
             plt.savefig(
                 self.output_dir / "comparative_upset_distributions.png",
@@ -623,7 +633,9 @@ class BracketAnalysis:
 
         return fig
 
-    def plot_comparative_log_probability_distributions(self, save: bool = True) -> plt.Figure:
+    def plot_comparative_log_probability_distributions(
+        self, save: bool = True
+    ) -> Optional[plt.Figure]:
         """
         Plot comparative distributions of log probabilities for winning vs. non-winning brackets.
 
@@ -724,8 +736,8 @@ class BracketAnalysis:
             }
 
             # Add mean lines
-            winning_mean = np.mean(winning_data)
-            non_winning_mean = np.mean(non_winning_data)
+            winning_mean = float(np.mean(winning_data))
+            non_winning_mean = float(np.mean(non_winning_data))
 
             ax.axvline(
                 winning_mean,
@@ -762,7 +774,7 @@ class BracketAnalysis:
                     "w",
                 ) as f:
                     json.dump(histogram_data, f, indent=2)
-            plt.tight_layout(rect=[0, 0, 1, 0.96])
+            plt.tight_layout(rect=(0, 0, 1, 0.96))
             if save:
                 plt.savefig(
                     self.output_dir / "comparative_log_probability_distributions.png",
@@ -821,8 +833,8 @@ class BracketAnalysis:
         }
 
         # Add mean lines
-        winning_mean = np.mean(winning_total)
-        non_winning_mean = np.mean(non_winning_total)
+        winning_mean = float(np.mean(winning_total))
+        non_winning_mean = float(np.mean(non_winning_total))
 
         ax_total.axvline(
             winning_mean,
@@ -838,10 +850,10 @@ class BracketAnalysis:
         )
 
         # Add percentile lines
-        winning_q25 = np.percentile(winning_total, 25)
-        winning_q75 = np.percentile(winning_total, 75)
-        non_winning_q25 = np.percentile(non_winning_total, 25)
-        non_winning_q75 = np.percentile(non_winning_total, 75)
+        winning_q25 = float(np.percentile(winning_total, 25))
+        winning_q75 = float(np.percentile(winning_total, 75))
+        non_winning_q25 = float(np.percentile(non_winning_total, 25))
+        non_winning_q75 = float(np.percentile(non_winning_total, 75))
 
         ax_total.axvline(
             winning_q25,
@@ -883,7 +895,7 @@ class BracketAnalysis:
                 json.dump(histogram_data, f, indent=2)
 
         # Adjust layout and save figure
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.tight_layout(rect=(0, 0, 1, 0.96))
         if save:
             plt.savefig(
                 self.output_dir / "comparative_log_probability_distributions.png",
@@ -913,7 +925,7 @@ class BracketAnalysis:
             "Final Four": "Championship",
         }
 
-        upset_counts = defaultdict(int)
+        upset_counts: dict[tuple[str, int, str], int] = defaultdict(int)
 
         # Use the underdogs identified in each bracket
         for bracket in self.winning_brackets:
@@ -1428,18 +1440,18 @@ class BracketAnalysis:
             DataFrame with statistics on champion picks by seed and team
         """
         # Count champion picks in winning brackets
-        winning_champions = defaultdict(int)
+        winning_champions: dict[tuple[int, str], int] = defaultdict(int)
         for bracket in self.winning_brackets:
             if "Champion" in bracket.results:
-                champion = bracket.results["Champion"]
+                champion: Team = bracket.results["Champion"]  # type: ignore[assignment]
                 key = (champion.seed, champion.name)
                 winning_champions[key] += 1
 
         # Count champion picks in non-winning brackets
-        non_winning_champions = defaultdict(int)
+        non_winning_champions: dict[tuple[int, str], int] = defaultdict(int)
         for bracket in self.non_winning_brackets:
             if "Champion" in bracket.results:
-                champion = bracket.results["Champion"]
+                champion = bracket.results["Champion"]  # type: ignore[assignment]
                 key = (champion.seed, champion.name)
                 non_winning_champions[key] += 1
 
@@ -1527,9 +1539,9 @@ class BracketAnalysis:
             )
 
         # Dictionary to track specific upsets in winning brackets
-        winning_upsets = defaultdict(int)
+        winning_upsets: dict[tuple[str, int, str], int] = defaultdict(int)
         # Dictionary to track specific upsets in non-winning brackets
-        non_winning_upsets = defaultdict(int)
+        non_winning_upsets: dict[tuple[str, int, str], int] = defaultdict(int)
 
         # Process all winning brackets
         for bracket in self.winning_brackets:

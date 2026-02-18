@@ -248,6 +248,7 @@ class Bracket:
 
     def calculate_game_probability(self, game: Game) -> float:
         """Calculate probability of game outcome based on Elo ratings"""
+        assert game.winner is not None
         rating_diff = game.winner.rating - (
             game.team2.rating if game.winner == game.team1 else game.team1.rating
         )
@@ -492,7 +493,7 @@ class Bracket:
             # Store the round results
             if round_name == "Championship":
                 self.results[round_name] = [round_winners[0]] if round_winners else []
-                self.results["Champion"] = round_winners[0] if round_winners else None
+                self.results["Champion"] = round_winners[0] if round_winners else None  # type: ignore[assignment]
             else:
                 self.results[round_name] = round_winners
 
@@ -551,7 +552,7 @@ class Pool:
         """Initialize pool with actual tournament results for comparison"""
         self.actual_results = actual_results
         self.entries: list[tuple[str, Bracket, bool]] = []  # name, bracket, simulate_flag
-        self.actual_tournament = None  # Store the one true tournament outcome
+        self.actual_tournament: Optional[dict[str, list[Team]]] = None
 
     def add_entry(self, name: str, bracket: Bracket, simulate: bool = True):
         """
@@ -617,7 +618,7 @@ class Pool:
         results = []
 
         # Additional data to track
-        round_log_probs = {
+        round_log_probs: dict[str, dict[str, list[float]]] = {
             entry_name: {
                 round_name: []
                 for round_name in [

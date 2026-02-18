@@ -113,7 +113,7 @@ class BaseScraper:
                 return None
 
             logger.debug(f"Using cached response for {cache_key}")
-            return cache_data["content"]
+            return str(cache_data["content"])
 
         except Exception as e:
             logger.warning(f"Error reading cache for {cache_key}: {e}")
@@ -198,8 +198,8 @@ class ESPNScraper(BaseScraper):
         )
 
         # Initialize cached Chrome options and service to avoid repeated setup
-        self._chrome_options = None
-        self._chrome_service = None
+        self._chrome_options: Optional[Options] = None
+        self._chrome_service: Optional[Service] = None
 
     def _get_chrome_options(self) -> Options:
         """
@@ -265,7 +265,8 @@ class ESPNScraper(BaseScraper):
                 complete_cache_key, DEFAULT_ENTRY_CACHE_EXPIRY
             )
             if cached_content:
-                return json.loads(cached_content)
+                result: dict[int, str] = json.loads(cached_content)
+                return result
 
         # Check regular cache for non-paginated content
         if not check_pagination and cache_key:
@@ -293,6 +294,7 @@ class ESPNScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error retrieving {url}: {e}")
                 return None
+        return None
 
     def _retrieve_page(
         self, url: str, cache_key: Optional[str], check_pagination: bool, max_pages: int
@@ -399,7 +401,9 @@ class ESPNScraper(BaseScraper):
 
     def _is_button_disabled(self, button) -> bool:
         """Check if a button is disabled"""
-        return "disabled" in button.get_attribute("class") or button.get_attribute("disabled")
+        return bool(
+            "disabled" in (button.get_attribute("class") or "") or button.get_attribute("disabled")
+        )
 
     def _click_next_button(self, driver, button) -> None:
         """Click a button with fallback strategies"""
@@ -431,7 +435,10 @@ class ESPNScraper(BaseScraper):
             f"bracket_{'women' if self.women else 'men'}_{entry_id if entry_id else 'blank'}"
         )
 
-        return self.get_page(url, cache_key, check_pagination=False)
+        result = self.get_page(url, cache_key, check_pagination=False)
+        if isinstance(result, dict):
+            return None
+        return result
 
     def get_pool(self, pool_id: str) -> Optional[dict[int, str]]:
         """
@@ -446,7 +453,10 @@ class ESPNScraper(BaseScraper):
         url = f"{self.base_url}/group?id={pool_id}"
         cache_key = f"pool_{'women' if self.women else 'men'}_{pool_id}"
 
-        return self.get_page(url, cache_key, check_pagination=True)
+        result = self.get_page(url, cache_key, check_pagination=True)
+        if isinstance(result, str):
+            return {1: result}
+        return result
 
 
 class ESPNBracket:
@@ -521,7 +531,7 @@ class ESPNBracket:
             # Extract actual bracket outcomes
             regions = [region.text for region in region_tags]
             names = [team.text for team in team_tags]
-            ids = [team.attrs["src"].split("/")[-1].split(".")[0] for team in team_id_tags]
+            ids = [str(team.attrs["src"]).split("/")[-1].split(".")[0] for team in team_id_tags]
             seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1]
 
             # Create mapping between team names and ESPN id
@@ -560,7 +570,7 @@ class ESPNBracket:
                 # Extract picks made by user
                 try:
                     pick_ids = [
-                        pick.find("img").attrs["src"].split("/")[-1].split(".")[0]
+                        str(pick.find("img").attrs["src"]).split("/")[-1].split(".")[0]  # type: ignore[union-attr]
                         for pick in pick_tags
                     ]
                     picks = [name_mapping[id_val] for id_val in pick_ids]
@@ -589,7 +599,7 @@ class ESPNBracket:
                 winner = next((t for t in teams if champion.startswith(t.name)), None)
                 if winner:
                     bracket.results["Championship"] = [winner]
-                    bracket.results["Champion"] = winner
+                    bracket.results["Champion"] = winner  # type: ignore[assignment]
 
             # Calculate bracket statistics
             bracket.log_probability = bracket.calculate_log_probability()
@@ -657,13 +667,13 @@ class ESPNBracket:
                 # Try exact match
                 team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
                 if not team_row.empty:
-                    return team_row.iloc[0]["Conference"]
+                    return str(team_row.iloc[0]["Conference"])
 
                 # Try fuzzy matching
                 for team in self.ratings_source.elo["Team"]:
                     if team.lower() in team_name.lower() or team_name.lower() in team.lower():
                         team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
-                        return team_row.iloc[0]["Conference"]
+                        return str(team_row.iloc[0]["Conference"])
             except Exception:
                 pass
 
@@ -738,11 +748,12 @@ class ESPNPool:
             "td", attrs={"class": "BracketEntryTable-column--entryName Table__TD"}
         )
 
-        return {
-            entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1]
-            for entry in entry_tags
-            if entry.find("a")
-        }
+        result: dict[str, str] = {}
+        for entry in entry_tags:
+            link = entry.find("a")
+            if link:
+                result[link.text] = str(link.attrs["href"]).split("bracket?id=")[-1]
+        return result
 
     def load_pool_entries(self, pool_id: str) -> dict[str, Bracket]:
         """

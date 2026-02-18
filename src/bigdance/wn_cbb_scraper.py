@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from io import StringIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import quote
 
 import pandas as pd
@@ -54,7 +54,7 @@ class BaseScraper:
             if (
                 datetime.now() - datetime.fromisoformat(cache_data["timestamp"])
             ).total_seconds() < 3600:
-                return cache_data["content"]
+                return str(cache_data["content"])
         return None
 
     def _cache_response(self, url: str, cache_key: str, content: str):
@@ -156,6 +156,7 @@ class Standings(BaseScraper):
         self.season = season
         self.gender = "w" if women else ""
         self.base_url = f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
+        self.elo: pd.DataFrame = pd.DataFrame()
         self.pull_elo_html()
         self.parse_elo_table()
         self.pull_conferences_html()
@@ -220,8 +221,8 @@ class Standings(BaseScraper):
         )
         conf_soup = BeautifulSoup(conf_response, "html.parser")
         conf_teams = conf_soup.find_all("div", attrs={"class": "name-subcontainer"})
-        conf_teams = [team.text for team in conf_teams]
-        return conf_teams
+        conf_team_names = [team.text for team in conf_teams]
+        return conf_team_names
 
     def add_conferences(self):
         """
@@ -284,7 +285,7 @@ class Matchups(BaseScraper):
 
     def __init__(
         self,
-        date: str = datetime.now(),
+        date: Optional[Union[str, datetime]] = None,
         gameset: str = "All Games",
         women: bool = False,
         elos: bool = True,
@@ -293,11 +294,12 @@ class Matchups(BaseScraper):
         """Initialize Matchups with caching support."""
         super().__init__(cache_dir)  # Initialize the parent BaseScraper
 
-        self.date = pd.to_datetime(date)
+        self.date = pd.to_datetime(date if date is not None else datetime.now())
         self.gameset = gameset
         self.gender = "w" if women else ""
         self.season = (self.date + timedelta(days=90)).year
         self.base_url = f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
+        self.matchups: pd.DataFrame = pd.DataFrame()
         self.pull_matchups_html()
         self.parse_matchups_table()
         if elos:
