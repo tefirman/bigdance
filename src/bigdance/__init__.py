@@ -22,12 +22,12 @@ from .bigdance_integration import (
     create_teams_from_standings,
     simulate_hypothetical_bracket_pool,
 )
-from .cbb_brackets import Bracket, Game, Pool, Team
-from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
-from .espn_tc_scraper import ESPNScraper, ESPNBracket, ESPNPool, GameImportanceAnalyzer
 from .bracket_analysis import BracketAnalysis
+from .cbb_brackets import Bracket, Game, Pool, Team
+from .espn_tc_scraper import ESPNBracket, ESPNPool, ESPNScraper, GameImportanceAnalyzer
+from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 __author__ = "Taylor Firman"
 __email__ = "tefirman@gmail.com"
 

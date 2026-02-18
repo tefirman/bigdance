@@ -29,3 +29,4 @@ cookies.txt
 **/.DS_Store
 .venv/
 test_cache/
+notes/

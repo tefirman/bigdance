@@ -1,16 +1,15 @@
 #!/usr/bin/env python
-# -*-coding:utf-8 -*-
 """
 @File    :   cbb_brackets.py
 @Time    :   2024/01/11
 @Author  :   Taylor Firman
-@Version :   0.3.2
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Generalized March Madness bracket simulation package
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -41,9 +40,7 @@ class Team:
     def __post_init__(self):
         """Validate team attributes after initialization"""
         if not isinstance(self.seed, int) or self.seed < 1 or self.seed > 16:
-            raise ValueError(
-                f"Seed must be an integer between 1 and 16, got {self.seed}"
-            )
+            raise ValueError(f"Seed must be an integer between 1 and 16, got {self.seed}")
 
         if not self.name or not isinstance(self.name, str):
             raise ValueError("Team name must be a non-empty string")
@@ -66,7 +63,7 @@ class Game:
     team2: Team
     round: int
     region: str
-    upset_factor: float = None
+    upset_factor: Optional[float] = None
     winner: Optional[Team] = None
     actual_winner: Optional[Team] = None  # For comparing to real results
 
@@ -77,12 +74,12 @@ class Bracket:
     Represents a tournament bracket, either actual results or a contestant's picks
     """
 
-    teams: List[Team]
-    games: List[Game] = field(default_factory=list)
-    results: Dict[str, List[Team]] = field(default_factory=dict)
+    teams: list[Team]
+    games: list[Game] = field(default_factory=list)
+    results: dict[str, list[Team]] = field(default_factory=dict)
     log_probability: float = float("inf")  # Initialize to infinity
-    log_probability_by_round: Dict[str, float] = field(default_factory=dict)
-    underdogs_by_round: Dict[str, List[Team]] = field(default_factory=dict)
+    log_probability_by_round: dict[str, float] = field(default_factory=dict)
+    underdogs_by_round: dict[str, list[Team]] = field(default_factory=dict)
 
     def __post_init__(self):
         """Called after dataclass auto-generated __init__"""
@@ -130,9 +127,7 @@ class Bracket:
             # Create games following seed matchup pattern
             for seed1, seed2 in seed_matchups:
                 if seed1 not in region_teams or seed2 not in region_teams:
-                    raise ValueError(
-                        f"Missing seed {seed1} or {seed2} in {region} region"
-                    )
+                    raise ValueError(f"Missing seed {seed1} or {seed2} in {region} region")
 
                 self.games.append(
                     Game(
@@ -143,7 +138,7 @@ class Bracket:
                     )
                 )
 
-    def simulate_game(self, game: Game, upset_factor: float = None) -> Team:
+    def simulate_game(self, game: Game, upset_factor: Optional[float] = None) -> Team:
         """
         Simulate single game outcome with upset factor adjustment.
 
@@ -205,7 +200,7 @@ class Bracket:
         else:
             return underdog
 
-    def advance_round(self, games: List[Game]) -> List[Game]:
+    def advance_round(self, games: list[Game]) -> list[Game]:
         """
         Simulate games and create matchups for next round
 
@@ -253,6 +248,7 @@ class Bracket:
 
     def calculate_game_probability(self, game: Game) -> float:
         """Calculate probability of game outcome based on Elo ratings"""
+        assert game.winner is not None
         rating_diff = game.winner.rating - (
             game.team2.rating if game.winner == game.team1 else game.team1.rating
         )
@@ -274,22 +270,16 @@ class Bracket:
         }
 
         # Initialize log probabilities by round
-        self.log_probability_by_round = {
-            round_name: 0.0 for round_name in round_names.values()
-        }
+        self.log_probability_by_round = {round_name: 0.0 for round_name in round_names.values()}
 
         # Track teams that advance from each round to calculate probabilities
         round_outcomes = {}
 
         # First round probabilities from initial games
         if "First Round" in self.results:
-            first_round_winners = {
-                team.name: team for team in self.results["First Round"]
-            }
+            first_round_winners = {team.name: team for team in self.results["First Round"]}
             round_log_prob = 0.0  # Track log probability for this round
-            for (
-                game
-            ) in self.games:  # This only contains first round games from initialization
+            for game in self.games:  # This only contains first round games from initialization
                 if game.winner and game.winner.name in first_round_winners:
                     prob = self.calculate_game_probability(game)
                     game_log_prob = -np.log(prob)
@@ -323,11 +313,7 @@ class Bracket:
                         team1=team1,
                         team2=team2,
                         round=round_num,
-                        region=(
-                            team1.region
-                            if team1.region == team2.region
-                            else "Final Four"
-                        ),
+                        region=(team1.region if team1.region == team2.region else "Final Four"),
                     )
 
                     # Determine winner based on results
@@ -370,7 +356,7 @@ class Bracket:
         threshold = seed_thresholds.get(round_name, 1)
         return team.seed > threshold
 
-    def identify_underdogs(self) -> Dict[str, List[Team]]:
+    def identify_underdogs(self) -> dict[str, list[Team]]:
         """
         Identify underdog teams in all rounds of bracket results.
         An underdog is defined as a team with a seed lower than typically expected
@@ -389,16 +375,14 @@ class Bracket:
             if round_name == "Champion":
                 continue  # Skip the single champion result
 
-            round_underdogs = [
-                team for team in teams if self.is_underdog(team, round_name)
-            ]
+            round_underdogs = [team for team in teams if self.is_underdog(team, round_name)]
             if round_underdogs:
                 underdogs[round_name] = round_underdogs
 
         self.underdogs_by_round = underdogs
         return underdogs
 
-    def count_underdogs_by_round(self) -> Dict[str, int]:
+    def count_underdogs_by_round(self) -> dict[str, int]:
         """
         Count the number of underdogs in each round.
 
@@ -408,10 +392,7 @@ class Bracket:
         if not self.underdogs_by_round and self.results:
             self.identify_underdogs()
 
-        return {
-            round_name: len(teams)
-            for round_name, teams in self.underdogs_by_round.items()
-        }
+        return {round_name: len(teams) for round_name, teams in self.underdogs_by_round.items()}
 
     def total_underdogs(self) -> int:
         """
@@ -425,7 +406,7 @@ class Bracket:
 
         return sum(len(teams) for teams in self.underdogs_by_round.values())
 
-    def simulate_tournament(self, fixed_winners=None) -> Dict[str, List[Team]]:
+    def simulate_tournament(self, fixed_winners=None) -> dict[str, list[Team]]:
         """
         Simulate entire tournament and store results, respecting any fixed outcomes provided.
 
@@ -498,9 +479,7 @@ class Bracket:
                         # Both teams can't advance - prioritize the one listed first
                         first_idx = fixed_winners_list.index(game.team1)
                         second_idx = fixed_winners_list.index(game.team2)
-                        game.winner = (
-                            game.team1 if first_idx < second_idx else game.team2
-                        )
+                        game.winner = game.team1 if first_idx < second_idx else game.team2
                     else:
                         # No fixed winner, simulate normally
                         game.winner = self.simulate_game(game)
@@ -514,7 +493,7 @@ class Bracket:
             # Store the round results
             if round_name == "Championship":
                 self.results[round_name] = [round_winners[0]] if round_winners else []
-                self.results["Champion"] = round_winners[0] if round_winners else None
+                self.results["Champion"] = round_winners[0] if round_winners else None  # type: ignore[assignment]
             else:
                 self.results[round_name] = round_winners
 
@@ -572,10 +551,8 @@ class Pool:
     def __init__(self, actual_results: Bracket):
         """Initialize pool with actual tournament results for comparison"""
         self.actual_results = actual_results
-        self.entries: List[Tuple[str, Bracket, bool]] = (
-            []
-        )  # name, bracket, simulate_flag
-        self.actual_tournament = None  # Store the one true tournament outcome
+        self.entries: list[tuple[str, Bracket, bool]] = []  # name, bracket, simulate_flag
+        self.actual_tournament: Optional[dict[str, list[Team]]] = None
 
     def add_entry(self, name: str, bracket: Bracket, simulate: bool = True):
         """
@@ -590,7 +567,9 @@ class Pool:
         self.entries.append((name, bracket, simulate))
 
     def score_bracket(
-        self, entry_results: Dict[str, List[Team]], round_values: Dict[str, int] = None
+        self,
+        entry_results: dict[str, list[Team]],
+        round_values: Optional[dict[str, int]] = None,
     ) -> int:
         """
         Score a bracket against actual results
@@ -639,7 +618,7 @@ class Pool:
         results = []
 
         # Additional data to track
-        round_log_probs = {
+        round_log_probs: dict[str, dict[str, list[float]]] = {
             entry_name: {
                 round_name: []
                 for round_name in [
@@ -656,9 +635,7 @@ class Pool:
 
         for sim in range(num_sims):
             # Simulate actual tournament once per simulation with fixed winners
-            self.actual_tournament = self.actual_results.simulate_tournament(
-                fixed_winners
-            )
+            self.actual_tournament = self.actual_results.simulate_tournament(fixed_winners)
 
             scores = []
             for name, entry, should_simulate in self.entries:
@@ -708,7 +685,7 @@ class Pool:
 
         summary.columns = ["name", "avg_score", "std_score", "wins"]
         summary["win_pct"] = summary["wins"] / num_sims
-        summary["win_prob"] = summary["win_pct"].apply(lambda x: "{:.1f}%".format(x * 100))
+        summary["win_prob"] = summary["win_pct"].apply(lambda x: f"{x * 100:.1f}%")
 
         # Add per-round log probability statistics to the summary
         for round_name in [
@@ -761,7 +738,7 @@ def main():
     # Add some entries
     for i in range(10):
         entry = Bracket(teams)  # Each entry gets fresh simulation
-        pool.add_entry(f"Entry {i+1}", entry)
+        pool.add_entry(f"Entry {i + 1}", entry)
 
     # Simulate pool
     results = pool.simulate_pool(num_sims=1000)

@@ -1,16 +1,15 @@
 #!/usr/bin/env python
-# -*-coding:utf-8 -*-
 """
 @File    :   bigdance_integration.py
 @Time    :   2025/01/19
 @Author  :   Taylor Firman
-@Version :   0.3.2
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Integration module between Warren Nolan scraper and bracket simulator
 """
 
 import argparse
-from typing import Dict, List, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -20,7 +19,7 @@ from bigdance.wn_cbb_scraper import Standings
 
 
 def create_teams_from_standings(
-    standings: Standings, regions: Optional[Dict[str, str]] = None
+    standings: Standings, regions: Optional[dict[str, str]] = None
 ) -> Bracket:
     """
     Convert Warren Nolan standings into bracket-compatible Team objects.
@@ -51,9 +50,7 @@ def create_teams_from_standings(
 
     # Get highest rated teams not already in auto bids
     at_large_pool = standings.elo[~standings.elo["Team"].isin(auto_bids["Team"])]
-    at_large_bids = at_large_pool.sort_values("ELO", ascending=False).head(
-        remaining_spots
-    )
+    at_large_bids = at_large_pool.sort_values("ELO", ascending=False).head(remaining_spots)
 
     # Combine auto bids and at-large bids
     tournament_teams = pd.concat([auto_bids, at_large_bids], ignore_index=True)
@@ -109,12 +106,8 @@ def create_teams_from_standings(
         )
 
     # Validate bracket structure
-    team_counts = pd.DataFrame(
-        [(t.region, t.seed) for t in teams], columns=["region", "seed"]
-    )
-    team_counts = (
-        team_counts.groupby(["region", "seed"]).size().reset_index(name="count")
-    )
+    team_counts = pd.DataFrame([(t.region, t.seed) for t in teams], columns=["region", "seed"])
+    team_counts = team_counts.groupby(["region", "seed"]).size().reset_index(name="count")
     if not all(team_counts["count"] == 1):
         raise ValueError(
             "Invalid bracket structure: Each region must have exactly one team of each seed"
@@ -153,9 +146,7 @@ def create_bracket_with_picks(teams, picks_by_round):
     }
 
     # Working set of games for each round
-    current_round_games = (
-        bracket.games.copy()
-    )  # Start with first round games from initialization
+    current_round_games = bracket.games.copy()  # Start with first round games from initialization
 
     # Process each round in sequence
     for round_name in [
@@ -202,7 +193,7 @@ def create_bracket_with_picks(teams, picks_by_round):
 
         # Special case for championship
         if round_name == "Championship" and winners_for_round:
-            bracket.results["Champion"] = winners_for_round[0]
+            bracket.results["Champion"] = winners_for_round[0]  # type: ignore[assignment]
 
         # Create next round matchups for subsequent rounds
         if len(winners_for_round) > 1:
@@ -215,11 +206,7 @@ def create_bracket_with_picks(teams, picks_by_round):
                         team1=team1,
                         team2=team2,
                         round=round_num + 1,
-                        region=(
-                            team1.region
-                            if team1.region == team2.region
-                            else "Final Four"
-                        ),
+                        region=(team1.region if team1.region == team2.region else "Final Four"),
                     )
                     next_round_games.append(next_game)
 
@@ -235,7 +222,7 @@ def create_bracket_with_picks(teams, picks_by_round):
 def simulate_hypothetical_bracket_pool(
     standings: Optional[Standings] = None,
     num_entries: int = 100,
-    upset_factors: Optional[List[float]] = None,
+    upset_factors: Optional[list[float]] = None,
     women: bool = False,
 ) -> pd.DataFrame:
     """
@@ -272,21 +259,23 @@ def simulate_hypothetical_bracket_pool(
     if upset_factors is None:
         # Create a normal distribution centered around 0 with standard deviation 0.3
         # This gives us a realistic mix of chalk-leaning and upset-leaning entries
-        upset_factors = np.random.normal(0, 0.3, num_entries)
+        factors_array = np.random.normal(0, 0.3, num_entries)
 
         # Clip values to stay within -1.0 to 1.0 range
-        upset_factors = np.clip(upset_factors, -1.0, 1.0)
+        factors_array = np.clip(factors_array, -1.0, 1.0)
 
         # Ensure we include some extreme values for variety
         if num_entries >= 10:
             # Include at least one strong chalk picker
-            upset_factors[0] = -0.8
+            factors_array[0] = -0.8
             # Include at least one strong upset picker
-            upset_factors[1] = 0.8
+            factors_array[1] = 0.8
             # Include at least one pure elo-based picker
-            upset_factors[2] = 0.0
+            factors_array[2] = 0.0
             # Shuffle to randomize positions
-            np.random.shuffle(upset_factors)
+            np.random.shuffle(factors_array)
+
+        upset_factors = factors_array.tolist()
 
     elif len(upset_factors) != num_entries:
         raise ValueError("Number of upset factors must match number of entries")
@@ -297,7 +286,7 @@ def simulate_hypothetical_bracket_pool(
         # Set upset factor for all games in this entry
         for game in entry_bracket.games:
             game.upset_factor = upset_factors[i]
-        entry_name = f"Entry_{i+1}"
+        entry_name = f"Entry_{i + 1}"
         pool.add_entry(entry_name, entry_bracket)
 
     # Simulate pool with single reality per simulation
@@ -305,15 +294,11 @@ def simulate_hypothetical_bracket_pool(
     return results
 
 
-def main():
+def main(argv=None):
     """Example usage of integration module with command-line arguments"""
     parser = argparse.ArgumentParser(description="Simulate March Madness bracket pool")
-    parser.add_argument(
-        "--num_entries", type=int, default=10, help="Number of entries to simulate"
-    )
-    parser.add_argument(
-        "--num_sims", type=int, default=1000, help="Number of simulations to run"
-    )
+    parser.add_argument("--num_entries", type=int, default=10, help="Number of entries to simulate")
+    parser.add_argument("--num_sims", type=int, default=1000, help="Number of simulations to run")
     parser.add_argument(
         "--women",
         action="store_true",
@@ -337,11 +322,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Print verbose output")
 
     # Parse arguments
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.verbose:
         print("Running with the following settings:")
-        print(f'  Basketball type: {"Women" if args.women else "Men"}')
+        print(f"  Basketball type: {'Women' if args.women else 'Men'}")
         print(f"  Number of entries: {args.num_entries}")
         print(f"  Number of simulations: {args.num_sims}")
         if args.conference:
@@ -355,8 +340,7 @@ def main():
     upset_factors = None
     if args.num_entries > 1:
         upset_factors = [
-            args.upset_min
-            + (i / (args.num_entries - 1)) * (args.upset_max - args.upset_min)
+            args.upset_min + (i / (args.num_entries - 1)) * (args.upset_max - args.upset_min)
             for i in range(args.num_entries)
         ]
     else:
@@ -385,7 +369,7 @@ def main():
         print("\nTop performing entries:")
         for i, row in results.head(3).iterrows():
             print(
-                f"{i+1}. {row['name']}: {row['win_pct']:.1%} win rate, {row['avg_score']:.1f} avg score"
+                f"{i + 1}. {row['name']}: {row['win_pct']:.1%} win rate, {row['avg_score']:.1f} avg score"
             )
 
 

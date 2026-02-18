@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-# -*-coding:utf-8 -*-
 """
 @File    :   wn_cbb_elo.py
 @Time    :   2024/02/22 10:58:06
 @Author  :   Taylor Firman
-@Version :   0.3.2
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Elo ratings parser for the Warren Nolan college sports website (no affiliation)
 """
@@ -13,12 +12,11 @@ import json
 import logging
 import optparse
 import time
-from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from io import StringIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import quote
 
 import pandas as pd
@@ -28,7 +26,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-class BaseScraper(ABC):
+class BaseScraper:
     """Base class for Warren Nolan scrapers with common functionality."""
 
     def __init__(self, cache_dir: Optional[str] = None):
@@ -40,9 +38,7 @@ class BaseScraper(ABC):
     def _create_session(self) -> requests.Session:
         """Create session with retry logic and connection pooling."""
         session = requests.Session()
-        retries = Retry(
-            total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504]
-        )
+        retries = Retry(total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
         adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
         session.mount("https://", adapter)
         return session
@@ -58,7 +54,7 @@ class BaseScraper(ABC):
             if (
                 datetime.now() - datetime.fromisoformat(cache_data["timestamp"])
             ).total_seconds() < 3600:
-                return cache_data["content"]
+                return str(cache_data["content"])
         return None
 
     def _cache_response(self, url: str, cache_key: str, content: str):
@@ -74,9 +70,7 @@ class BaseScraper(ABC):
         cache_file = self.cache_dir / f"{cache_key}.json"
         cache_file.write_text(json.dumps(cache_data))
 
-    def courteous_get(
-        self, url: str, cache_key: Optional[str] = None, delay: float = 0.1
-    ) -> str:
+    def courteous_get(self, url: str, cache_key: Optional[str] = None, delay: float = 0.1) -> str:
         """Enhanced GET request with caching and error handling."""
         if cache_key:
             cached = self._get_cached_response(url, cache_key)
@@ -140,9 +134,7 @@ class Schedule(BaseScraper):
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             self.games_per_day = list(
-                executor.map(
-                    lambda d: Matchups(d, self.gameset, self.gender == "w", elos), dates
-                )
+                executor.map(lambda d: Matchups(d, self.gameset, self.gender == "w", elos), dates)
             )
 
         self.games_per_day = [g for g in self.games_per_day if g.matchups.shape[0] > 0]
@@ -154,7 +146,7 @@ class Standings(BaseScraper):
     def __init__(
         self,
         season: int = (datetime.now() + timedelta(days=90)).year,
-        conference: str = None,
+        conference: Optional[str] = None,
         women: bool = False,
         cache_dir: Optional[str] = None,
     ):
@@ -163,9 +155,8 @@ class Standings(BaseScraper):
 
         self.season = season
         self.gender = "w" if women else ""
-        self.base_url = (
-            f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
-        )
+        self.base_url = f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
+        self.elo: pd.DataFrame = pd.DataFrame()
         self.pull_elo_html()
         self.parse_elo_table()
         self.pull_conferences_html()
@@ -173,22 +164,16 @@ class Standings(BaseScraper):
         self.add_conferences()
         self.add_ranks()
         if conference in self.conferences:
-            self.elo = self.elo.loc[self.elo.Conference == conference].reset_index(
-                drop=True
-            )
+            self.elo = self.elo.loc[self.elo.Conference == conference].reset_index(drop=True)
         elif conference == "Top 25":
-            self.elo = self.elo.loc[~self.elo["AP Rank"].isnull()].reset_index(
-                drop=True
-            )
+            self.elo = self.elo.loc[~self.elo["AP Rank"].isnull()].reset_index(drop=True)
         elif conference is not None and conference != "All Games":
             print("Invalid value for conference, including all teams...")
 
     def pull_elo_html(self):
         """Pull elo HTML using cached request."""
         cache_key = f"elo_{self.season}"
-        self.elo_response = self.courteous_get(
-            f"{self.base_url}/elo", cache_key=cache_key
-        )
+        self.elo_response = self.courteous_get(f"{self.base_url}/elo", cache_key=cache_key)
         self.elo_soup = BeautifulSoup(self.elo_response, "html.parser")
 
     def parse_elo_table(self):
@@ -198,9 +183,7 @@ class Standings(BaseScraper):
         self.elo_tables = self.elo_soup.find_all(
             "table", attrs={"class": "normal-grid alternating-rows stats-table"}
         )
-        self.elo = pd.concat(
-            pd.read_html(StringIO(str(self.elo_tables))), ignore_index=True
-        )
+        self.elo = pd.concat(pd.read_html(StringIO(str(self.elo_tables))), ignore_index=True)
         self.elo = self.elo.rename(columns={"Rank": "ELO Rank"})
 
     def pull_conferences_html(self):
@@ -218,9 +201,7 @@ class Standings(BaseScraper):
         """
         Parses the list of conferences from the raw html.
         """
-        self.confs_div = self.confs_soup.find_all(
-            "div", attrs={"class": "name-subcontainer"}
-        )
+        self.confs_div = self.confs_soup.find_all("div", attrs={"class": "name-subcontainer"})
         self.conferences = [team.text for team in self.confs_div]
 
     def pull_conference_teams(self, conference: str) -> list:
@@ -240,8 +221,8 @@ class Standings(BaseScraper):
         )
         conf_soup = BeautifulSoup(conf_response, "html.parser")
         conf_teams = conf_soup.find_all("div", attrs={"class": "name-subcontainer"})
-        conf_teams = [team.text for team in conf_teams]
-        return conf_teams
+        conf_team_names = [team.text for team in conf_teams]
+        return conf_team_names
 
     def add_conferences(self):
         """
@@ -304,7 +285,7 @@ class Matchups(BaseScraper):
 
     def __init__(
         self,
-        date: str = datetime.now(),
+        date: Optional[Union[str, datetime]] = None,
         gameset: str = "All Games",
         women: bool = False,
         elos: bool = True,
@@ -313,13 +294,12 @@ class Matchups(BaseScraper):
         """Initialize Matchups with caching support."""
         super().__init__(cache_dir)  # Initialize the parent BaseScraper
 
-        self.date = pd.to_datetime(date)
+        self.date = pd.to_datetime(date if date is not None else datetime.now())
         self.gameset = gameset
         self.gender = "w" if women else ""
         self.season = (self.date + timedelta(days=90)).year
-        self.base_url = (
-            f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
-        )
+        self.base_url = f"https://www.warrennolan.com/basketball{self.gender}/{self.season}"
+        self.matchups: pd.DataFrame = pd.DataFrame()
         self.pull_matchups_html()
         self.parse_matchups_table()
         if elos:
@@ -327,11 +307,7 @@ class Matchups(BaseScraper):
         self.matchups = self.matchups[
             [col for col in self.matchups.columns if "1" in col]
             + [col for col in self.matchups.columns if "2" in col]
-            + [
-                col
-                for col in self.matchups.columns
-                if "1" not in col and "2" not in col
-            ]
+            + [col for col in self.matchups.columns if "1" not in col and "2" not in col]
         ]
 
     def pull_matchups_html(self):
@@ -347,9 +323,7 @@ class Matchups(BaseScraper):
         url = f"{self.base_url}/predict-winners?type1={date1}&type2={gamestr}&date={date2}"
         logging.debug(f"Requesting URL: {url}")
 
-        cache_key = (
-            f"matchups_{self.date.strftime('%Y%m%d')}_{self.gameset.replace(' ','')}"
-        )
+        cache_key = f"matchups_{self.date.strftime('%Y%m%d')}_{self.gameset.replace(' ', '')}"
         self.response = self.courteous_get(url, cache_key=cache_key)
         logging.debug(f"Response length: {len(self.response)}")
 
@@ -373,14 +347,10 @@ class Matchups(BaseScraper):
             if team1_row and team2_row:
                 # Extract team names
                 game_data["team1"] = (
-                    team1_row.find("div", class_="name-subcontainer")
-                    .find("a")
-                    .text.strip()
+                    team1_row.find("div", class_="name-subcontainer").find("a").text.strip()
                 )
                 game_data["team2"] = (
-                    team2_row.find("div", class_="name-subcontainer")
-                    .find("a")
-                    .text.strip()
+                    team2_row.find("div", class_="name-subcontainer").find("a").text.strip()
                 )
 
                 # Extract scores (actual scores from live/final games)
@@ -398,16 +368,8 @@ class Matchups(BaseScraper):
                 game_data["proj_score2"] = int(proj_score2)
 
                 # Extract win probabilities
-                prob1 = (
-                    team1_row.find_all("td", class_="value")[1]
-                    .text.strip()
-                    .replace("%", "")
-                )
-                prob2 = (
-                    team2_row.find_all("td", class_="value")[1]
-                    .text.strip()
-                    .replace("%", "")
-                )
+                prob1 = team1_row.find_all("td", class_="value")[1].text.strip().replace("%", "")
+                prob2 = team2_row.find_all("td", class_="value")[1].text.strip().replace("%", "")
                 game_data["rp_prob1"] = float(prob1) / 100.0
                 game_data["rp_prob2"] = float(prob2) / 100.0
 
@@ -443,7 +405,7 @@ class Matchups(BaseScraper):
 
     def add_elos(
         self,
-        s: Standings = None,
+        s: Optional[Standings] = None,
         base_elo: float = 1500.0,
         scale: float = 1.0,
         homefield: float = 100.0,
@@ -467,17 +429,13 @@ class Matchups(BaseScraper):
             s = Standings(self.season, women=self.gender == "w")
         self.matchups = pd.merge(
             left=self.matchups,
-            right=s.elo[["Team", "ELO"]].rename(
-                columns={"Team": "team1", "ELO": "elo1"}
-            ),
+            right=s.elo[["Team", "ELO"]].rename(columns={"Team": "team1", "ELO": "elo1"}),
             how="left",
             on="team1",
         )
         self.matchups = pd.merge(
             left=self.matchups,
-            right=s.elo[["Team", "ELO"]].rename(
-                columns={"Team": "team2", "ELO": "elo2"}
-            ),
+            right=s.elo[["Team", "ELO"]].rename(columns={"Team": "team2", "ELO": "elo2"}),
             how="left",
             on="team2",
         )
@@ -503,9 +461,7 @@ class Matchups(BaseScraper):
         self.matchups["elo_prob2"] = 1 - self.matchups["elo_prob1"]
 
 
-def elo_prob(
-    elo1: float, elo2: float, scale: float = 1.0, homefield: float = 100.0
-) -> float:
+def elo_prob(elo1: float, elo2: float, scale: float = 1.0, homefield: float = 100.0) -> float:
     """
     Calculates the respective win probabilities of a matchup given the two corresponding elo ratings.
 
@@ -523,7 +479,7 @@ def elo_prob(
     return prob1
 
 
-def main():
+def main(argv=None):
     # Initializing command line inputs
     parser = optparse.OptionParser()
     parser.add_option(
@@ -565,7 +521,7 @@ def main():
         dest="cache_dir",
         help="location of html cache",
     )
-    options = parser.parse_args()[0]
+    options = parser.parse_args(argv)[0]
     if options.debug:
         logging.basicConfig(level=logging.DEBUG)
     options.date = pd.to_datetime(options.date)
@@ -580,28 +536,16 @@ def main():
         print(s.elo.to_string(index=False, na_rep=""))
 
         # Pulling requested Matchups for today and printing results
-        m = Matchups(
-            options.date, options.conference, options.women, False, options.cache_dir
-        )
+        m = Matchups(options.date, options.conference, options.women, False, options.cache_dir)
         if m.matchups.shape[0] > 0:
             print(m.matchups.to_string(index=False, na_rep=""))
         else:
-            print(
-                "No games were played on {}.".format(options.date.strftime("%B %d, %Y"))
-            )
+            print("No games were played on {}.".format(options.date.strftime("%B %d, %Y")))
 
         # Saving as csv's if requested
         if options.output is not None:
-            s.to_csv(
-                "{}Standings_{}.csv".format(
-                    options.output, datetime.now().strftime("%m%d%y")
-                )
-            )
-            m.to_csv(
-                "{}Matchups_{}.csv".format(
-                    options.output, datetime.now().strftime("%m%d%y")
-                )
-            )
+            s.to_csv("{}Standings_{}.csv".format(options.output, datetime.now().strftime("%m%d%y")))
+            m.to_csv("{}Matchups_{}.csv".format(options.output, datetime.now().strftime("%m%d%y")))
 
 
 if __name__ == "__main__":

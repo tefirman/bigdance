@@ -1,35 +1,34 @@
 #!/usr/bin/env python
-# -*-coding:utf-8 -*-
 """
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.3.2
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Class-based implementation for extracting bracket data from ESPN Tournament Challenge
 """
 
-import time
+import copy
 import json
 import logging
+import optparse
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
-import sys
-import copy
-from typing import Dict, List, Optional, Union, Any
+from typing import Any, Optional, Union
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException
-from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
 import numpy as np
 import pandas as pd
-import optparse
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-from bigdance import Standings
-from bigdance.cbb_brackets import Bracket, Team, Pool
+from bigdance.cbb_brackets import Bracket, Pool, Team
+from bigdance.wn_cbb_scraper import Standings
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -110,13 +109,11 @@ class BaseScraper:
                 datetime.now() - datetime.fromisoformat(cache_data["timestamp"])
             ).total_seconds()
             if time_since > max_age:
-                logger.debug(
-                    f"Cache expired for key {cache_key} (age: {time_since:.1f}s)"
-                )
+                logger.debug(f"Cache expired for key {cache_key} (age: {time_since:.1f}s)")
                 return None
 
             logger.debug(f"Using cached response for {cache_key}")
-            return cache_data["content"]
+            return str(cache_data["content"])
 
         except Exception as e:
             logger.warning(f"Error reading cache for {cache_key}: {e}")
@@ -174,9 +171,7 @@ class BaseScraper:
                 if age_days > older_than_days:
                     cache_file.unlink()
                     removed_count += 1
-                    logger.debug(
-                        f"Removed cache file {cache_file} ({age_days:.1f} days old)"
-                    )
+                    logger.debug(f"Removed cache file {cache_file} ({age_days:.1f} days old)")
 
             except Exception as e:
                 logger.warning(f"Error processing cache file {cache_file}: {e}")
@@ -198,11 +193,13 @@ class ESPNScraper(BaseScraper):
         super().__init__(cache_dir)
         self.women = women
         self.gender_suffix = "-women" if women else ""
-        self.base_url = f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender_suffix}-2025"
+        self.base_url = (
+            f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender_suffix}-2025"
+        )
 
         # Initialize cached Chrome options and service to avoid repeated setup
-        self._chrome_options = None
-        self._chrome_service = None
+        self._chrome_options: Optional[Options] = None
+        self._chrome_service: Optional[Service] = None
 
     def _get_chrome_options(self) -> Options:
         """
@@ -248,7 +245,7 @@ class ESPNScraper(BaseScraper):
         cache_key: Optional[str] = None,
         check_pagination: bool = False,
         max_pages: int = 10,
-    ) -> Optional[Union[str, Dict[int, str]]]:
+    ) -> Optional[Union[str, dict[int, str]]]:
         """
         Retrieve a page using Selenium with support for pagination and caching
 
@@ -268,14 +265,13 @@ class ESPNScraper(BaseScraper):
                 complete_cache_key, DEFAULT_ENTRY_CACHE_EXPIRY
             )
             if cached_content:
-                return json.loads(cached_content)
+                result: dict[int, str] = json.loads(cached_content)
+                return result
 
         # Check regular cache for non-paginated content
         if not check_pagination and cache_key:
             cache_expiry = (
-                DEFAULT_CACHE_EXPIRY
-                if "blank" in cache_key
-                else DEFAULT_ENTRY_CACHE_EXPIRY
+                DEFAULT_CACHE_EXPIRY if "blank" in cache_key else DEFAULT_ENTRY_CACHE_EXPIRY
             )
             cached_content = self._get_cached_response(cache_key, cache_expiry)
             if cached_content:
@@ -289,7 +285,7 @@ class ESPNScraper(BaseScraper):
                 if attempt < MAX_RETRIES - 1:
                     wait_time = 2**attempt  # Exponential backoff
                     logger.warning(
-                        f"Retrieval attempt {attempt+1} failed: {e}. Retrying in {wait_time}s..."
+                        f"Retrieval attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s..."
                     )
                     time.sleep(wait_time)
                 else:
@@ -298,10 +294,11 @@ class ESPNScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error retrieving {url}: {e}")
                 return None
+        return None
 
     def _retrieve_page(
         self, url: str, cache_key: Optional[str], check_pagination: bool, max_pages: int
-    ) -> Union[str, Dict[int, str]]:
+    ) -> Union[str, dict[int, str]]:
         """
         Internal method to retrieve a page with Selenium
 
@@ -369,9 +366,7 @@ class ESPNScraper(BaseScraper):
                 # Cache the complete result
                 if cache_key and self.cache_dir:
                     complete_cache_key = f"{cache_key}_complete"
-                    self._cache_response(
-                        complete_cache_key, url, json.dumps(all_pages_content)
-                    )
+                    self._cache_response(complete_cache_key, url, json.dumps(all_pages_content))
 
                 return all_pages_content
 
@@ -406,8 +401,8 @@ class ESPNScraper(BaseScraper):
 
     def _is_button_disabled(self, button) -> bool:
         """Check if a button is disabled"""
-        return "disabled" in button.get_attribute("class") or button.get_attribute(
-            "disabled"
+        return bool(
+            "disabled" in (button.get_attribute("class") or "") or button.get_attribute("disabled")
         )
 
     def _click_next_button(self, driver, button) -> None:
@@ -436,11 +431,16 @@ class ESPNScraper(BaseScraper):
             HTML content of the bracket page
         """
         url = f"{self.base_url}/bracket?id={entry_id}"
-        cache_key = f"bracket_{'women' if self.women else 'men'}_{entry_id if entry_id else 'blank'}"
+        cache_key = (
+            f"bracket_{'women' if self.women else 'men'}_{entry_id if entry_id else 'blank'}"
+        )
 
-        return self.get_page(url, cache_key, check_pagination=False)
+        result = self.get_page(url, cache_key, check_pagination=False)
+        if isinstance(result, dict):
+            return None
+        return result
 
-    def get_pool(self, pool_id: str) -> Optional[Dict[int, str]]:
+    def get_pool(self, pool_id: str) -> Optional[dict[int, str]]:
         """
         Get an ESPN Tournament Challenge pool with support for pagination
 
@@ -453,7 +453,10 @@ class ESPNScraper(BaseScraper):
         url = f"{self.base_url}/group?id={pool_id}"
         cache_key = f"pool_{'women' if self.women else 'men'}_{pool_id}"
 
-        return self.get_page(url, cache_key, check_pagination=True)
+        result = self.get_page(url, cache_key, check_pagination=True)
+        if isinstance(result, str):
+            return {1: result}
+        return result
 
 
 class ESPNBracket:
@@ -519,9 +522,7 @@ class ESPNBracket:
             pick_tags = soup.find_all(
                 "span", attrs={"class": "BracketPropositionHeaderDesktop-pickText"}
             )
-            team_tags = soup.find_all(
-                "label", attrs={"class": "BracketOutcome-label truncate"}
-            )
+            team_tags = soup.find_all("label", attrs={"class": "BracketOutcome-label truncate"})
             team_id_tags = soup.find_all(
                 "img", attrs={"class": "Image BracketOutcome-image printHide"}
             )
@@ -530,12 +531,8 @@ class ESPNBracket:
             # Extract actual bracket outcomes
             regions = [region.text for region in region_tags]
             names = [team.text for team in team_tags]
-            ids = [
-                team.attrs["src"].split("/")[-1].split(".")[0] for team in team_id_tags
-            ]
-            seeds = [
-                int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1
-            ]
+            ids = [str(team.attrs["src"]).split("/")[-1].split(".")[0] for team in team_id_tags]
+            seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1]
 
             # Create mapping between team names and ESPN id
             name_mapping = {ids[ind]: names[ind] for ind in range(len(ids))}
@@ -573,7 +570,7 @@ class ESPNBracket:
                 # Extract picks made by user
                 try:
                     pick_ids = [
-                        pick.find("img").attrs["src"].split("/")[-1].split(".")[0]
+                        str(pick.find("img").attrs["src"]).split("/")[-1].split(".")[0]  # type: ignore[union-attr]
                         for pick in pick_tags
                     ]
                     picks = [name_mapping[id_val] for id_val in pick_ids]
@@ -584,32 +581,25 @@ class ESPNBracket:
             # Parse each round's picks
             for round_ind in range(5):
                 bracket.results[round_names[round_ind]] = []
-                for pick in picks[
-                    64 - 2 ** (6 - round_ind) : 64 - 2 ** (5 - round_ind)
-                ]:
+                for pick in picks[64 - 2 ** (6 - round_ind) : 64 - 2 ** (5 - round_ind)]:
                     pick = pick.replace("St.", "St")  # Fix Saint name mismatch
                     winner = next((t for t in teams if pick == t.name), None)
                     if winner:
                         bracket.results[round_names[round_ind]].append(winner)
                         if round_ind == 0:
                             for game in bracket.games:
-                                if (
-                                    game.team1.name == winner.name
-                                    or game.team2.name == winner.name
-                                ):
+                                if game.team1.name == winner.name or game.team2.name == winner.name:
                                     game.winner = winner
                                     break
 
             # Extract champion pick
-            champ_tag = soup.find(
-                "span", attrs={"class": "PrintChampionshipPickBody-outcomeName"}
-            )
+            champ_tag = soup.find("span", attrs={"class": "PrintChampionshipPickBody-outcomeName"})
             if champ_tag:
                 champion = champ_tag.text.replace("St.", "St")
                 winner = next((t for t in teams if champion.startswith(t.name)), None)
                 if winner:
                     bracket.results["Championship"] = [winner]
-                    bracket.results["Champion"] = winner
+                    bracket.results["Champion"] = winner  # type: ignore[assignment]
 
             # Calculate bracket statistics
             bracket.log_probability = bracket.calculate_log_probability()
@@ -639,21 +629,14 @@ class ESPNBracket:
         if self.ratings_source is not None:
             try:
                 # Try exact match
-                team_row = self.ratings_source.elo[
-                    self.ratings_source.elo["Team"] == team_name
-                ]
+                team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
                 if not team_row.empty:
                     return float(team_row.iloc[0]["ELO"])
 
                 # Try fuzzy matching
                 for team in self.ratings_source.elo["Team"]:
-                    if (
-                        team.lower() in team_name.lower()
-                        or team_name.lower() in team.lower()
-                    ):
-                        team_row = self.ratings_source.elo[
-                            self.ratings_source.elo["Team"] == team
-                        ]
+                    if team.lower() in team_name.lower() or team_name.lower() in team.lower():
+                        team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
                         return float(team_row.iloc[0]["ELO"])
             except Exception as e:
                 logger.warning(f"Error finding rating for {team_name}: {e}")
@@ -682,22 +665,15 @@ class ESPNBracket:
         if self.ratings_source is not None:
             try:
                 # Try exact match
-                team_row = self.ratings_source.elo[
-                    self.ratings_source.elo["Team"] == team_name
-                ]
+                team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
                 if not team_row.empty:
-                    return team_row.iloc[0]["Conference"]
+                    return str(team_row.iloc[0]["Conference"])
 
                 # Try fuzzy matching
                 for team in self.ratings_source.elo["Team"]:
-                    if (
-                        team.lower() in team_name.lower()
-                        or team_name.lower() in team.lower()
-                    ):
-                        team_row = self.ratings_source.elo[
-                            self.ratings_source.elo["Team"] == team
-                        ]
-                        return team_row.iloc[0]["Conference"]
+                    if team.lower() in team_name.lower() or team_name.lower() in team.lower():
+                        team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
+                        return str(team_row.iloc[0]["Conference"])
             except Exception:
                 pass
 
@@ -720,7 +696,7 @@ class ESPNPool:
         self.scraper = ESPNScraper(women, cache_dir)
         self.bracket_handler = ESPNBracket(women, cache_dir)
 
-    def get_pool(self, pool_id: str) -> Optional[Dict[int, str]]:
+    def get_pool(self, pool_id: str) -> Optional[dict[int, str]]:
         """
         Get pool pages
 
@@ -732,9 +708,7 @@ class ESPNPool:
         """
         return self.scraper.get_pool(pool_id)
 
-    def extract_entry_ids(
-        self, html_content: Union[str, Dict[int, str]]
-    ) -> Dict[str, str]:
+    def extract_entry_ids(self, html_content: Union[str, dict[int, str]]) -> dict[str, str]:
         """
         Extract entry IDs from pool HTML
 
@@ -759,7 +733,7 @@ class ESPNPool:
 
         return entry_ids
 
-    def _extract_entries_from_html(self, html: str) -> Dict[str, str]:
+    def _extract_entries_from_html(self, html: str) -> dict[str, str]:
         """
         Extract entries from a single HTML page
 
@@ -774,13 +748,14 @@ class ESPNPool:
             "td", attrs={"class": "BracketEntryTable-column--entryName Table__TD"}
         )
 
-        return {
-            entry.find("a").text: entry.find("a").attrs["href"].split("bracket?id=")[-1]
-            for entry in entry_tags
-            if entry.find("a")
-        }
+        result: dict[str, str] = {}
+        for entry in entry_tags:
+            link = entry.find("a")
+            if link:
+                result[link.text] = str(link.attrs["href"]).split("bracket?id=")[-1]
+        return result
 
-    def load_pool_entries(self, pool_id: str) -> Dict[str, Bracket]:
+    def load_pool_entries(self, pool_id: str) -> dict[str, Bracket]:
         """
         Load all entries from a pool
 
@@ -850,9 +825,7 @@ class ESPNPool:
         # Load and add entries
         entries = self.load_pool_entries(pool_id)
         for entry_name, bracket in entries.items():
-            pool_sim.add_entry(
-                entry_name, bracket, False
-            )  # Don't re-simulate fixed picks
+            pool_sim.add_entry(entry_name, bracket, False)  # Don't re-simulate fixed picks
 
         return pool_sim
 
@@ -871,7 +844,7 @@ class GameImportanceAnalyzer:
 
     def analyze_win_importance(
         self, current_round: Optional[str] = None, num_sims: int = 1000
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Analyze the importance of each game in the current round
 
@@ -900,20 +873,16 @@ class GameImportanceAnalyzer:
             "Championship",
         ]
         if current_round not in valid_rounds:
-            raise ValueError(
-                f"Invalid round name: {current_round}. Must be one of {valid_rounds}"
-            )
+            raise ValueError(f"Invalid round name: {current_round}. Must be one of {valid_rounds}")
 
         # Get teams in the current round
         teams_in_round = self._get_teams_in_round(actual_bracket, current_round)
-        logger.debug(f"Analyzing {len(teams_in_round)//2} games in {current_round}")
+        logger.debug(f"Analyzing {len(teams_in_round) // 2} games in {current_round}")
 
         # Simulate baseline results
         logger.debug("Simulating baseline...")
         fixed_winners = copy.deepcopy(actual_bracket.results)
-        baseline = self.pool.simulate_pool(
-            num_sims=num_sims, fixed_winners=fixed_winners
-        )
+        baseline = self.pool.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners)
 
         # Analyze each game
         game_importance = []
@@ -939,7 +908,7 @@ class GameImportanceAnalyzer:
 
         return game_importance
 
-    def _get_teams_in_round(self, bracket: Bracket, round_name: str) -> List[Team]:
+    def _get_teams_in_round(self, bracket: Bracket, round_name: str) -> list[Team]:
         """
         Get teams participating in a specific round
 
@@ -973,7 +942,7 @@ class GameImportanceAnalyzer:
         actual_bracket,
         baseline,
         num_sims: int,
-    ) -> Dict:
+    ) -> dict:
         """
         Analyze the importance of a specific matchup
 
@@ -991,9 +960,7 @@ class GameImportanceAnalyzer:
         # Simulate with Team 1 winning
         logger.debug(f"Simulating with {team1.name} winning...")
         fixed_winners_team1 = copy.deepcopy(actual_bracket.results)
-        fixed_winners_team1[round_name] = fixed_winners_team1.get(round_name, []) + [
-            team1
-        ]
+        fixed_winners_team1[round_name] = fixed_winners_team1.get(round_name, []) + [team1]
         results_team1 = self.pool.simulate_pool(
             num_sims=num_sims, fixed_winners=fixed_winners_team1
         )
@@ -1001,29 +968,21 @@ class GameImportanceAnalyzer:
         # Simulate with Team 2 winning
         logger.debug(f"Simulating with {team2.name} winning...")
         fixed_winners_team2 = copy.deepcopy(actual_bracket.results)
-        fixed_winners_team2[round_name] = fixed_winners_team2.get(round_name, []) + [
-            team2
-        ]
+        fixed_winners_team2[round_name] = fixed_winners_team2.get(round_name, []) + [team2]
         results_team2 = self.pool.simulate_pool(
             num_sims=num_sims, fixed_winners=fixed_winners_team2
         )
 
         # Merge results to calculate impact
         merged_results = pd.merge(
-            results_team1[["name", "win_pct"]].rename(
-                columns={"win_pct": "win_pct_team1"}
-            ),
-            results_team2[["name", "win_pct"]].rename(
-                columns={"win_pct": "win_pct_team2"}
-            ),
+            results_team1[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team1"}),
+            results_team2[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_team2"}),
             on="name",
             how="outer",
         )
         merged_results = pd.merge(
             merged_results,
-            baseline[["name", "win_pct"]].rename(
-                columns={"win_pct": "win_pct_baseline"}
-            ),
+            baseline[["name", "win_pct"]].rename(columns={"win_pct": "win_pct_baseline"}),
             on="name",
             how="outer",
         )
@@ -1057,7 +1016,7 @@ class GameImportanceAnalyzer:
         }
 
     def print_importance_summary(
-        self, game_importance: List[Dict], entry_name: Optional[str] = None
+        self, game_importance: list[dict], entry_name: Optional[str] = None
     ) -> None:
         """
         Print a human-readable summary of game importance analysis
@@ -1091,7 +1050,7 @@ class GameImportanceAnalyzer:
             print(f"Focusing on entry: {entry_name}")
 
         for i, details in enumerate(game_importance):
-            print(f"GAME #{i+1}: {details['matchup']} (Region: {details['region']})")
+            print(f"GAME #{i + 1}: {details['matchup']} (Region: {details['region']})")
             print(
                 f"  Max Impact: {details['max_impact']:.4f} | Avg Impact: {details['avg_impact']:.4f}"
             )
@@ -1110,18 +1069,14 @@ class GameImportanceAnalyzer:
                         break
 
                 if not entry_impact:
-                    print(
-                        f"  Note: Could not find impact data for {entry_name} on this game"
-                    )
+                    print(f"  Note: Could not find impact data for {entry_name} on this game")
                     continue
 
                 print(f"  Impact for {entry_name}: {entry_impact['impact']:.4f}")
             else:
                 # Show the most affected entry
                 print(f"  Most affected entry: {details['max_impact_entry']}")
-                entry_impact = details["entry_win_pct_diff"][
-                    details["max_impact_entry"]
-                ]
+                entry_impact = details["entry_win_pct_diff"][details["max_impact_entry"]]
 
             # Calculate percentages
             team1_pct = entry_impact["team1_wins"] * 100
@@ -1150,7 +1105,7 @@ class GameImportanceAnalyzer:
         print("=== END OF SUMMARY ===")
 
 
-def main():
+def main(argv=None):
     """Command line interface for the module"""
     parser = optparse.OptionParser()
     parser.add_option(
@@ -1197,7 +1152,7 @@ def main():
         dest="verbose",
         help="show all debugging messages",
     )
-    options = parser.parse_args()[0]
+    options = parser.parse_args(argv)[0]
 
     # Set up logging
     logging.basicConfig(
@@ -1253,11 +1208,7 @@ def main():
     top_entries = pool_results.sort_values("win_pct", ascending=False)
     top_entries.to_csv("PoolSimResults.csv", index=False)
     print()
-    print(
-        top_entries[["name", "avg_score", "std_score", "win_prob"]].to_string(
-            index=False
-        )
-    )
+    print(top_entries[["name", "avg_score", "std_score", "win_prob"]].to_string(index=False))
     print()
 
     # Analyze game importance if requested
