@@ -30,3 +30,14 @@ cookies.txt
 .venv/
 test_cache/
 notes/
+
+# Generated simulation output
+src/bigdance/bracket_analysis_*/
+*SimResults.csv
+
+# Browser-saved page asset dumps
+src/bigdance/*_files/
+
+# Test-generated plots/reports
+tests/*.pdf
+tests/*.png
