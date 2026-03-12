@@ -21,6 +21,7 @@ Main components:
 from .bigdance_integration import (
     create_teams_from_standings,
     simulate_hypothetical_bracket_pool,
+    simulate_round_probabilities,
 )
 from .bracket_analysis import BracketAnalysis
 from .cbb_brackets import Bracket, Game, Pool, Team
@@ -52,4 +53,5 @@ __all__ = [
     "elo_prob",
     "create_teams_from_standings",
     "simulate_hypothetical_bracket_pool",
+    "simulate_round_probabilities",
 ]

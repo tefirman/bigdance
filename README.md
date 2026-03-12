@@ -129,6 +129,23 @@ for team in results["Final Four"]:
     print(f"{team.name} (Seed {team.seed}, {team.region} Region)")
 ```
 
+To see each team's probability of reaching each round across many simulations:
+
+```python
+from bigdance import simulate_round_probabilities, Standings
+
+# Get current standings
+standings = Standings()
+
+# Simulate 1000 tournaments and compute round-by-round probabilities
+df = simulate_round_probabilities(standings, num_sims=1000, upset_factor=0.25)
+
+# Show top 20 teams by championship probability
+print(df.head(20))
+```
+
+Output columns: `Team`, `Seed`, `Region`, `First Round`, `Second Round`, `Sweet 16`, `Elite 8`, `Final Four`, `Championship` — each showing the percentage of simulations in which that team reached that round.
+
 ### Customizing Upset Likelihood
 
 Control how often upsets occur in your simulations:
@@ -177,6 +194,19 @@ pool_sim = pool_manager.create_simulation_pool(pool_id)
 # Simulate and display top entries
 results = pool_sim.simulate_pool(num_sims=1000)
 print(results.head(10))
+```
+
+You can also compute per-team round probabilities using the real ESPN bracket:
+
+```python
+from bigdance.espn_tc_scraper import ESPNPool
+from bigdance import simulate_round_probabilities
+
+pool_sim = ESPNPool().create_simulation_pool("1234567")
+
+# Use the real bracket to compute each team's odds of reaching each round
+df = simulate_round_probabilities(bracket=pool_sim.actual_results, num_sims=1000)
+print(df.head(20))
 ```
 
 ### Game Importance Analysis
@@ -280,11 +310,14 @@ The package provides a unified `bigdance` CLI with subcommands:
 # Get current team standings and ratings
 bigdance standings
 
-# Simulate a hypothetical bracket pool
-bigdance simulate --num_entries 50 --num_sims 1000
+# Show each team's probability of reaching each round (hypothetical bracket)
+bigdance simulate --num_sims 1000 --upset_factor 0.25 --top 20
 
 # Analyze a bracket pool from ESPN
 bigdance espn --pool_id 1234567
+
+# Show each team's round probabilities using the real ESPN bracket
+bigdance espn --pool_id 1234567 --team_probs
 
 # Find most important remaining games
 bigdance espn --pool_id 1234567 --importance
