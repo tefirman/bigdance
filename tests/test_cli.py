@@ -49,11 +49,13 @@ def test_no_command_prints_help(capsys):
 
 def test_simulate_subcommand(mock_simulate_df, capsys):
     """bigdance simulate calls simulate_round_probabilities and prints results."""
-    with patch("bigdance.bigdance_integration.Standings"), \
-         patch(
-             "bigdance.bigdance_integration.simulate_round_probabilities",
-             return_value=mock_simulate_df,
-         ) as mock_fn:
+    with (
+        patch("bigdance.bigdance_integration.Standings"),
+        patch(
+            "bigdance.bigdance_integration.simulate_round_probabilities",
+            return_value=mock_simulate_df,
+        ) as mock_fn,
+    ):
         result = main(["simulate", "--num_sims", "10"])
 
     assert result == 0
@@ -64,11 +66,13 @@ def test_simulate_subcommand(mock_simulate_df, capsys):
 
 def test_simulate_top_flag(mock_simulate_df, capsys):
     """--top N limits output to N rows."""
-    with patch("bigdance.bigdance_integration.Standings"), \
-         patch(
-             "bigdance.bigdance_integration.simulate_round_probabilities",
-             return_value=mock_simulate_df,
-         ):
+    with (
+        patch("bigdance.bigdance_integration.Standings"),
+        patch(
+            "bigdance.bigdance_integration.simulate_round_probabilities",
+            return_value=mock_simulate_df,
+        ),
+    ):
         main(["simulate", "--num_sims", "10", "--top", "1"])
 
     captured = capsys.readouterr()
@@ -78,15 +82,25 @@ def test_simulate_top_flag(mock_simulate_df, capsys):
 
 def test_simulate_women_flag():
     """--women flag is forwarded to Standings and simulate_round_probabilities."""
-    with patch("bigdance.bigdance_integration.Standings") as mock_standings_cls, \
-         patch(
-             "bigdance.bigdance_integration.simulate_round_probabilities",
-             return_value=pd.DataFrame(
-                 columns=["Team", "Seed", "Region",
-                          "First Round", "Second Round", "Sweet 16",
-                          "Elite 8", "Final Four", "Championship"]
-             ),
-         ) as mock_fn:
+    with (
+        patch("bigdance.bigdance_integration.Standings") as mock_standings_cls,
+        patch(
+            "bigdance.bigdance_integration.simulate_round_probabilities",
+            return_value=pd.DataFrame(
+                columns=[
+                    "Team",
+                    "Seed",
+                    "Region",
+                    "First Round",
+                    "Second Round",
+                    "Sweet 16",
+                    "Elite 8",
+                    "Final Four",
+                    "Championship",
+                ]
+            ),
+        ) as mock_fn,
+    ):
         main(["simulate", "--num_sims", "5", "--women"])
 
     mock_standings_cls.assert_called_once_with(conference=None, women=True)

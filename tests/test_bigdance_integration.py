@@ -296,9 +296,15 @@ def test_simulate_round_probabilities_columns(mock_standings):
     """Output DataFrame has the expected columns."""
     df = simulate_round_probabilities(mock_standings, num_sims=10)
     expected_cols = [
-        "Team", "Seed", "Region",
-        "First Round", "Second Round", "Sweet 16",
-        "Elite 8", "Final Four", "Championship",
+        "Team",
+        "Seed",
+        "Region",
+        "First Round",
+        "Second Round",
+        "Sweet 16",
+        "Elite 8",
+        "Final Four",
+        "Championship",
     ]
     assert list(df.columns) == expected_cols
 
@@ -336,9 +342,15 @@ def test_simulate_round_probabilities_bracket_mode(sample_bracket):
     df = simulate_round_probabilities(bracket=sample_bracket, num_sims=20)
     assert len(df) == 64
     expected_cols = [
-        "Team", "Seed", "Region",
-        "First Round", "Second Round", "Sweet 16",
-        "Elite 8", "Final Four", "Championship",
+        "Team",
+        "Seed",
+        "Region",
+        "First Round",
+        "Second Round",
+        "Sweet 16",
+        "Elite 8",
+        "Final Four",
+        "Championship",
     ]
     assert list(df.columns) == expected_cols
 
