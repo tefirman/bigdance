@@ -294,11 +294,85 @@ def simulate_hypothetical_bracket_pool(
     return results
 
 
+def simulate_round_probabilities(
+    standings: Optional[Standings] = None,
+    num_sims: int = 1000,
+    upset_factor: float = 0.25,
+    women: bool = False,
+    bracket: Optional["Bracket"] = None,
+) -> pd.DataFrame:
+    """
+    Simulate the tournament many times and compute each team's probability of
+    reaching each round.
+
+    Args:
+        standings: Standings object. If None, fetches current standings.
+                   Ignored if bracket is provided.
+        num_sims: Number of tournament simulations to run.
+        upset_factor: Upset factor applied to every game (-1.0 = chalk, 1.0 = coin flip).
+        women: Whether to use women's basketball data. Ignored if bracket is provided.
+        bracket: Pre-built Bracket object (e.g. from ESPN). If provided, standings
+                 and women are ignored and this bracket is used as the template.
+
+    Returns:
+        DataFrame with columns: Team, Seed, Region, and one column per round
+        showing the percentage chance of reaching that round, sorted by
+        championship probability descending.
+    """
+    import copy
+
+    rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+    counts: dict[str, dict[str, int]] = {}
+
+    if bracket is not None:
+        template = bracket
+    else:
+        if standings is None:
+            standings = Standings(women=women)
+        template = create_teams_from_standings(standings)
+
+    team_info = {t.name: (t.seed, t.region) for t in template.teams}
+    for name in team_info:
+        counts[name] = {r: 0 for r in rounds}
+
+    for _ in range(num_sims):
+        if bracket is not None:
+            b = copy.deepcopy(bracket)
+        else:
+            b = create_teams_from_standings(standings)  # type: ignore[arg-type]
+        for game in b.games:
+            game.upset_factor = upset_factor
+        results = b.simulate_tournament()
+        for round_name in rounds:
+            for team in results.get(round_name, []):
+                counts[team.name][round_name] += 1
+
+    rows = []
+    for name, (seed, region) in team_info.items():
+        row = {"Team": name, "Seed": seed, "Region": region}
+        for r in rounds:
+            row[r] = f"{counts[name][r] / num_sims:.1%}"
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    # Sort by championship probability descending, then seed ascending
+    df["_champ"] = df["Championship"].str.rstrip("%").astype(float)
+    df = df.sort_values(["_champ", "Seed"], ascending=[False, True]).drop(columns="_champ")
+    return df.reset_index(drop=True)
+
+
 def main(argv=None):
-    """Example usage of integration module with command-line arguments"""
-    parser = argparse.ArgumentParser(description="Simulate March Madness bracket pool")
-    parser.add_argument("--num_entries", type=int, default=10, help="Number of entries to simulate")
+    """Simulate tournament outcomes and show each team's probability of reaching each round."""
+    parser = argparse.ArgumentParser(
+        description="Simulate March Madness and show round-by-round probabilities per team"
+    )
     parser.add_argument("--num_sims", type=int, default=1000, help="Number of simulations to run")
+    parser.add_argument(
+        "--upset_factor",
+        type=float,
+        default=0.25,
+        help="Upset factor for all games (-1.0 = chalk, 1.0 = coin flip, ~0.25 matches history)",
+    )
     parser.add_argument(
         "--women",
         action="store_true",
@@ -307,70 +381,24 @@ def main(argv=None):
     parser.add_argument(
         "--conference", type=str, default=None, help="Filter by specific conference"
     )
-    parser.add_argument(
-        "--upset_min",
-        type=float,
-        default=-0.5,
-        help="Minimum upset factor (-1.0 for extreme chalk)",
-    )
-    parser.add_argument(
-        "--upset_max",
-        type=float,
-        default=0.5,
-        help="Maximum upset factor (1.0 for coin flip)",
-    )
-    parser.add_argument("--verbose", action="store_true", help="Print verbose output")
+    parser.add_argument("--top", type=int, default=None, help="Show only the top N teams")
 
-    # Parse arguments
     args = parser.parse_args(argv)
 
-    if args.verbose:
-        print("Running with the following settings:")
-        print(f"  Basketball type: {'Women' if args.women else 'Men'}")
-        print(f"  Number of entries: {args.num_entries}")
-        print(f"  Number of simulations: {args.num_sims}")
-        if args.conference:
-            print(f"  Conference filter: {args.conference}")
-        print(f"  Upset factor range: {args.upset_min} to {args.upset_max}")
-
-    # Get current standings with appropriate gender and conference
     standings = Standings(conference=args.conference, women=args.women)
 
-    # Generate upset factors ranging from min to max
-    upset_factors = None
-    if args.num_entries > 1:
-        upset_factors = [
-            args.upset_min + (i / (args.num_entries - 1)) * (args.upset_max - args.upset_min)
-            for i in range(args.num_entries)
-        ]
-    else:
-        upset_factors = [args.upset_min]  # Just use minimum for a single entry
-
-    # Create and simulate bracket pool
-    results = simulate_hypothetical_bracket_pool(
+    print(f"\nSimulating {args.num_sims} tournaments (upset_factor={args.upset_factor})...\n")
+    df = simulate_round_probabilities(
         standings=standings,
-        num_entries=args.num_entries,
-        upset_factors=upset_factors,
+        num_sims=args.num_sims,
+        upset_factor=args.upset_factor,
+        women=args.women,
     )
 
-    # Display results
-    print("\nPool Simulation Results:")
-    print(results.to_string(index=False))
+    if args.top is not None:
+        df = df.head(args.top)
 
-    # Print additional statistics if verbose
-    if args.verbose:
-        # Calculate average win percentage and score
-        avg_win_pct = results["win_pct"].mean()
-        avg_score = results["avg_score"].mean()
-        print(f"\nAverage win percentage: {avg_win_pct:.4f}")
-        print(f"Average score: {avg_score:.2f}")
-
-        # Print top 3 entries
-        print("\nTop performing entries:")
-        for i, row in results.head(3).iterrows():
-            print(
-                f"{i + 1}. {row['name']}: {row['win_pct']:.1%} win rate, {row['avg_score']:.1f} avg score"
-            )
+    print(df.to_string(index=False))
 
 
 if __name__ == "__main__":

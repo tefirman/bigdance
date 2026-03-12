@@ -1147,6 +1147,12 @@ def main(argv=None):
         help="location of html cache directory",
     )
     parser.add_option(
+        "--team_probs",
+        action="store_true",
+        dest="team_probs",
+        help="show each team's probability of reaching each round instead of pool standings",
+    )
+    parser.add_option(
         "--verbose",
         action="store_true",
         dest="verbose",
@@ -1168,6 +1174,16 @@ def main(argv=None):
     if not pool_sim:
         logging.error("Failed to create simulation pool")
         return 1
+
+    # Show team round probabilities if requested (skips pool simulation)
+    if options.team_probs:
+        from bigdance.bigdance_integration import simulate_round_probabilities
+
+        df = simulate_round_probabilities(bracket=pool_sim.actual_results, num_sims=1000)
+        print()
+        print(df.to_string(index=False))
+        print()
+        return 0
 
     # Creating copy of pool simulator if importance calculation is requested
     if options.importance:

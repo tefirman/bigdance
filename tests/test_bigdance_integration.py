@@ -1,12 +1,15 @@
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from bigdance.bigdance_integration import (
     create_teams_from_standings,
     simulate_hypothetical_bracket_pool,
+    simulate_round_probabilities,
 )
+from bigdance.cbb_brackets import Bracket, Team
 from bigdance.wn_cbb_scraper import Standings
 
 
@@ -270,3 +273,87 @@ def test_simulate_hypothetical_bracket_pool_with_full_upset_range(mock_standings
         mock_standings, num_entries=num_entries, upset_factors=extreme_factors
     )
     assert len(results_extreme) == num_entries
+
+
+@pytest.fixture
+def sample_bracket():
+    """64-team bracket usable as a pre-built bracket input."""
+    teams = []
+    for region in ["East", "West", "South", "Midwest"]:
+        for seed in range(1, 17):
+            teams.append(
+                Team(
+                    name=f"{region}{seed}",
+                    seed=seed,
+                    region=region,
+                    rating=1800 - seed * 30,
+                    conference=f"Conf{seed}",
+                )
+            )
+    return Bracket(teams)
+
+
+def test_simulate_round_probabilities_columns(mock_standings):
+    """Output DataFrame has the expected columns."""
+    df = simulate_round_probabilities(mock_standings, num_sims=10)
+    expected_cols = [
+        "Team", "Seed", "Region",
+        "First Round", "Second Round", "Sweet 16",
+        "Elite 8", "Final Four", "Championship",
+    ]
+    assert list(df.columns) == expected_cols
+
+
+def test_simulate_round_probabilities_row_count(mock_standings):
+    """One row per tournament team (64)."""
+    df = simulate_round_probabilities(mock_standings, num_sims=10)
+    assert len(df) == 64
+
+
+def test_simulate_round_probabilities_sorted_by_championship(mock_standings):
+    """Rows are sorted by championship probability descending."""
+    df = simulate_round_probabilities(mock_standings, num_sims=50)
+    champ_pcts = df["Championship"].str.rstrip("%").astype(float)
+    assert list(champ_pcts) == sorted(champ_pcts, reverse=True)
+
+
+def test_simulate_round_probabilities_first_round_monotone(mock_standings):
+    """First Round win % should be >= Sweet 16 % for every team (later rounds are harder)."""
+    df = simulate_round_probabilities(mock_standings, num_sims=50)
+    r32 = df["First Round"].str.rstrip("%").astype(float)
+    s16 = df["Sweet 16"].str.rstrip("%").astype(float)
+    assert (r32 >= s16).all()
+
+
+def test_simulate_round_probabilities_chalk_favors_low_seeds(mock_standings):
+    """With extreme chalk, 1-seeds should dominate championship probability."""
+    df = simulate_round_probabilities(mock_standings, num_sims=200, upset_factor=-1.0)
+    top_4 = df.head(4)
+    assert (top_4["Seed"] == 1).all()
+
+
+def test_simulate_round_probabilities_bracket_mode(sample_bracket):
+    """Passing a pre-built Bracket directly works the same as standings mode."""
+    df = simulate_round_probabilities(bracket=sample_bracket, num_sims=20)
+    assert len(df) == 64
+    expected_cols = [
+        "Team", "Seed", "Region",
+        "First Round", "Second Round", "Sweet 16",
+        "Elite 8", "Final Four", "Championship",
+    ]
+    assert list(df.columns) == expected_cols
+
+
+def test_simulate_round_probabilities_bracket_teams_match(sample_bracket):
+    """Team names in output match the teams in the supplied bracket."""
+    df = simulate_round_probabilities(bracket=sample_bracket, num_sims=10)
+    expected_names = {t.name for t in sample_bracket.teams}
+    assert set(df["Team"]) == expected_names
+
+
+def test_simulate_round_probabilities_bracket_ignores_standings(mock_standings, sample_bracket):
+    """When bracket is supplied, standings are ignored (team sets differ)."""
+    df_bracket = simulate_round_probabilities(bracket=sample_bracket, num_sims=10)
+    df_standings = simulate_round_probabilities(mock_standings, num_sims=10)
+    # The two sources have completely different team names
+    assert set(df_bracket["Team"]).isdisjoint(set(df_standings["Team"]))
