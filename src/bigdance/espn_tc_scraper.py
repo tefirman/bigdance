@@ -16,7 +16,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -328,7 +328,7 @@ class ESPNScraper(BaseScraper):
                 if cache_key and self.cache_dir:
                     self._cache_response(cache_key, url, html_content)
 
-                return html_content
+                return cast(str, html_content)
             else:
                 # Pagination mode
                 all_pages_content = {}
