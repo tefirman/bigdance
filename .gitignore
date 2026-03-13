@@ -31,6 +31,9 @@ cookies.txt
 test_cache/
 notes/
 
+# Streamlit secrets (never commit)
+**/.streamlit/secrets.toml
+
 # Generated simulation output
 src/bigdance/bracket_analysis_*/
 *SimResults.csv

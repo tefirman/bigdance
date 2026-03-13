@@ -5,6 +5,29 @@ from bigdance.cbb_brackets import Bracket, Team, Game, Pool
 from bigdance.wn_cbb_scraper import elo_prob
 
 st.set_page_config(page_title="bigdance bracket pool", layout="wide")
+
+# ---------------------------------------------------------------------------
+# Password gate
+# ---------------------------------------------------------------------------
+
+def check_password() -> bool:
+    if st.session_state.get("authenticated"):
+        return True
+    _, col, _ = st.columns([1, 1, 1])
+    with col:
+        st.title("March Madness Bracket Pool")
+        pwd = st.text_input("Password", type="password", key="pwd_input")
+        if pwd:
+            if pwd == st.secrets.get("password", ""):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    return False
+
+if not check_password():
+    st.stop()
+
 st.title("March Madness Bracket Pool Simulator")
 
 # ---------------------------------------------------------------------------
