@@ -37,6 +37,9 @@ bracket: Bracket = st.session_state.bracket
 if "picks" not in st.session_state:
     st.session_state.picks = {r: {} for r in range(6)}
 
+if "reset_count" not in st.session_state:
+    st.session_state.reset_count = 0
+
 picks: dict[int, dict[int, Team]] = st.session_state.picks
 
 
@@ -173,7 +176,8 @@ def render_matchup(round_idx: int, game_idx: int, team1: Team | None, team2: Tea
         # Default to the better seed (lower seed number)
         current_label = label1 if team1.seed <= team2.seed else label2
 
-    key = f"pick_r{round_idx}_g{game_idx}"
+    rc = st.session_state.reset_count
+    key = f"pick_r{round_idx}_g{game_idx}_v{rc}"
     choice = st.radio(
         label=key,
         options=[label1, label2],
@@ -199,6 +203,7 @@ with st.sidebar:
     st.divider()
     if st.button("Reset bracket", width="stretch"):
         st.session_state.picks = {r: {} for r in range(6)}
+        st.session_state.reset_count += 1
         st.rerun()
 
 # ---------------------------------------------------------------------------
