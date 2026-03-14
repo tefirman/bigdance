@@ -1,10 +1,35 @@
 import streamlit as st
 from collections import defaultdict
+from pathlib import Path
+import pandas as pd
 from bigdance import Standings, create_teams_from_standings, simulate_round_probabilities
 from bigdance.cbb_brackets import Bracket, Team, Game, Pool
 from bigdance.wn_cbb_scraper import elo_prob
 
 st.set_page_config(page_title="bigdance bracket pool", layout="wide")
+
+# ---------------------------------------------------------------------------
+# Password gate
+# ---------------------------------------------------------------------------
+
+def check_password() -> bool:
+    if st.session_state.get("authenticated"):
+        return True
+    _, col, _ = st.columns([1, 1, 1])
+    with col:
+        st.title("March Madness Bracket Pool")
+        pwd = st.text_input("Password", type="password", key="pwd_input")
+        if pwd:
+            if pwd == st.secrets.get("password", ""):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    return False
+
+if not check_password():
+    st.stop()
+
 st.title("March Madness Bracket Pool Simulator")
 
 # ---------------------------------------------------------------------------
@@ -197,7 +222,7 @@ def render_matchup(round_idx: int, game_idx: int, team1: Team | None, team2: Tea
 
 with st.sidebar:
     st.header("Pool Settings")
-    pool_size = st.selectbox("Pool size (# of entries)", options=list(range(2, 51)), index=8)
+    pool_size = st.selectbox("Pool size (# of entries)", options=[5, 10, 15, 20, 30, 50], index=1)
     num_sims = st.selectbox("Simulations", options=[500, 1000, 2500, 5000], index=1)
     simulate_btn = st.button("Simulate", type="primary", width="stretch")
     st.divider()
@@ -223,7 +248,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_bracket, tab_results, tab_probs = st.tabs(["🏀  Pick Your Bracket", "📊  Results", "📈  Team Probabilities"])
+tab_bracket, tab_results, tab_strategy, tab_probs = st.tabs(["🏀  Pick Your Bracket", "📊  Sim Results", "🎯  Upset Strategy", "📈  Team Probabilities"])
 
 # ---------------------------------------------------------------------------
 # Tab 1: bracket picker
@@ -362,7 +387,231 @@ with tab_results:
         st.dataframe(display, width="stretch")
 
 # ---------------------------------------------------------------------------
-# Tab 3: team round probabilities
+# Tab 3: upset strategy
+# ---------------------------------------------------------------------------
+
+ROUND_ORDER = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship"]
+
+
+def count_upsets_from_picks() -> dict[str, int]:
+    """Count underdogs per round using the same seed-threshold definition as BracketAnalysis.
+
+    Mirrors cbb_brackets.Bracket.is_underdog():
+        First Round  — seed > 8  (9–16 are underdogs)
+        Second Round — seed > 4  (5–16 are underdogs)
+        Sweet 16     — seed > 2  (3–16 are underdogs)
+        Elite 8+     — seed > 1  (2–16 are underdogs)
+    """
+    seed_thresholds = {
+        "First Round": 8,
+        "Second Round": 4,
+        "Sweet 16": 2,
+        "Elite 8": 1,
+        "Final Four": 1,
+        "Championship": 1,
+    }
+    round_name_map = {
+        0: "First Round",
+        1: "Second Round",
+        2: "Sweet 16",
+        3: "Elite 8",
+        4: "Final Four",
+        5: "Championship",
+    }
+    upset_counts: dict[str, int] = {r: 0 for r in ROUND_ORDER}
+
+    for rnd in range(6):
+        round_name = round_name_map[rnd]
+        threshold = seed_thresholds[round_name]
+        for winner in picks[rnd].values():
+            if winner is not None and winner.seed > threshold:
+                upset_counts[round_name] += 1
+
+    return upset_counts
+
+
+def load_upset_strategy(pool_size: int) -> pd.DataFrame | None:
+    strategy_path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "optimal_upset_strategy.csv"
+    if not strategy_path.exists():
+        return None
+    return pd.read_csv(strategy_path)
+
+
+def load_log_prob_strategy(pool_size: int) -> pd.DataFrame | None:
+    path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "log_prob_strategy.csv"
+    if not path.exists():
+        return None
+    return pd.read_csv(path)
+
+
+def load_common_underdogs(pool_size: int) -> pd.DataFrame | None:
+    path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "common_underdogs.csv"
+    if not path.exists():
+        return None
+    df = pd.read_csv(path)
+    if df.empty:
+        return df
+    # Pivot from long (one row per team×round) to wide (one row per team, one col per round)
+    rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
+    pivot = df.pivot_table(index=["seed", "team"], columns="advanced_through", values="frequency", aggfunc="first")
+    pivot = pivot.reindex(columns=[r for r in rounds if r in pivot.columns])
+    pivot.columns = [c for c in pivot.columns]
+    pivot = pivot.reset_index()
+    # Leave frequencies as floats (NaN for missing); format via column_config in the display layer
+    pivot = pivot.rename(columns={"seed": "Seed", "team": "Team"})
+    # Sort by First Round frequency desc (most common underdogs first), then by seed
+    sort_col = next((r for r in rounds if r in pivot.columns), None)
+    if sort_col:
+        pivot = pivot.sort_values(sort_col, ascending=False, na_position="last").reset_index(drop=True)
+    return pivot
+
+
+def compute_madness_scores() -> dict[str, float]:
+    """Compute Madness Score (negative log probability) per round from current picks.
+
+    Builds a temporary bracket from current picks and delegates to
+    Bracket.calculate_log_probability() from the bigdance package.
+    Higher score = more surprising/upset-heavy picks in that round.
+    """
+    tmp = create_teams_from_standings(load_standings())
+    tmp.simulate_tournament(fixed_winners=build_fixed_winners())
+    tmp.calculate_log_probability()
+    return tmp.log_probability_by_round
+
+
+with tab_strategy:
+    strategy_df = load_upset_strategy(pool_size)
+    if strategy_df is None:
+        st.info(
+            f"No upset strategy data found for pool size {pool_size}. "
+            "Run `python app/generate_upset_analysis.py` to generate it."
+        )
+    else:
+        num_pools_used = int(strategy_df["num_pools"].iloc[0]) if "num_pools" in strategy_df.columns else "?"
+        st.caption(
+            f"Optimal upset counts per round for a {pool_size}-person pool, "
+            f"based on {num_pools_used} simulated pools. Pick counts update live as you fill in your bracket."
+        )
+
+        def _z_to_color(z: float) -> str:
+            """Interpolate light-green→light-yellow→light-red based on z-score distance from mean.
+            z=0 → light green, z=0.5 → light yellow, z>=1 → light red.
+            """
+            z = min(abs(z), 1.0)
+            if z <= 0.5:
+                # #90ee90 (light green) → #ffff99 (light yellow)
+                t = z / 0.5
+                r = int(144 + t * (255 - 144))
+                g = int(238 + t * (255 - 238))
+                b = int(144 - t * 144)
+            else:
+                # #ffff99 (light yellow) → #ff9999 (light red)
+                t = (z - 0.5) / 0.5
+                r = 255
+                g = int(255 - t * (255 - 153))
+                b = int(153 - t * 153)
+            return f"background-color: rgb({r},{g},{b}); color: #222"
+
+        user_upsets = count_upsets_from_picks()
+
+        rows = []
+        z_scores_upsets = []
+        for _, row in strategy_df.iterrows():
+            rnd = row["round"]
+            if rnd == "Total Upsets":
+                continue
+            mean_val = row["mean_upsets"] if pd.notna(row.get("mean_upsets")) else None
+            std_val = row["std_upsets"] if pd.notna(row.get("std_upsets")) else None
+            mean_str = f"{mean_val:.1f}" if mean_val is not None else "—"
+            std_str = f"{std_val:.1f}" if std_val is not None else "—"
+            your_count = user_upsets.get(rnd, 0)
+            if mean_val is not None and std_val is not None and std_val > 0:
+                z = (your_count - mean_val) / std_val
+                direction = "—" if abs(z) < 0.1 else ("↑ too bold" if z > 0 else "↓ too chalk")
+            else:
+                z = 0.0
+                direction = "—"
+            z_scores_upsets.append(z)
+            rows.append({
+                "Round": rnd,
+                "Your Upsets": your_count,
+                "Winners Avg": mean_str,
+                "Winners Std": std_str,
+                "Direction": direction,
+            })
+
+        display_df = pd.DataFrame(rows)
+
+        def _color_col(z_scores: list[float], col: str):
+            def _styler(s):
+                return [_z_to_color(z) for z in z_scores]
+            return _styler
+
+        styled = display_df.style.apply(_color_col(z_scores_upsets, "Your Upsets"), subset=["Your Upsets"])
+        st.dataframe(styled, width="stretch", hide_index=True)
+
+        st.markdown("#### Madness Score by Round")
+        st.caption(
+            "Negative log probability of your picks — higher = more surprising. "
+            "Compare your score per round to what winners typically look like."
+        )
+        log_prob_df = load_log_prob_strategy(pool_size)
+        if log_prob_df is None:
+            st.info("Run `python app/generate_upset_analysis.py` to generate Madness Score data.")
+        else:
+            madness_scores = compute_madness_scores()
+            madness_rows = []
+            z_scores_madness = []
+            for _, row in log_prob_df.iterrows():
+                rnd = row["round"]
+                mean_val = row["mean_madness"] if pd.notna(row.get("mean_madness")) else None
+                std_val = row["std_madness"] if pd.notna(row.get("std_madness")) else None
+                your_score = madness_scores.get(rnd, 0.0)
+                mean_str = f"{mean_val:.2f}" if mean_val is not None else "—"
+                std_str = f"{std_val:.2f}" if std_val is not None else "—"
+                if mean_val is not None and std_val is not None and std_val > 0:
+                    z = (your_score - mean_val) / std_val
+                    direction = "—" if abs(z) < 0.1 else ("↑ too bold" if z > 0 else "↓ too chalk")
+                else:
+                    z = 0.0
+                    direction = "—"
+                z_scores_madness.append(z)
+                madness_rows.append({
+                    "Round": rnd,
+                    "Your Madness": f"{your_score:.2f}",
+                    "Winners Avg": mean_str,
+                    "Winners Std": std_str,
+                    "Direction": direction,
+                })
+
+            madness_display = pd.DataFrame(madness_rows)
+            styled_madness = madness_display.style.apply(
+                _color_col(z_scores_madness, "Your Madness"), subset=["Your Madness"]
+            )
+            st.dataframe(styled_madness, width="stretch", hide_index=True)
+
+        st.markdown("#### Common Underdogs in Winning Brackets")
+        st.caption("How often each underdog team appears in winning pool brackets, by the round they upset through.")
+        underdogs_df = load_common_underdogs(pool_size)
+        if underdogs_df is None:
+            st.info("Run `python app/generate_upset_analysis.py` to generate common underdogs data.")
+        elif underdogs_df.empty:
+            st.info("No common underdog data available for this pool size.")
+        else:
+            round_cols = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
+            display_underdogs = underdogs_df.copy()
+            for rnd in round_cols:
+                if rnd in display_underdogs.columns:
+                    display_underdogs[rnd] = display_underdogs[rnd] * 100
+            col_config = {
+                rnd: st.column_config.NumberColumn(rnd, format="%.0f%%", min_value=0, max_value=100)
+                for rnd in round_cols
+                if rnd in display_underdogs.columns
+            }
+            st.dataframe(display_underdogs, column_config=col_config, width="stretch", hide_index=True)
+
+# ---------------------------------------------------------------------------
+# Tab 4: team round probabilities
 # ---------------------------------------------------------------------------
 
 def american_odds(p: float) -> str:
