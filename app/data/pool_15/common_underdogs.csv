@@ -1,0 +1,58 @@
+advanced_through,to_reach,seed,team,frequency
+First Round,Second Round,10,McNeese,0.25
+First Round,Second Round,10,Dayton,0.2
+First Round,Second Round,10,San Diego State,0.2
+First Round,Second Round,9,Kentucky,0.15
+First Round,Second Round,10,Miami (OH),0.15
+First Round,Second Round,11,South Florida,0.15
+First Round,Second Round,9,Villanova,0.15
+First Round,Second Round,12,Oklahoma,0.1
+First Round,Second Round,15,Furman,0.1
+First Round,Second Round,13,UNCW,0.1
+First Round,Second Round,14,Wright State,0.1
+First Round,Second Round,15,Tennessee State,0.1
+First Round,Second Round,11,Georgia,0.1
+First Round,Second Round,13,North Dakota State,0.05
+First Round,Second Round,14,Navy,0.05
+First Round,Second Round,9,Tennessee,0.05
+First Round,Second Round,14,Merrimack,0.05
+First Round,Second Round,11,High Point,0.05
+First Round,Second Round,11,Saint Louis,0.05
+First Round,Second Round,15,Queens,0.05
+Second Round,Sweet 16,6,North Carolina,0.25
+Second Round,Sweet 16,5,Saint Mary's College,0.15
+Second Round,Sweet 16,5,Alabama,0.15
+Second Round,Sweet 16,7,Utah State,0.15
+Second Round,Sweet 16,6,Texas Tech,0.15
+Second Round,Sweet 16,7,Ohio State,0.1
+Second Round,Sweet 16,5,Illinois,0.1
+Second Round,Sweet 16,6,VCU,0.1
+Second Round,Sweet 16,6,Nebraska,0.1
+Second Round,Sweet 16,8,Clemson,0.05
+Second Round,Sweet 16,15,Furman,0.05
+Second Round,Sweet 16,5,Kansas,0.05
+Second Round,Sweet 16,9,Tennessee,0.05
+Second Round,Sweet 16,8,BYU,0.05
+Second Round,Sweet 16,9,Kentucky,0.05
+Second Round,Sweet 16,15,Tennessee State,0.05
+Second Round,Sweet 16,10,McNeese,0.05
+Second Round,Sweet 16,10,Dayton,0.05
+Sweet 16,Elite 8,3,Iowa State,0.25
+Sweet 16,Elite 8,3,Gonzaga,0.2
+Sweet 16,Elite 8,4,UCLA,0.15
+Sweet 16,Elite 8,3,Vanderbilt,0.15
+Sweet 16,Elite 8,3,Arkansas,0.1
+Sweet 16,Elite 8,6,Texas Tech,0.1
+Sweet 16,Elite 8,4,Purdue,0.1
+Sweet 16,Elite 8,5,Illinois,0.05
+Sweet 16,Elite 8,5,Saint Mary's College,0.05
+Sweet 16,Elite 8,4,Michigan State,0.05
+Elite 8,Final Four,2,Virginia,0.15
+Elite 8,Final Four,4,UCLA,0.1
+Elite 8,Final Four,2,Connecticut,0.1
+Elite 8,Final Four,2,Florida,0.05
+Elite 8,Final Four,3,Vanderbilt,0.05
+Elite 8,Final Four,2,Saint John's,0.05
+Elite 8,Final Four,3,Gonzaga,0.05
+Elite 8,Final Four,6,Texas Tech,0.05
+Final Four,Championship,3,Vanderbilt,0.05
