@@ -1,0 +1,93 @@
+name: Generate Upset Analysis Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      use_espn:
+        description: "Use real ESPN bracket (run after Selection Sunday)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pool_size: [5, 10, 15, 20, 30, 50]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run analysis for pool size ${{ matrix.pool_size }}
+        run: |
+          ARGS="--pool_size ${{ matrix.pool_size }}"
+          if [ "${{ inputs.use_espn }}" = "true" ]; then
+            ARGS="$ARGS --use_espn"
+          fi
+          python app/generate_upset_analysis.py $ARGS
+
+      - name: Upload pool_${{ matrix.pool_size }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pool-${{ matrix.pool_size }}
+          path: app/data/pool_${{ matrix.pool_size }}/
+
+  commit:
+    needs: generate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: app/data/
+          merge-multiple: false
+
+      - name: Move artifacts into correct pool subdirectories
+        run: |
+          for pool_size in 5 10 15 20 30 50; do
+            src="app/data/pool-${pool_size}"
+            dst="app/data/pool_${pool_size}"
+            if [ -d "$src" ]; then
+              mkdir -p "$dst"
+              cp -r "$src"/. "$dst/"
+              rm -rf "$src"
+            fi
+          done
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/data/
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            ESPN_FLAG="${{ inputs.use_espn }}"
+            if [ "$ESPN_FLAG" = "true" ]; then
+              MSG="Update upset analysis data from ESPN bracket"
+            else
+              MSG="Update upset analysis data from Warren Nolan standings"
+            fi
+            git commit -m "$MSG [skip ci]"
+            git push
+          fi

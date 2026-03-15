@@ -27,13 +27,13 @@ BASE_OBSERVATIONS = 1000
 DATA_DIR = Path(__file__).parent / "data"
 
 
-def run(use_espn: bool = False) -> None:
+def run(use_espn: bool = False, pool_sizes: list[int] | None = None) -> None:
     source = "ESPN bracket" if use_espn else "Warren Nolan standings"
     print(f"Using {source} as tournament reference.\n")
 
     standings = None if use_espn else Standings()
 
-    for pool_size in POOL_SIZES:
+    for pool_size in (pool_sizes or POOL_SIZES):
         num_pools = max(20, BASE_OBSERVATIONS // pool_size)
         print(f"=== Pool size {pool_size} ({num_pools} pools) ===")
         output_dir = DATA_DIR / f"pool_{pool_size}"
@@ -121,5 +121,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Use real ESPN bracket (run after Selection Sunday).",
     )
+    parser.add_argument(
+        "--pool_size",
+        type=int,
+        default=None,
+        help="Run for a single pool size only (e.g. --pool_size 10). Defaults to all pool sizes.",
+    )
     args = parser.parse_args()
-    run(use_espn=args.use_espn)
+    pool_sizes = [args.pool_size] if args.pool_size is not None else None
+    run(use_espn=args.use_espn, pool_sizes=pool_sizes)
