@@ -8,10 +8,10 @@
 @Desc    :   Class-based implementation for extracting bracket data from ESPN Tournament Challenge
 """
 
+import argparse
 import copy
 import json
 import logging
-import optparse
 import sys
 import time
 from datetime import datetime
@@ -1107,76 +1107,73 @@ class GameImportanceAnalyzer:
 
 def main(argv=None):
     """Command line interface for the module"""
-    parser = optparse.OptionParser()
-    parser.add_option(
-        "--women",
-        action="store_true",
-        dest="women",
-        help="whether to pull stats for the NCAAW instead of NCAAM",
+    parser = argparse.ArgumentParser(description="Simulate ESPN Tournament Challenge bracket pool")
+    parser.add_argument(
+        "--gender",
+        choices=["men", "women"],
+        default="men",
+        help="Which tournament to use (default: men)",
     )
-    parser.add_option(
+    parser.add_argument(
         "--pool_id",
-        action="store",
-        dest="pool_id",
+        type=str,
+        default=None,
         help="ESPN group ID of the bracket pool of interest",
     )
-    parser.add_option(
+    parser.add_argument(
         "--as_of",
-        action="store",
-        dest="as_of",
+        type=str,
+        default=None,
         help='name of the round to simulate from ("First Round", '
         + '"Second Round", "Sweet 16", "Elite 8", "Final Four", "Championship")',
     )
-    parser.add_option(
+    parser.add_argument(
         "--importance",
         action="store_true",
-        dest="importance",
         help="whether to assess the importance of each team winning in the current round",
     )
-    parser.add_option(
+    parser.add_argument(
         "--my_bracket",
-        action="store",
-        dest="my_bracket",
+        type=str,
+        default=None,
         help="name of the specific bracket to focus on in importance analysis",
     )
-    parser.add_option(
+    parser.add_argument(
         "--cache_dir",
-        action="store",
-        dest="cache_dir",
+        type=str,
         default=".cache",
         help="location of html cache directory",
     )
-    parser.add_option(
+    parser.add_argument(
         "--team_probs",
         action="store_true",
-        dest="team_probs",
         help="show each team's probability of reaching each round instead of pool standings",
     )
-    parser.add_option(
+    parser.add_argument(
         "--verbose",
         action="store_true",
-        dest="verbose",
         help="show all debugging messages",
     )
-    options = parser.parse_args(argv)[0]
+    args = parser.parse_args(argv)
+    women = args.gender == "women"
 
     # Set up logging
     logging.basicConfig(
-        level=logging.DEBUG if options.verbose else logging.INFO,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
     # Create pool manager
-    pool_manager = ESPNPool(women=options.women, cache_dir=options.cache_dir)
+    pool_manager = ESPNPool(women=women, cache_dir=args.cache_dir)
 
     # Load actual bracket and pool entries
-    pool_sim = pool_manager.create_simulation_pool(options.pool_id)
+    pool_sim = pool_manager.create_simulation_pool(args.pool_id)
     if not pool_sim:
         logging.error("Failed to create simulation pool")
         return 1
 
     # Show team round probabilities if requested (skips pool simulation)
-    if options.team_probs:
+    if args.team_probs:
         from bigdance.bigdance_integration import simulate_round_probabilities
 
         df = simulate_round_probabilities(bracket=pool_sim.actual_results, num_sims=1000)
@@ -1186,11 +1183,11 @@ def main(argv=None):
         return 0
 
     # Creating copy of pool simulator if importance calculation is requested
-    if options.importance:
+    if args.importance:
         importance_sim = copy.deepcopy(pool_sim)
 
     # If specified, erasing results from "as_of" round and beyond
-    if options.as_of:
+    if args.as_of:
         round_names = [
             "First Round",
             "Second Round",
@@ -1199,17 +1196,17 @@ def main(argv=None):
             "Final Four",
             "Championship",
         ]
-        if options.as_of not in round_names:
+        if args.as_of not in round_names:
             logger.warning(
                 "Don't recognize the round name provided for as_of, simulating from current state..."
             )
-            if options.as_of in ["First", "Second", "Sweet", "Elite", "Final"]:
+            if args.as_of in ["First", "Second", "Sweet", "Elite", "Final"]:
                 logger.warning(
                     "Hot tip: make sure to put multi-word round names in quotes, "
                     'i.e. `--as_of "Second Round"` (thanks bash)'
                 )
         else:
-            for round_name in round_names[round_names.index(options.as_of) :]:
+            for round_name in round_names[round_names.index(args.as_of) :]:
                 pool_sim.actual_results.results[round_name] = []
             if "Champion" in pool_sim.actual_results.results:
                 del pool_sim.actual_results.results["Champion"]
@@ -1228,10 +1225,10 @@ def main(argv=None):
     print()
 
     # Analyze game importance if requested
-    if options.importance:
+    if args.importance:
         analyzer = GameImportanceAnalyzer(importance_sim)
-        importance = analyzer.analyze_win_importance(options.as_of, 1000)
-        analyzer.print_importance_summary(importance, options.my_bracket)
+        importance = analyzer.analyze_win_importance(args.as_of, 1000)
+        analyzer.print_importance_summary(importance, args.my_bracket)
 
     return 0
 

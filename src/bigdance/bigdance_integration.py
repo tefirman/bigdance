@@ -374,9 +374,10 @@ def main(argv=None):
         help="Upset factor for all games (-1.0 = chalk, 1.0 = coin flip, ~0.25 matches history)",
     )
     parser.add_argument(
-        "--women",
-        action="store_true",
-        help="Use women's basketball data instead of men's",
+        "--gender",
+        choices=["men", "women"],
+        default="men",
+        help="Which tournament to use (default: men)",
     )
     parser.add_argument(
         "--conference", type=str, default=None, help="Filter by specific conference"
@@ -384,15 +385,16 @@ def main(argv=None):
     parser.add_argument("--top", type=int, default=None, help="Show only the top N teams")
 
     args = parser.parse_args(argv)
+    women = args.gender == "women"
 
-    standings = Standings(conference=args.conference, women=args.women)
+    standings = Standings(conference=args.conference, women=women)
 
     print(f"\nSimulating {args.num_sims} tournaments (upset_factor={args.upset_factor})...\n")
     df = simulate_round_probabilities(
         standings=standings,
         num_sims=args.num_sims,
         upset_factor=args.upset_factor,
-        women=args.women,
+        women=women,
     )
 
     if args.top is not None:

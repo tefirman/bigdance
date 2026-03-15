@@ -16,6 +16,14 @@ on:
         required: false
         default: "1000"
         type: string
+      gender:
+        description: "Which tournament to generate data for"
+        required: false
+        default: "men"
+        type: choice
+        options:
+          - "men"
+          - "women"
 
 permissions:
   contents: write
@@ -45,7 +53,7 @@ jobs:
 
       - name: Run analysis for pool size ${{ matrix.pool_size }}
         run: |
-          ARGS="--pool_size ${{ matrix.pool_size }} --base_observations ${{ inputs.base_observations }}"
+          ARGS="--pool_size ${{ matrix.pool_size }} --base_observations ${{ inputs.base_observations }} --gender ${{ inputs.gender }}"
           if [ "${{ inputs.use_espn }}" = "true" ]; then
             ARGS="$ARGS --use_espn"
           fi
@@ -54,8 +62,8 @@ jobs:
       - name: Upload pool_${{ matrix.pool_size }} artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pool-${{ matrix.pool_size }}
-          path: app/data/pool_${{ matrix.pool_size }}/
+          name: ${{ inputs.gender }}-pool-${{ matrix.pool_size }}
+          path: app/data/${{ inputs.gender }}/pool_${{ matrix.pool_size }}/
 
   commit:
     needs: generate
@@ -72,9 +80,10 @@ jobs:
 
       - name: Move artifacts into correct pool subdirectories
         run: |
+          GENDER="${{ inputs.gender }}"
           for pool_size in 5 10 15 20 30 50; do
-            src="app/data/pool-${pool_size}"
-            dst="app/data/pool_${pool_size}"
+            src="app/data/${GENDER}-pool-${pool_size}"
+            dst="app/data/${GENDER}/pool_${pool_size}"
             if [ -d "$src" ]; then
               mkdir -p "$dst"
               cp -r "$src"/. "$dst/"
@@ -90,11 +99,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
+            GENDER="${{ inputs.gender }}"
             ESPN_FLAG="${{ inputs.use_espn }}"
             if [ "$ESPN_FLAG" = "true" ]; then
-              MSG="Update upset analysis data from ESPN bracket"
+              MSG="Update ${GENDER} upset analysis data from ESPN bracket"
             else
-              MSG="Update upset analysis data from Warren Nolan standings"
+              MSG="Update ${GENDER} upset analysis data from Warren Nolan standings"
             fi
             git commit -m "$MSG [skip ci]"
             git push

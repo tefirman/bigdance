@@ -79,6 +79,14 @@ GAME #2: Duke vs Houston (Region: EAST)
 === END OF SUMMARY ===
 ```
 
+## Interactive Demo
+
+A live web app is available at **[bigdance-bracket.streamlit.app](https://bigdance-bracket.streamlit.app)** — no installation required. It lets you pick your bracket, configure your pool size, and run simulations to estimate your win probability, all from the browser.
+
+The app supports both the men's and women's NCAA tournaments and includes an Upset Strategy tab with pre-computed analysis of winning bracket patterns by pool size.
+
+See [app/README.md](app/README.md) for details on running the app locally or deploying your own instance.
+
 ## Key Features
 
 ### Real-time Basketball Data
@@ -313,6 +321,9 @@ bigdance standings
 # Show each team's probability of reaching each round (hypothetical bracket)
 bigdance simulate --num_sims 1000 --upset_factor 0.25 --top 20
 
+# Women's tournament
+bigdance simulate --gender women --num_sims 1000
+
 # Analyze a bracket pool from ESPN
 bigdance espn --pool_id 1234567
 
@@ -324,6 +335,9 @@ bigdance espn --pool_id 1234567 --importance
 
 # Run bracket analysis with ESPN data
 bigdance analyze --use_espn --num_pools 100
+
+# Women's tournament analysis
+bigdance analyze --gender women --num_pools 100
 ```
 
 Use `bigdance <command> --help` for full options on each subcommand. The legacy `python -m bigdance.<module>` invocations also still work.
