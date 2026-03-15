@@ -264,8 +264,15 @@ with tab_bracket:
             with col:
                 st.markdown(f"**{round_label}**")
                 block_size = 8 // (2 ** round_idx)
+                # Spacers to vertically center games relative to their feeder games.
+                # Before the first game: 2^round_idx - 1 blank lines.
+                # Between games: 2^(round_idx+1) - 1 blank lines.
+                leading = 6 * (2 ** round_idx - 1)
+                between = 6 * (2 ** (round_idx + 1) - 1)
 
                 for local_idx in range(block_size):
+                    for _ in range(leading if local_idx == 0 else between):
+                        st.write("")
                     if round_idx == 0:
                         bracket_idx, game = region_r0_games[region][local_idx]
                         render_matchup(0, bracket_idx, game.team1, game.team2)
