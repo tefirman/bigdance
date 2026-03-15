@@ -37,25 +37,44 @@ st.title("March Madness Bracket Pool Simulator")
 # ---------------------------------------------------------------------------
 
 @st.cache_resource
-def load_standings() -> Standings:
-    return Standings()
+def load_standings(women: bool = False) -> Standings:
+    return Standings(women=women)
 
 
 @st.cache_resource
-def load_bracket() -> Bracket:
-    return create_teams_from_standings(load_standings())
+def load_bracket(women: bool = False) -> Bracket:
+    return create_teams_from_standings(load_standings(women=women))
 
 
 @st.cache_resource
-def load_round_probabilities():
-    return simulate_round_probabilities(standings=load_standings(), num_sims=1000)
+def load_round_probabilities(women: bool = False):
+    return simulate_round_probabilities(standings=load_standings(women=women), num_sims=1000)
 
 
-if "bracket" not in st.session_state:
-    with st.spinner("Loading bracket from Warren Nolan rankings..."):
-        st.session_state.bracket = load_bracket()
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
 
-bracket: Bracket = st.session_state.bracket
+with st.sidebar:
+    st.header("Pool Settings")
+    gender = st.radio("Tournament", options=["Men's", "Women's"], horizontal=True)
+    women = gender == "Women's"
+    gender_key = "women" if women else "men"
+    pool_size = st.selectbox("Pool size (# of entries)", options=[5, 10, 15, 20, 30, 50], index=1)
+    num_sims = st.selectbox("Simulations", options=[500, 1000, 2500, 5000], index=1)
+    simulate_btn = st.button("Simulate", type="primary", width="stretch")
+    st.divider()
+    if st.button("Reset bracket", width="stretch"):
+        st.session_state.picks = {r: {} for r in range(6)}
+        st.session_state.reset_count += 1
+        st.rerun()
+
+bracket_key = f"bracket_{gender}"
+if bracket_key not in st.session_state:
+    with st.spinner(f"Loading {gender} bracket from Warren Nolan rankings..."):
+        st.session_state[bracket_key] = load_bracket(women=women)
+
+bracket: Bracket = st.session_state[bracket_key]
 
 # picks[round_idx][game_idx] = Team
 # round 0 = Round of 64 (32 games), ..., round 5 = Championship (1 game)
@@ -75,7 +94,7 @@ def better_seed(t1: Team, t2: Team) -> Team:
 def seed_defaults() -> None:
     """Pre-populate all missing picks with the better-seeded team so every
     widget has a value on the very first page load, before any radio fires."""
-    _bracket: Bracket = st.session_state.bracket
+    _bracket: Bracket = bracket
     _region_r0: dict = defaultdict(list)
     for _i, _g in enumerate(_bracket.games):
         _region_r0[_g.region].append((_i, _g))
@@ -217,21 +236,6 @@ def render_matchup(round_idx: int, game_idx: int, team1: Team | None, team2: Tea
 
 
 # ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
-
-with st.sidebar:
-    st.header("Pool Settings")
-    pool_size = st.selectbox("Pool size (# of entries)", options=[5, 10, 15, 20, 30, 50], index=1)
-    num_sims = st.selectbox("Simulations", options=[500, 1000, 2500, 5000], index=1)
-    simulate_btn = st.button("Simulate", type="primary", width="stretch")
-    st.divider()
-    if st.button("Reset bracket", width="stretch"):
-        st.session_state.picks = {r: {} for r in range(6)}
-        st.session_state.reset_count += 1
-        st.rerun()
-
-# ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
 
@@ -351,7 +355,7 @@ if simulate_btn:
         with st.spinner(f"Running {num_sims:,} simulations with {pool_size} entries..."):
             fixed_winners = build_fixed_winners()
 
-            standings = load_standings()
+            standings = load_standings(women=women)
             actual_bracket = create_teams_from_standings(standings)
             pool = Pool(actual_results=actual_bracket)
 
@@ -437,22 +441,22 @@ def count_upsets_from_picks() -> dict[str, int]:
     return upset_counts
 
 
-def load_upset_strategy(pool_size: int) -> pd.DataFrame | None:
-    strategy_path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "optimal_upset_strategy.csv"
+def load_upset_strategy(pool_size: int, gender: str = "men") -> pd.DataFrame | None:
+    strategy_path = Path(__file__).parent / "data" / gender / f"pool_{pool_size}" / "optimal_upset_strategy.csv"
     if not strategy_path.exists():
         return None
     return pd.read_csv(strategy_path)
 
 
-def load_log_prob_strategy(pool_size: int) -> pd.DataFrame | None:
-    path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "log_prob_strategy.csv"
+def load_log_prob_strategy(pool_size: int, gender: str = "men") -> pd.DataFrame | None:
+    path = Path(__file__).parent / "data" / gender / f"pool_{pool_size}" / "log_prob_strategy.csv"
     if not path.exists():
         return None
     return pd.read_csv(path)
 
 
-def load_common_underdogs(pool_size: int) -> pd.DataFrame | None:
-    path = Path(__file__).parent / "data" / f"pool_{pool_size}" / "common_underdogs.csv"
+def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame | None:
+    path = Path(__file__).parent / "data" / gender / f"pool_{pool_size}" / "common_underdogs.csv"
     if not path.exists():
         return None
     df = pd.read_csv(path)
@@ -473,21 +477,21 @@ def load_common_underdogs(pool_size: int) -> pd.DataFrame | None:
     return pivot
 
 
-def compute_madness_scores() -> dict[str, float]:
+def compute_madness_scores(women: bool = False) -> dict[str, float]:
     """Compute Madness Score (negative log probability) per round from current picks.
 
     Builds a temporary bracket from current picks and delegates to
     Bracket.calculate_log_probability() from the bigdance package.
     Higher score = more surprising/upset-heavy picks in that round.
     """
-    tmp = create_teams_from_standings(load_standings())
+    tmp = create_teams_from_standings(load_standings(women=women))
     tmp.simulate_tournament(fixed_winners=build_fixed_winners())
     tmp.calculate_log_probability()
     return tmp.log_probability_by_round
 
 
 with tab_strategy:
-    strategy_df = load_upset_strategy(pool_size)
+    strategy_df = load_upset_strategy(pool_size, gender=gender_key)
     if strategy_df is None:
         st.info(
             f"No upset strategy data found for pool size {pool_size}. "
@@ -562,11 +566,11 @@ with tab_strategy:
             "Negative log probability of your picks — higher = more surprising. "
             "Compare your score per round to what winners typically look like."
         )
-        log_prob_df = load_log_prob_strategy(pool_size)
+        log_prob_df = load_log_prob_strategy(pool_size, gender=gender_key)
         if log_prob_df is None:
             st.info("Run `python app/generate_upset_analysis.py` to generate Madness Score data.")
         else:
-            madness_scores = compute_madness_scores()
+            madness_scores = compute_madness_scores(women=women)
             madness_rows = []
             z_scores_madness = []
             for _, row in log_prob_df.iterrows():
@@ -599,7 +603,7 @@ with tab_strategy:
 
         st.markdown("#### Common Underdogs in Winning Brackets")
         st.caption("How often each underdog team appears in winning pool brackets, by the round they upset through.")
-        underdogs_df = load_common_underdogs(pool_size)
+        underdogs_df = load_common_underdogs(pool_size, gender=gender_key)
         if underdogs_df is None:
             st.info("Run `python app/generate_upset_analysis.py` to generate common underdogs data.")
         elif underdogs_df.empty:
@@ -634,7 +638,7 @@ def american_odds(p: float) -> str:
 with tab_probs:
     st.caption("Probability of each team reaching each round, based on 1,000 simulated tournaments using current Warren Nolan Elo ratings.")
     with st.spinner("Computing team probabilities..."):
-        probs_df = load_round_probabilities().copy()
+        probs_df = load_round_probabilities(women=women).copy()
     champ_pct = probs_df["Championship"].str.rstrip("%").astype(float) / 100
     probs_df["Championship Odds"] = champ_pct.apply(american_odds)
     st.dataframe(probs_df, width="stretch", hide_index=True)

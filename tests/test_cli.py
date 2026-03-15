@@ -80,8 +80,8 @@ def test_simulate_top_flag(mock_simulate_df, capsys):
     assert "TeamB" not in captured.out
 
 
-def test_simulate_women_flag():
-    """--women flag is forwarded to Standings and simulate_round_probabilities."""
+def test_simulate_gender_flag():
+    """--gender women is forwarded to Standings and simulate_round_probabilities."""
     with (
         patch("bigdance.bigdance_integration.Standings") as mock_standings_cls,
         patch(
@@ -101,7 +101,7 @@ def test_simulate_women_flag():
             ),
         ) as mock_fn,
     ):
-        main(["simulate", "--num_sims", "5", "--women"])
+        main(["simulate", "--num_sims", "5", "--gender", "women"])
 
     mock_standings_cls.assert_called_once_with(conference=None, women=True)
     _, kwargs = mock_fn.call_args

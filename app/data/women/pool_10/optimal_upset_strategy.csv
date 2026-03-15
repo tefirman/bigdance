@@ -1,0 +1,8 @@
+round,max_advantage_upsets,max_advantage,max_density_upsets,mode_upsets,mean_upsets,std_upsets,num_pools
+First Round,1.0,0.3,1.0,1.0,2.5,1.466287829861518,20
+Second Round,1.0,0.3333333333333333,1.0,1.0,1.25,0.9937303457175896,20
+Sweet 16,0.0,0.3944444444444445,0.0,0.0,0.9,0.9433981132056605,20
+Elite 8,0.0,0.5888888888888889,0.0,0.0,0.45,0.6689544080129827,20
+Final Four,,,,0.0,0.0,0.0,20
+Championship,,,,0.0,0.0,0.0,20
+Total Upsets,4.0,0.2,4.0,4.0,5.1,2.5865034312755126,20

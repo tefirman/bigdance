@@ -8,9 +8,9 @@
 @Desc    :   Elo ratings parser for the Warren Nolan college sports website (no affiliation)
 """
 
+import argparse
 import json
 import logging
-import optparse
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -481,71 +481,64 @@ def elo_prob(elo1: float, elo2: float, scale: float = 1.0, homefield: float = 10
 
 def main(argv=None):
     # Initializing command line inputs
-    parser = optparse.OptionParser()
-    parser.add_option(
+    parser = argparse.ArgumentParser(description="Pull Warren Nolan standings and matchups")
+    parser.add_argument(
         "--date",
-        action="store",
-        type="str",
-        dest="date",
-        default=datetime.now(),
+        type=str,
+        default=str(datetime.now()),
         help="date of interest",
     )
-    parser.add_option(
+    parser.add_argument(
         "--conference",
-        action="store",
-        type="str",
-        dest="conference",
+        type=str,
         default="All Games",
         help="conference of interest",
     )
-    parser.add_option(
-        "--women",
-        action="store_true",
-        dest="women",
-        help="whether to pull stats for the NCAAW instead of NCAAM",
+    parser.add_argument(
+        "--gender",
+        choices=["men", "women"],
+        default="men",
+        help="Which tournament to use (default: men)",
     )
-    parser.add_option(
+    parser.add_argument(
         "--output",
-        action="store",
-        type="str",
-        dest="output",
+        type=str,
+        default=None,
         help="where to save the Standings and Matchups data in the form of csv's",
     )
-    parser.add_option(
-        "--debug", action="store_true", dest="debug", help="prints debugging statements"
-    )
-    parser.add_option(
+    parser.add_argument("--debug", action="store_true", help="prints debugging statements")
+    parser.add_argument(
         "--cache_dir",
-        action="store",
-        type="str",
-        dest="cache_dir",
+        type=str,
+        default=None,
         help="location of html cache",
     )
-    options = parser.parse_args(argv)[0]
-    if options.debug:
+    args = parser.parse_args(argv)
+    women = args.gender == "women"
+    if args.debug:
         logging.basicConfig(level=logging.DEBUG)
-    options.date = pd.to_datetime(options.date)
-    season = (options.date + timedelta(days=90)).year
+    args.date = pd.to_datetime(args.date)
+    season = (args.date + timedelta(days=90)).year
     if season < 2021:
         print(
             "Sadly, elo ratings were not stored on Warren Nolan before 2021. Try again with a more recent date."
         )
     else:
         # Pulling requested Standings and printing results
-        s = Standings(season, options.conference, options.women, options.cache_dir)
+        s = Standings(season, args.conference, women, args.cache_dir)
         print(s.elo.to_string(index=False, na_rep=""))
 
         # Pulling requested Matchups for today and printing results
-        m = Matchups(options.date, options.conference, options.women, False, options.cache_dir)
+        m = Matchups(args.date, args.conference, women, False, args.cache_dir)
         if m.matchups.shape[0] > 0:
             print(m.matchups.to_string(index=False, na_rep=""))
         else:
-            print("No games were played on {}.".format(options.date.strftime("%B %d, %Y")))
+            print("No games were played on {}.".format(args.date.strftime("%B %d, %Y")))
 
         # Saving as csv's if requested
-        if options.output is not None:
-            s.to_csv("{}Standings_{}.csv".format(options.output, datetime.now().strftime("%m%d%y")))
-            m.to_csv("{}Matchups_{}.csv".format(options.output, datetime.now().strftime("%m%d%y")))
+        if args.output is not None:
+            s.to_csv("{}Standings_{}.csv".format(args.output, datetime.now().strftime("%m%d%y")))
+            m.to_csv("{}Matchups_{}.csv".format(args.output, datetime.now().strftime("%m%d%y")))
 
 
 if __name__ == "__main__":

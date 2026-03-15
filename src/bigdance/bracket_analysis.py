@@ -1975,9 +1975,10 @@ def main(argv=None):
             help="Number of entries per pool",
         )
         parser.add_argument(
-            "--women",
-            action="store_true",
-            help="Whether to use women's basketball data instead of men's",
+            "--gender",
+            choices=["men", "women"],
+            default="men",
+            help="Which tournament to use (default: men)",
         )
         parser.add_argument(
             "--output_dir",
@@ -1997,6 +1998,7 @@ def main(argv=None):
             help="Analyze picks from Sweet 16 onwards for Second Chance brackets",
         )
         args = parser.parse_args(argv)
+        women = args.gender == "women"
 
         # Set up logging
         log_level = logging.DEBUG if args.debug else logging.INFO
@@ -2005,7 +2007,7 @@ def main(argv=None):
         # Initialize standings (needed for ratings even when using ESPN bracket)
         try:
             logging.info("Retrieving current basketball standings...")
-            standings = Standings(women=args.women)
+            standings = Standings(women=women)
         except Exception as e:
             logging.error(f"Error retrieving standings: {str(e)}")
             print(
@@ -2014,7 +2016,7 @@ def main(argv=None):
             return 1
 
         # Set up output directory
-        gender = "women" if args.women else "men"
+        gender = args.gender
         bracket_source = "espn" if args.use_espn else "wn"
         second_chance = "_secondchance" if args.second_chance else ""
         output_dir = (
@@ -2035,7 +2037,7 @@ def main(argv=None):
             num_pools=args.num_pools,
             output_dir=output_dir,
             use_espn=args.use_espn,
-            women=args.women,
+            women=women,
             second_chance=args.second_chance,
         )
 

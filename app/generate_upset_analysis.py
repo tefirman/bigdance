@@ -7,11 +7,14 @@ with --use_espn to use the real bracket):
 
     # Pre-Selection Sunday (Warren Nolan hypothetical bracket):
     python app/generate_upset_analysis.py
+    python app/generate_upset_analysis.py --women
 
     # Post-Selection Sunday (real ESPN bracket):
     python app/generate_upset_analysis.py --use_espn
+    python app/generate_upset_analysis.py --use_espn --women
 
-Outputs one optimal_upset_strategy.csv per pool size under app/data/pool_{n}/.
+Outputs one optimal_upset_strategy.csv per pool size under
+app/data/men/pool_{n}/ or app/data/women/pool_{n}/.
 """
 
 import argparse
@@ -27,16 +30,17 @@ BASE_OBSERVATIONS = 1000
 DATA_DIR = Path(__file__).parent / "data"
 
 
-def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observations: int = BASE_OBSERVATIONS) -> None:
+def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observations: int = BASE_OBSERVATIONS, gender: str = "men") -> None:
+    women = gender == "women"
     source = "ESPN bracket" if use_espn else "Warren Nolan standings"
-    print(f"Using {source} as tournament reference.\n")
+    print(f"Using {source} as tournament reference ({gender}).\n")
 
-    standings = None if use_espn else Standings()
+    standings = None if use_espn else Standings(women=women)
 
     for pool_size in (pool_sizes or POOL_SIZES):
         num_pools = max(20, base_observations // pool_size)
         print(f"=== Pool size {pool_size} ({num_pools} pools) ===")
-        output_dir = DATA_DIR / f"pool_{pool_size}"
+        output_dir = DATA_DIR / gender / f"pool_{pool_size}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         analyzer = BracketAnalysis(
@@ -44,6 +48,7 @@ def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observ
             num_pools=num_pools,
             output_dir=str(output_dir),
             use_espn=use_espn,
+            women=(gender == "women"),
         )
         analyzer.simulate_pools(entries_per_pool=pool_size)
         analyzer.plot_comparative_upset_distributions(save=True)
@@ -133,6 +138,12 @@ if __name__ == "__main__":
         default=BASE_OBSERVATIONS,
         help=f"Total bracket observations to simulate across all pools (default: {BASE_OBSERVATIONS}).",
     )
+    parser.add_argument(
+        "--gender",
+        choices=["men", "women"],
+        default="men",
+        help="Which tournament to generate data for (default: men).",
+    )
     args = parser.parse_args()
     pool_sizes = [args.pool_size] if args.pool_size is not None else None
-    run(use_espn=args.use_espn, pool_sizes=pool_sizes, base_observations=args.base_observations)
+    run(use_espn=args.use_espn, pool_sizes=pool_sizes, base_observations=args.base_observations, gender=args.gender)
