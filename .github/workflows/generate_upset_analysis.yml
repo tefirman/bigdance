@@ -11,6 +11,11 @@ on:
         options:
           - "false"
           - "true"
+      base_observations:
+        description: "Total bracket observations to simulate (higher = more accurate, slower)"
+        required: false
+        default: "1000"
+        type: string
 
 permissions:
   contents: write
@@ -37,7 +42,7 @@ jobs:
 
       - name: Run analysis for pool size ${{ matrix.pool_size }}
         run: |
-          ARGS="--pool_size ${{ matrix.pool_size }}"
+          ARGS="--pool_size ${{ matrix.pool_size }} --base_observations ${{ inputs.base_observations }}"
           if [ "${{ inputs.use_espn }}" = "true" ]; then
             ARGS="$ARGS --use_espn"
           fi
