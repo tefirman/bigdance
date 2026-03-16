@@ -194,7 +194,7 @@ class ESPNScraper(BaseScraper):
         self.women = women
         self.gender_suffix = "-women" if women else ""
         self.base_url = (
-            f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender_suffix}-2025"
+            f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender_suffix}-2026"
         )
 
         # Initialize cached Chrome options and service to avoid repeated setup
@@ -522,7 +522,9 @@ class ESPNBracket:
             pick_tags = soup.find_all(
                 "span", attrs={"class": "BracketPropositionHeaderDesktop-pickText"}
             )
-            team_tags = soup.find_all("label", attrs={"class": "BracketOutcome-label truncate"})
+            team_tags = soup.find_all(
+                "label", class_=lambda c: c and "BracketOutcome-label" in c and "truncate" in c
+            )
             team_id_tags = soup.find_all(
                 "img", attrs={"class": "Image BracketOutcome-image printHide"}
             )
