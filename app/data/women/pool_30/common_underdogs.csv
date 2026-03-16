@@ -1,94 +1,125 @@
 advanced_through,to_reach,seed,team,frequency
-First Round,Second Round,10,Washington,0.45
-First Round,Second Round,11,Georgia Southern,0.35
-First Round,Second Round,9,North Carolina State,0.3
-First Round,Second Round,9,Miami (OH),0.3
-First Round,Second Round,14,Charleston,0.25
-First Round,Second Round,11,Colorado State,0.25
-First Round,Second Round,12,Texas Tech,0.25
-First Round,Second Round,13,McNeese,0.2
-First Round,Second Round,14,Western Illinois,0.2
-First Round,Second Round,15,Green Bay,0.2
-First Round,Second Round,12,Georgia,0.2
-First Round,Second Round,10,Idaho,0.2
-First Round,Second Round,11,North Dakota State,0.2
-First Round,Second Round,9,Michigan State,0.15
-First Round,Second Round,13,Illinois,0.15
-First Round,Second Round,10,Virginia Tech,0.15
-First Round,Second Round,9,Colorado,0.15
-First Round,Second Round,11,San Diego State,0.15
-First Round,Second Round,10,Oklahoma State,0.15
-First Round,Second Round,12,Gonzaga,0.15
-First Round,Second Round,13,Iowa State,0.15
-First Round,Second Round,14,UC San Diego,0.1
-First Round,Second Round,15,Howard,0.05
-First Round,Second Round,15,Holy Cross,0.05
-First Round,Second Round,15,Jacksonville,0.05
-First Round,Second Round,16,East Tennessee State,0.05
-First Round,Second Round,12,Louisiana Tech,0.05
-First Round,Second Round,14,Fairleigh Dickinson,0.05
-Second Round,Sweet 16,6,Murray State,0.3
-Second Round,Sweet 16,5,Rhode Island,0.25
-Second Round,Sweet 16,5,Villanova,0.2
-Second Round,Sweet 16,7,Richmond,0.2
-Second Round,Sweet 16,6,Fairfield,0.15
-Second Round,Sweet 16,6,James Madison,0.15
-Second Round,Sweet 16,8,Alabama,0.15
-Second Round,Sweet 16,6,George Mason,0.15
-Second Round,Sweet 16,7,Kentucky,0.15
-Second Round,Sweet 16,5,Notre Dame,0.1
-Second Round,Sweet 16,11,Georgia Southern,0.1
-Second Round,Sweet 16,10,Washington,0.1
-Second Round,Sweet 16,7,South Dakota State,0.1
-Second Round,Sweet 16,11,North Dakota State,0.1
-Second Round,Sweet 16,13,McNeese,0.1
-Second Round,Sweet 16,14,Charleston,0.1
-Second Round,Sweet 16,11,Colorado State,0.1
-Second Round,Sweet 16,5,Minnesota,0.1
-Second Round,Sweet 16,7,Maryland,0.1
-Second Round,Sweet 16,8,Rice,0.05
-Second Round,Sweet 16,10,Oklahoma State,0.05
-Second Round,Sweet 16,12,Gonzaga,0.05
-Second Round,Sweet 16,13,Iowa State,0.05
-Second Round,Sweet 16,16,East Tennessee State,0.05
-Second Round,Sweet 16,11,San Diego State,0.05
-Second Round,Sweet 16,13,Illinois,0.05
-Second Round,Sweet 16,8,Ole Miss,0.05
-Sweet 16,Elite 8,3,Vanderbilt,0.3
-Sweet 16,Elite 8,4,North Carolina,0.15
-Sweet 16,Elite 8,3,TCU,0.15
-Sweet 16,Elite 8,4,Louisville,0.15
-Sweet 16,Elite 8,3,Michigan,0.15
-Sweet 16,Elite 8,7,South Dakota State,0.1
-Sweet 16,Elite 8,5,Villanova,0.1
-Sweet 16,Elite 8,11,North Dakota State,0.1
-Sweet 16,Elite 8,3,Ohio State,0.1
-Sweet 16,Elite 8,4,Princeton,0.1
-Sweet 16,Elite 8,6,James Madison,0.05
-Sweet 16,Elite 8,10,Washington,0.05
-Sweet 16,Elite 8,6,Fairfield,0.05
-Sweet 16,Elite 8,7,Kentucky,0.05
-Sweet 16,Elite 8,7,Maryland,0.05
-Sweet 16,Elite 8,6,Murray State,0.05
-Sweet 16,Elite 8,4,Oklahoma,0.05
-Sweet 16,Elite 8,5,Rhode Island,0.05
-Sweet 16,Elite 8,8,Ole Miss,0.05
-Elite 8,Final Four,3,Vanderbilt,0.25
-Elite 8,Final Four,2,Duke,0.2
-Elite 8,Final Four,2,LSU,0.2
-Elite 8,Final Four,2,Iowa,0.15
-Elite 8,Final Four,2,West Virginia,0.1
-Elite 8,Final Four,3,TCU,0.05
-Elite 8,Final Four,3,Ohio State,0.05
-Elite 8,Final Four,10,Washington,0.05
-Elite 8,Final Four,4,Louisville,0.05
-Elite 8,Final Four,5,Villanova,0.05
-Elite 8,Final Four,4,Princeton,0.05
-Elite 8,Final Four,5,Rhode Island,0.05
-Final Four,Championship,2,West Virginia,0.1
-Final Four,Championship,2,Iowa,0.05
-Final Four,Championship,2,LSU,0.05
-Final Four,Championship,3,Vanderbilt,0.05
-Final Four,Championship,5,Rhode Island,0.05
-Final Four,Championship,5,Villanova,0.05
-Championship,N/A,5,Rhode Island,0.05
+First Round,Second Round,11,Rhode Island,0.48484848484848486
+First Round,Second Round,11,Fairfield,0.42424242424242425
+First Round,Second Round,10,Villanova,0.36363636363636365
+First Round,Second Round,11,S Dakota St,0.3333333333333333
+First Round,Second Round,9,Virginia Tech,0.30303030303030304
+First Round,Second Round,12,Gonzaga,0.30303030303030304
+First Round,Second Round,12,James Madison,0.2727272727272727
+First Round,Second Round,9,Princeton,0.24242424242424243
+First Round,Second Round,10,Colorado,0.24242424242424243
+First Round,Second Round,10,Tennessee,0.24242424242424243
+First Round,Second Round,13,Green Bay,0.21212121212121213
+First Round,Second Round,14,Vermont,0.21212121212121213
+First Round,Second Round,14,UC San Diego,0.21212121212121213
+First Round,Second Round,13,W Illinois,0.21212121212121213
+First Round,Second Round,9,Syracuse,0.18181818181818182
+First Round,Second Round,13,Idaho,0.18181818181818182
+First Round,Second Round,14,Charleston,0.18181818181818182
+First Round,Second Round,12,Colorado St,0.18181818181818182
+First Round,Second Round,15,Jacksonville,0.18181818181818182
+First Round,Second Round,9,USC,0.18181818181818182
+First Round,Second Round,14,Howard,0.18181818181818182
+First Round,Second Round,13,Miami OH,0.15151515151515152
+First Round,Second Round,16,UTSA,0.12121212121212122
+First Round,Second Round,15,Holy Cross,0.12121212121212122
+First Round,Second Round,12,Murray St,0.12121212121212122
+First Round,Second Round,11,NEB/RICH,0.09090909090909091
+First Round,Second Round,15,High Point,0.06060606060606061
+First Round,Second Round,16,CA Baptist,0.06060606060606061
+First Round,Second Round,10,UVA/ASU,0.030303030303030304
+First Round,Second Round,15,FDU,0.030303030303030304
+Second Round,Sweet 16,5,Maryland,0.36363636363636365
+Second Round,Sweet 16,6,Baylor,0.30303030303030304
+Second Round,Sweet 16,5,Ole Miss,0.2727272727272727
+Second Round,Sweet 16,5,Michigan St,0.2727272727272727
+Second Round,Sweet 16,11,Rhode Island,0.24242424242424243
+Second Round,Sweet 16,11,Fairfield,0.21212121212121213
+Second Round,Sweet 16,7,NC State,0.18181818181818182
+Second Round,Sweet 16,6,Washington,0.18181818181818182
+Second Round,Sweet 16,10,Villanova,0.18181818181818182
+Second Round,Sweet 16,6,Alabama,0.15151515151515152
+Second Round,Sweet 16,12,Gonzaga,0.15151515151515152
+Second Round,Sweet 16,11,S Dakota St,0.12121212121212122
+Second Round,Sweet 16,9,Princeton,0.12121212121212122
+Second Round,Sweet 16,5,Kentucky,0.12121212121212122
+Second Round,Sweet 16,7,Georgia,0.12121212121212122
+Second Round,Sweet 16,7,Illinois,0.09090909090909091
+Second Round,Sweet 16,13,Miami OH,0.09090909090909091
+Second Round,Sweet 16,6,Notre Dame,0.09090909090909091
+Second Round,Sweet 16,8,Iowa State,0.09090909090909091
+Second Round,Sweet 16,10,Colorado,0.09090909090909091
+Second Round,Sweet 16,12,James Madison,0.09090909090909091
+Second Round,Sweet 16,7,Texas Tech,0.09090909090909091
+Second Round,Sweet 16,16,UTSA,0.06060606060606061
+Second Round,Sweet 16,13,Green Bay,0.06060606060606061
+Second Round,Sweet 16,14,Charleston,0.06060606060606061
+Second Round,Sweet 16,14,UC San Diego,0.06060606060606061
+Second Round,Sweet 16,10,Tennessee,0.06060606060606061
+Second Round,Sweet 16,8,Clemson,0.06060606060606061
+Second Round,Sweet 16,12,Murray St,0.06060606060606061
+Second Round,Sweet 16,9,Virginia Tech,0.030303030303030304
+Second Round,Sweet 16,8,Oregon,0.030303030303030304
+Second Round,Sweet 16,13,W Illinois,0.030303030303030304
+Second Round,Sweet 16,14,Vermont,0.030303030303030304
+Second Round,Sweet 16,15,Jacksonville,0.030303030303030304
+Second Round,Sweet 16,9,USC,0.030303030303030304
+Second Round,Sweet 16,9,Syracuse,0.030303030303030304
+Second Round,Sweet 16,12,Colorado St,0.030303030303030304
+Second Round,Sweet 16,13,Idaho,0.030303030303030304
+Second Round,Sweet 16,15,Holy Cross,0.030303030303030304
+Second Round,Sweet 16,8,Oklahoma St,0.030303030303030304
+Sweet 16,Elite 8,3,TCU,0.3333333333333333
+Sweet 16,Elite 8,3,Louisville,0.2727272727272727
+Sweet 16,Elite 8,4,Oklahoma,0.24242424242424243
+Sweet 16,Elite 8,3,Ohio State,0.21212121212121213
+Sweet 16,Elite 8,4,North Carolina,0.15151515151515152
+Sweet 16,Elite 8,11,Fairfield,0.15151515151515152
+Sweet 16,Elite 8,10,Villanova,0.15151515151515152
+Sweet 16,Elite 8,9,Princeton,0.12121212121212122
+Sweet 16,Elite 8,3,Duke,0.12121212121212122
+Sweet 16,Elite 8,4,West Virginia,0.09090909090909091
+Sweet 16,Elite 8,11,Rhode Island,0.09090909090909091
+Sweet 16,Elite 8,5,Michigan St,0.09090909090909091
+Sweet 16,Elite 8,5,Maryland,0.06060606060606061
+Sweet 16,Elite 8,7,Texas Tech,0.06060606060606061
+Sweet 16,Elite 8,7,NC State,0.06060606060606061
+Sweet 16,Elite 8,6,Alabama,0.030303030303030304
+Sweet 16,Elite 8,13,Miami OH,0.030303030303030304
+Sweet 16,Elite 8,5,Kentucky,0.030303030303030304
+Sweet 16,Elite 8,8,Iowa State,0.030303030303030304
+Sweet 16,Elite 8,14,Charleston,0.030303030303030304
+Sweet 16,Elite 8,10,Colorado,0.030303030303030304
+Sweet 16,Elite 8,12,Gonzaga,0.030303030303030304
+Sweet 16,Elite 8,11,S Dakota St,0.030303030303030304
+Sweet 16,Elite 8,12,James Madison,0.030303030303030304
+Sweet 16,Elite 8,13,Idaho,0.030303030303030304
+Sweet 16,Elite 8,8,Oklahoma St,0.030303030303030304
+Elite 8,Final Four,2,Iowa,0.24242424242424243
+Elite 8,Final Four,2,LSU,0.18181818181818182
+Elite 8,Final Four,4,North Carolina,0.12121212121212122
+Elite 8,Final Four,4,Oklahoma,0.12121212121212122
+Elite 8,Final Four,2,Vanderbilt,0.06060606060606061
+Elite 8,Final Four,3,Louisville,0.06060606060606061
+Elite 8,Final Four,4,West Virginia,0.06060606060606061
+Elite 8,Final Four,2,Michigan,0.06060606060606061
+Elite 8,Final Four,11,Fairfield,0.06060606060606061
+Elite 8,Final Four,3,TCU,0.06060606060606061
+Elite 8,Final Four,9,Princeton,0.06060606060606061
+Elite 8,Final Four,3,Ohio State,0.030303030303030304
+Elite 8,Final Four,14,Charleston,0.030303030303030304
+Elite 8,Final Four,3,Duke,0.030303030303030304
+Elite 8,Final Four,10,Colorado,0.030303030303030304
+Elite 8,Final Four,12,James Madison,0.030303030303030304
+Elite 8,Final Four,8,Oklahoma St,0.030303030303030304
+Final Four,Championship,2,Iowa,0.12121212121212122
+Final Four,Championship,4,North Carolina,0.09090909090909091
+Final Four,Championship,2,LSU,0.09090909090909091
+Final Four,Championship,11,Fairfield,0.06060606060606061
+Final Four,Championship,2,Vanderbilt,0.030303030303030304
+Final Four,Championship,3,Duke,0.030303030303030304
+Final Four,Championship,3,Louisville,0.030303030303030304
+Final Four,Championship,9,Princeton,0.030303030303030304
+Championship,N/A,2,LSU,0.09090909090909091
+Championship,N/A,11,Fairfield,0.030303030303030304
+Championship,N/A,2,Iowa,0.030303030303030304
