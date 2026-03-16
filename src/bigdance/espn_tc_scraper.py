@@ -72,6 +72,8 @@ NAME_CORRECTIONS = {
     "CA Baptist": "California Baptist",
     "N Dakota St": "North Dakota State",
     "Hawai'i": "Hawaii",
+    "FDU": "Fairleigh Dickinson",
+    "Miami OH": "Miami (OH)",
 }
 
 
