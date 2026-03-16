@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pool_size: [5, 10, 15, 20, 30, 50]
+        pool_size: [10, 15, 20, 30, 50, 75, 100, 150, 200]
         gender: ${{ inputs.gender == 'both' && fromJSON('["men", "women"]') || fromJSON(format('["{0}"]', inputs.gender)) }}
 
     steps:

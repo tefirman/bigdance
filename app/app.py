@@ -65,7 +65,7 @@ with st.sidebar:
     gender = st.radio("Tournament", options=["Men's", "Women's"], horizontal=True)
     women = gender == "Women's"
     gender_key = "women" if women else "men"
-    pool_size = st.selectbox("Pool size (# of entries)", options=[5, 10, 15, 20, 30, 50], index=1)
+    pool_size = st.selectbox("Pool size (# of entries)", options=[10, 15, 20, 30, 50, 75, 100, 150, 200], index=1)
     num_sims = st.selectbox("Simulations", options=[500, 1000, 2500, 5000], index=1)
     simulate_btn = st.button("Simulate", type="primary", width="stretch")
     st.divider()
