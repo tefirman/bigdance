@@ -17,11 +17,12 @@ on:
         default: "1000"
         type: string
       gender:
-        description: "Which tournament to generate data for"
+        description: "Which tournament(s) to generate data for"
         required: false
-        default: "men"
+        default: "both"
         type: choice
         options:
+          - "both"
           - "men"
           - "women"
 
@@ -37,6 +38,7 @@ jobs:
     strategy:
       matrix:
         pool_size: [5, 10, 15, 20, 30, 50]
+        gender: ${{ inputs.gender == 'both' && fromJSON('["men", "women"]') || fromJSON(format('["{0}"]', inputs.gender)) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +53,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Run analysis for pool size ${{ matrix.pool_size }}
+      - name: Run analysis for ${{ matrix.gender }} pool size ${{ matrix.pool_size }}
         run: |
-          ARGS="--pool_size ${{ matrix.pool_size }} --base_observations ${{ inputs.base_observations }} --gender ${{ inputs.gender }}"
+          ARGS="--pool_size ${{ matrix.pool_size }} --base_observations ${{ inputs.base_observations }} --gender ${{ matrix.gender }}"
           if [ "${{ inputs.use_espn }}" = "true" ]; then
             ARGS="$ARGS --use_espn"
           fi
@@ -62,8 +64,8 @@ jobs:
       - name: Upload pool_${{ matrix.pool_size }} artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.gender }}-pool-${{ matrix.pool_size }}
-          path: app/data/${{ inputs.gender }}/pool_${{ matrix.pool_size }}/
+          name: ${{ matrix.gender }}-pool-${{ matrix.pool_size }}
+          path: app/data/${{ matrix.gender }}/pool_${{ matrix.pool_size }}/
 
   commit:
     needs: generate
@@ -80,15 +82,16 @@ jobs:
 
       - name: Move artifacts into correct pool subdirectories
         run: |
-          GENDER="${{ inputs.gender }}"
-          for pool_size in 5 10 15 20 30 50; do
-            src="app/data/${GENDER}-pool-${pool_size}"
-            dst="app/data/${GENDER}/pool_${pool_size}"
-            if [ -d "$src" ]; then
-              mkdir -p "$dst"
-              cp -r "$src"/. "$dst/"
-              rm -rf "$src"
-            fi
+          for gender in men women; do
+            for pool_size in 5 10 15 20 30 50; do
+              src="app/data/${gender}-pool-${pool_size}"
+              dst="app/data/${gender}/pool_${pool_size}"
+              if [ -d "$src" ]; then
+                mkdir -p "$dst"
+                cp -r "$src"/. "$dst/"
+                rm -rf "$src"
+              fi
+            done
           done
 
       - name: Commit and push updated data
