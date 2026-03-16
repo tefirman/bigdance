@@ -3,6 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 import pandas as pd
 from bigdance import Standings, create_teams_from_standings, simulate_round_probabilities
+from bigdance.espn_tc_scraper import ESPNBracket
 from bigdance.cbb_brackets import Bracket, Team, Game, Pool
 from bigdance.wn_cbb_scraper import elo_prob
 
@@ -43,7 +44,11 @@ def load_standings(women: bool = False) -> Standings:
 
 @st.cache_resource
 def load_bracket(women: bool = False) -> Bracket:
-    return create_teams_from_standings(load_standings(women=women))
+    espn = ESPNBracket(women=women)
+    bracket = espn.extract_bracket(espn.get_bracket())
+    if bracket is None:
+        return create_teams_from_standings(load_standings(women=women))
+    return bracket
 
 
 @st.cache_resource
@@ -71,7 +76,7 @@ with st.sidebar:
 
 bracket_key = f"bracket_{gender}"
 if bracket_key not in st.session_state:
-    with st.spinner(f"Loading {gender} bracket from Warren Nolan rankings..."):
+    with st.spinner(f"Loading {gender} bracket from ESPN..."):
         st.session_state[bracket_key] = load_bracket(women=women)
 
 bracket: Bracket = st.session_state[bracket_key]

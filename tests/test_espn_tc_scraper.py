@@ -33,7 +33,7 @@ SAMPLE_POOL_HTML = """
 <table>
   <tr>
     <td class="BracketEntryTable-column--entryName Table__TD">
-      <a href="/games/tournament-challenge-bracket-2025/bracket?id=1234">Entry 1</a>
+      <a href="/games/tournament-challenge-bracket-2026/bracket?id=1234">Entry 1</a>
     </td>
   </tr>
 </table>
@@ -166,7 +166,7 @@ class TestESPNScraper:
         assert scraper.women is False
         assert scraper.gender_suffix == ""
         assert (
-            scraper.base_url == "https://fantasy.espn.com/games/tournament-challenge-bracket-2025"
+            scraper.base_url == "https://fantasy.espn.com/games/tournament-challenge-bracket-2026"
         )
 
         # Test women's tournament initialization
@@ -175,7 +175,7 @@ class TestESPNScraper:
         assert women_scraper.gender_suffix == "-women"
         assert (
             women_scraper.base_url
-            == "https://fantasy.espn.com/games/tournament-challenge-bracket-women-2025"
+            == "https://fantasy.espn.com/games/tournament-challenge-bracket-women-2026"
         )
 
     @patch("selenium.webdriver.Chrome")
@@ -191,7 +191,7 @@ class TestESPNScraper:
             driver_instance.page_source = SAMPLE_BLANK_BRACKET_HTML
 
             scraper = ESPNScraper(cache_dir=sample_cache_dir)
-            url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/bracket"
+            url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/bracket"
 
             # Test page retrieval
             content = scraper.get_page(url, cache_key="test_page")
@@ -219,7 +219,7 @@ class TestESPNScraper:
                 }
 
                 scraper = ESPNScraper(cache_dir=sample_cache_dir)
-                url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/group"
+                url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/group"
 
                 # Test paginated retrieval
                 pages = scraper.get_page(url, cache_key="test_pool", check_pagination=True)
@@ -249,7 +249,7 @@ class TestESPNScraper:
 
             # Check arguments regardless of how they were passed
             assert (
-                "https://fantasy.espn.com/games/tournament-challenge-bracket-2025/bracket?id="
+                "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/bracket?id="
                 in call_args
             )
 
