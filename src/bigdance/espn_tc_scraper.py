@@ -69,6 +69,9 @@ NAME_CORRECTIONS = {
     "S Dakota St": "South Dakota State",
     "SF Austin": "Stephen F. Austin",
     "Fair Dickinson": "Fairleigh Dickinson",
+    "CA Baptist": "California Baptist",
+    "N Dakota St": "North Dakota State",
+    "Hawai'i": "Hawaii",
 }
 
 
