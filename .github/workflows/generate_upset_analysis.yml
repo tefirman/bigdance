@@ -63,9 +63,29 @@ jobs:
 
       - name: Upload pool_${{ matrix.pool_size }} artifact
         uses: actions/upload-artifact@v4
+        id: upload-attempt-1
+        continue-on-error: true
         with:
           name: ${{ matrix.gender }}-pool-${{ matrix.pool_size }}
           path: app/data/${{ matrix.gender }}/pool_${{ matrix.pool_size }}/
+
+      - name: Retry upload (attempt 2)
+        if: steps.upload-attempt-1.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        id: upload-attempt-2
+        continue-on-error: true
+        with:
+          name: ${{ matrix.gender }}-pool-${{ matrix.pool_size }}
+          path: app/data/${{ matrix.gender }}/pool_${{ matrix.pool_size }}/
+          overwrite: true
+
+      - name: Retry upload (attempt 3)
+        if: steps.upload-attempt-2.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.gender }}-pool-${{ matrix.pool_size }}
+          path: app/data/${{ matrix.gender }}/pool_${{ matrix.pool_size }}/
+          overwrite: true
 
   commit:
     needs: generate
@@ -83,7 +103,7 @@ jobs:
       - name: Move artifacts into correct pool subdirectories
         run: |
           for gender in men women; do
-            for pool_size in 5 10 15 20 30 50; do
+            for pool_size in 10 15 20 30 50 75 100 150 200; do
               src="app/data/${gender}-pool-${pool_size}"
               dst="app/data/${gender}/pool_${pool_size}"
               if [ -d "$src" ]; then
