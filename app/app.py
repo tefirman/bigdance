@@ -48,6 +48,11 @@ def load_bracket(women: bool = False) -> Bracket:
     bracket = espn.extract_bracket(espn.get_bracket())
     if bracket is None:
         return create_teams_from_standings(load_standings(women=women))
+    # Normalize region names to title case (ESPN returns all-caps)
+    for team in bracket.teams:
+        team.region = team.region.title()
+    for game in bracket.games:
+        game.region = game.region.title()
     return bracket
 
 
@@ -135,10 +140,10 @@ def seed_defaults() -> None:
                     if t1 and t2:
                         picks[rnd][gidx] = better_seed(t1, t2)
 
-    # Round 4 — Final Four: South vs Midwest (0), East vs West (1)
+    # Round 4 — Final Four: East vs South (0), West vs Midwest (1)
     ff_pairs = [
-        (0, _rgidx("South", 3, 0), _rgidx("Midwest", 3, 0)),
-        (1, _rgidx("East", 3, 0), _rgidx("West", 3, 0)),
+        (0, _rgidx("East", 3, 0), _rgidx("South", 3, 0)),
+        (1, _rgidx("West", 3, 0), _rgidx("Midwest", 3, 0)),
     ]
     for ff_idx, idx1, idx2 in ff_pairs:
         if ff_idx not in picks[4]:
@@ -165,7 +170,7 @@ seed_defaults()
 #   region_game_idx(region, round, local) → global index for that round
 #   where local is 0..block_size-1 within the region.
 #
-# Round 4 (Final Four): indices 0 (South vs Midwest) and 1 (East vs West)
+# Round 4 (Final Four): indices 0 (East vs South) and 1 (West vs Midwest)
 # Round 5 (Championship): index 0
 # ---------------------------------------------------------------------------
 
@@ -304,18 +309,18 @@ with tab_bracket:
     st.markdown("### Final Four")
     ff_cols = st.columns(2)
 
-    south_winner = picks[3].get(region_game_idx("South", 3, 0))
-    midwest_winner = picks[3].get(region_game_idx("Midwest", 3, 0))
     east_winner = picks[3].get(region_game_idx("East", 3, 0))
+    south_winner = picks[3].get(region_game_idx("South", 3, 0))
     west_winner = picks[3].get(region_game_idx("West", 3, 0))
+    midwest_winner = picks[3].get(region_game_idx("Midwest", 3, 0))
 
     with ff_cols[0]:
-        st.markdown("**South vs Midwest**")
-        render_matchup(4, 0, south_winner, midwest_winner)
+        st.markdown("**East vs South**")
+        render_matchup(4, 0, east_winner, south_winner)
 
     with ff_cols[1]:
-        st.markdown("**East vs West**")
-        render_matchup(4, 1, east_winner, west_winner)
+        st.markdown("**West vs Midwest**")
+        render_matchup(4, 1, west_winner, midwest_winner)
 
     st.divider()
 
@@ -473,7 +478,15 @@ def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame |
     pivot = pivot.reindex(columns=[r for r in rounds if r in pivot.columns])
     pivot.columns = [c for c in pivot.columns]
     pivot = pivot.reset_index()
-    # Leave frequencies as floats (NaN for missing); format via column_config in the display layer
+    # For rounds after a team's first appearance, NaN means 0% (never happened in sims).
+    # For rounds before their first appearance, NaN means N/A (not an upset category).
+    round_cols_present = [r for r in rounds if r in pivot.columns]
+    for _, row in pivot.iterrows():
+        first_val_idx = next((i for i, r in enumerate(round_cols_present) if pd.notna(row[r])), None)
+        if first_val_idx is not None:
+            for r in round_cols_present[first_val_idx:]:
+                if pd.isna(pivot.at[row.name, r]):
+                    pivot.at[row.name, r] = 0.0
     pivot = pivot.rename(columns={"seed": "Seed", "team": "Team"})
     # Sort by First Round frequency desc (most common underdogs first), then by seed
     sort_col = next((r for r in rounds if r in pivot.columns), None)
@@ -607,7 +620,7 @@ with tab_strategy:
             st.dataframe(styled_madness, width="stretch", hide_index=True)
 
         st.markdown("#### Common Underdogs in Winning Brackets")
-        st.caption("How often each underdog team appears in winning pool brackets, by the round they upset through.")
+        st.caption("How often each underdog team appears in winning pool brackets, by the round they upset through. Blue cells indicate rounds you've already picked that team to reach.")
         underdogs_df = load_common_underdogs(pool_size, gender=gender_key)
         if underdogs_df is None:
             st.info("Run `python app/generate_upset_analysis.py` to generate common underdogs data.")
@@ -615,16 +628,36 @@ with tab_strategy:
             st.info("No common underdog data available for this pool size.")
         else:
             round_cols = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
+            round_col_to_idx = {"First Round": 0, "Second Round": 1, "Sweet 16": 2, "Elite 8": 3, "Final Four": 4}
+
+            # Build set of (team_name, round_col) the user has picked
+            picked = set()
+            for round_col, round_idx in round_col_to_idx.items():
+                for team in picks[round_idx].values():
+                    if team is not None:
+                        picked.add((team.name, round_col))
+
             display_underdogs = underdogs_df.copy()
             for rnd in round_cols:
                 if rnd in display_underdogs.columns:
                     display_underdogs[rnd] = display_underdogs[rnd] * 100
+
+            def highlight_picked(row):
+                styles = []
+                for col in display_underdogs.columns:
+                    if col in round_cols and (row["Team"], col) in picked:
+                        styles.append("background-color: #1565C0; color: white")
+                    else:
+                        styles.append("")
+                return styles
+
             col_config = {
                 rnd: st.column_config.NumberColumn(rnd, format="%.0f%%", min_value=0, max_value=100)
                 for rnd in round_cols
                 if rnd in display_underdogs.columns
             }
-            st.dataframe(display_underdogs, column_config=col_config, width="stretch", hide_index=True)
+            styled_underdogs = display_underdogs.style.apply(highlight_picked, axis=1)
+            st.dataframe(styled_underdogs, column_config=col_config, width="stretch", hide_index=True)
 
 # ---------------------------------------------------------------------------
 # Tab 4: team round probabilities
