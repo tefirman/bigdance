@@ -109,18 +109,21 @@ class Bracket:
             (2, 15),
         ]
 
-        # Validate seeds and regions
-        regions = set()
+        # Validate seeds and regions (preserve insertion order from teams list)
+        seen = set()
+        regions = []
         for team in self.teams:
             if not 1 <= team.seed <= 16:
                 raise ValueError(f"Invalid seed {team.seed} for {team.name}")
-            regions.add(team.region)
+            if team.region not in seen:
+                seen.add(team.region)
+                regions.append(team.region)
 
         if len(regions) != 4:
             raise ValueError("Tournament must have exactly 4 regions")
 
-        # Create games for each region (sorted for deterministic order)
-        for region in sorted(regions):
+        # Create games for each region (order preserved from teams list)
+        for region in regions:
             # Get teams in this region
             region_teams = {t.seed: t for t in self.teams if t.region == region}
 

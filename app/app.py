@@ -121,8 +121,8 @@ def seed_defaults() -> None:
     for _i, _g in enumerate(_bracket.games):
         _region_r0[_g.region].append((_i, _g))
 
-    REGIONS_LOCAL = ["East", "West", "South", "Midwest"]
-    BLOCK = {r: i for i, r in enumerate(REGIONS_LOCAL)}
+    REGIONS_LOCAL = REGIONS
+    BLOCK = REGION_BLOCK
 
     def _rgidx(region: str, rnd: int, loc: int) -> int:
         return BLOCK[region] * (8 // (2 ** rnd)) + loc
@@ -152,10 +152,10 @@ def seed_defaults() -> None:
                     if t1 and t2:
                         picks[rnd][gidx] = better_seed(t1, t2)
 
-    # Round 4 — Final Four: East vs South (0), West vs Midwest (1)
+    # Round 4 — Final Four: region 0 vs region 1 (0), region 2 vs region 3 (1)
     ff_pairs = [
-        (0, _rgidx("East", 3, 0), _rgidx("South", 3, 0)),
-        (1, _rgidx("West", 3, 0), _rgidx("Midwest", 3, 0)),
+        (0, _rgidx(REGIONS_LOCAL[0], 3, 0), _rgidx(REGIONS_LOCAL[1], 3, 0)),
+        (1, _rgidx(REGIONS_LOCAL[2], 3, 0), _rgidx(REGIONS_LOCAL[3], 3, 0)),
     ]
     for ff_idx, idx1, idx2 in ff_pairs:
         if ff_idx not in picks[4]:
@@ -186,8 +186,14 @@ seed_defaults()
 # Round 5 (Championship): index 0
 # ---------------------------------------------------------------------------
 
-REGIONS = ["East", "West", "South", "Midwest"]
-REGION_BLOCK = {r: i for i, r in enumerate(REGIONS)}  # East=0, West=1, South=2, Midwest=3
+# Derive regions from the bracket data (handles both men's named regions
+# and women's "Regional 1/2/3/4" style regions)
+_seen_regions: list[str] = []
+for _g in bracket.games:
+    if _g.region not in _seen_regions:
+        _seen_regions.append(_g.region)
+REGIONS = _seen_regions  # preserves bracket order (first 4 unique regions)
+REGION_BLOCK = {r: i for i, r in enumerate(REGIONS)}
 
 # region_r0_games[region] = list of (global_bracket_index, Game)
 region_r0_games: dict[str, list[tuple[int, Game]]] = defaultdict(list)
@@ -321,18 +327,18 @@ with tab_bracket:
     st.markdown("### Final Four")
     ff_cols = st.columns(2)
 
-    east_winner = picks[3].get(region_game_idx("East", 3, 0))
-    south_winner = picks[3].get(region_game_idx("South", 3, 0))
-    west_winner = picks[3].get(region_game_idx("West", 3, 0))
-    midwest_winner = picks[3].get(region_game_idx("Midwest", 3, 0))
+    r0_winner = picks[3].get(region_game_idx(REGIONS[0], 3, 0))
+    r1_winner = picks[3].get(region_game_idx(REGIONS[1], 3, 0))
+    r2_winner = picks[3].get(region_game_idx(REGIONS[2], 3, 0))
+    r3_winner = picks[3].get(region_game_idx(REGIONS[3], 3, 0))
 
     with ff_cols[0]:
-        st.markdown("**East vs South**")
-        render_matchup(4, 0, east_winner, south_winner)
+        st.markdown(f"**{REGIONS[0]} vs {REGIONS[1]}**")
+        render_matchup(4, 0, r0_winner, r1_winner)
 
     with ff_cols[1]:
-        st.markdown("**West vs Midwest**")
-        render_matchup(4, 1, west_winner, midwest_winner)
+        st.markdown(f"**{REGIONS[2]} vs {REGIONS[3]}**")
+        render_matchup(4, 1, r2_winner, r3_winner)
 
     st.divider()
 
