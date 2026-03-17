@@ -44,9 +44,20 @@ def load_standings(women: bool = False) -> Standings:
 
 @st.cache_resource
 def load_bracket(women: bool = False) -> Bracket:
-    cache_dir = str(Path(__file__).parent / ".cache")
-    espn = ESPNBracket(women=women, cache_dir=cache_dir)
-    bracket = espn.extract_bracket(espn.get_bracket())
+    cache_dir = Path(__file__).parent / ".cache"
+    espn = ESPNBracket(women=women, cache_dir=str(cache_dir))
+    # First try loading cached bracket HTML directly (no expiry check)
+    # so the deployed app doesn't need Selenium
+    cache_file = cache_dir / f"bracket_{'women' if women else 'men'}_blank.json"
+    html = None
+    if cache_file.exists():
+        import json
+        cache_data = json.loads(cache_file.read_text())
+        html = cache_data.get("content")
+    # Fall back to live scraping if no cached file
+    if html is None:
+        html = espn.get_bracket()
+    bracket = espn.extract_bracket(html)
     if bracket is None:
         return create_teams_from_standings(load_standings(women=women))
     # Normalize region names to title case (ESPN returns all-caps)

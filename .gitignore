@@ -1,5 +1,7 @@
 __pycache__/
 .cache/
+!app/.cache/
+app/.cache/*
 !app/.cache/bracket_*.json
 .vscode/
 *.py[cod]
