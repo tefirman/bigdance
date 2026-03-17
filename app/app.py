@@ -113,6 +113,21 @@ def better_seed(t1: Team, t2: Team) -> Team:
     return t1 if t1.seed <= t2.seed else t2
 
 
+# Derive regions from the bracket data (handles both men's named regions
+# and women's "Regional 1/2/3/4" style regions)
+_seen_regions: list[str] = []
+for _g in bracket.games:
+    if _g.region not in _seen_regions:
+        _seen_regions.append(_g.region)
+REGIONS = _seen_regions  # preserves bracket order (first 4 unique regions)
+REGION_BLOCK = {r: i for i, r in enumerate(REGIONS)}
+
+# region_r0_games[region] = list of (global_bracket_index, Game)
+region_r0_games: dict[str, list[tuple[int, Game]]] = defaultdict(list)
+for _i, _g in enumerate(bracket.games):
+    region_r0_games[_g.region].append((_i, _g))
+
+
 def seed_defaults() -> None:
     """Pre-populate all missing picks with the better-seeded team so every
     widget has a value on the very first page load, before any radio fires."""
@@ -171,34 +186,6 @@ def seed_defaults() -> None:
 
 
 seed_defaults()
-
-# ---------------------------------------------------------------------------
-# Game index helpers
-#
-# First-round games in bracket.games are grouped by region.
-# We build a lookup once so the rest of the code is region-name driven.
-#
-# For rounds 1–3 (within-region games) we assign a flat index per round:
-#   region_game_idx(region, round, local) → global index for that round
-#   where local is 0..block_size-1 within the region.
-#
-# Round 4 (Final Four): indices 0 (East vs South) and 1 (West vs Midwest)
-# Round 5 (Championship): index 0
-# ---------------------------------------------------------------------------
-
-# Derive regions from the bracket data (handles both men's named regions
-# and women's "Regional 1/2/3/4" style regions)
-_seen_regions: list[str] = []
-for _g in bracket.games:
-    if _g.region not in _seen_regions:
-        _seen_regions.append(_g.region)
-REGIONS = _seen_regions  # preserves bracket order (first 4 unique regions)
-REGION_BLOCK = {r: i for i, r in enumerate(REGIONS)}
-
-# region_r0_games[region] = list of (global_bracket_index, Game)
-region_r0_games: dict[str, list[tuple[int, Game]]] = defaultdict(list)
-for _i, _g in enumerate(bracket.games):
-    region_r0_games[_g.region].append((_i, _g))
 
 
 def region_game_idx(region: str, round_idx: int, local_idx: int) -> int:
