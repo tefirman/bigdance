@@ -119,8 +119,8 @@ class Bracket:
         if len(regions) != 4:
             raise ValueError("Tournament must have exactly 4 regions")
 
-        # Create games for each region
-        for region in regions:
+        # Create games for each region (sorted for deterministic order)
+        for region in sorted(regions):
             # Get teams in this region
             region_teams = {t.seed: t for t in self.teams if t.region == region}
 
