@@ -237,17 +237,21 @@ def render_matchup(round_idx: int, game_idx: int, team1: Team | None, team2: Tea
 
     rc = st.session_state.reset_count
     key = f"pick_r{round_idx}_g{game_idx}_v{rc}"
-    choice = st.radio(
-        label=key,
-        options=[label1, label2],
-        index=0 if current_label == label1 else 1,
-        key=key,
-        label_visibility="collapsed",
-    )
-    set_pick(round_idx, game_idx, team1 if choice == label1 else team2)
+    with st.container(border=True):
+        choice = st.radio(
+            label=key,
+            options=[label1, label2],
+            index=0 if current_label == label1 else 1,
+            key=key,
+            label_visibility="collapsed",
+        )
+        set_pick(round_idx, game_idx, team1 if choice == label1 else team2)
 
-    p1 = elo_prob(team1.rating, team2.rating, homefield=0.0)
-    st.caption(f"{team1.name} {p1:.0%} · {team2.name} {1 - p1:.0%}")
+        p1 = elo_prob(team1.rating, team2.rating, homefield=0.0)
+        max_name = 8
+        n1 = team1.name[:max_name] + "…" if len(team1.name) > max_name else team1.name
+        n2 = team2.name[:max_name] + "…" if len(team2.name) > max_name else team2.name
+        st.caption(f"{n1} {p1:.0%} · {n2} {1 - p1:.0%}")
 
 
 # ---------------------------------------------------------------------------
@@ -286,12 +290,31 @@ with tab_bracket:
                 # Spacers to vertically center games relative to their feeder games.
                 # Before the first game: 2^round_idx - 1 blank lines.
                 # Between games: 2^(round_idx+1) - 1 blank lines.
-                leading = 6 * (2 ** round_idx - 1)
-                between = 6 * (2 ** (round_idx + 1) - 1)
+                if round_idx == 0:
+                    leading = 0
+                    between = 0
+                elif round_idx == 1:
+                    leading = 3.0
+                    between = 9.0
+                elif round_idx == 2:
+                    leading = 12.0
+                    between = 27.0
+                else:
+                    leading = 30.0
+                    between = 30.0
 
                 for local_idx in range(block_size):
-                    for _ in range(leading if local_idx == 0 else between):
+                    gap = leading if local_idx == 0 else between
+                    whole = int(gap)
+                    frac = gap - whole
+                    for _ in range(whole):
                         st.write("")
+                    if frac > 0:
+                        px = int(frac * 27)  # ~27px per st.write("") line
+                        st.markdown(
+                            f'<div style="height:{px}px"></div>',
+                            unsafe_allow_html=True,
+                        )
                     if round_idx == 0:
                         bracket_idx, game = region_r0_games[region][local_idx]
                         render_matchup(0, bracket_idx, game.team1, game.team2)
