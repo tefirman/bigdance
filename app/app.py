@@ -44,7 +44,8 @@ def load_standings(women: bool = False) -> Standings:
 
 @st.cache_resource
 def load_bracket(women: bool = False) -> Bracket:
-    espn = ESPNBracket(women=women)
+    cache_dir = str(Path(__file__).parent / ".cache")
+    espn = ESPNBracket(women=women, cache_dir=cache_dir)
     bracket = espn.extract_bracket(espn.get_bracket())
     if bracket is None:
         return create_teams_from_standings(load_standings(women=women))

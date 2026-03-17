@@ -1,5 +1,6 @@
 __pycache__/
 .cache/
+!app/.cache/
 .vscode/
 *.py[cod]
 *$py.class
