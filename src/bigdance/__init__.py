@@ -28,7 +28,7 @@ from .cbb_brackets import Bracket, Game, Pool, Team
 from .espn_tc_scraper import ESPNBracket, ESPNPool, ESPNScraper, GameImportanceAnalyzer
 from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __author__ = "Taylor Firman"
 __email__ = "tefirman@gmail.com"
 
