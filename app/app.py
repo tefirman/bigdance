@@ -45,7 +45,11 @@ def load_standings(women: bool = False) -> Standings:
 @st.cache_resource
 def load_bracket(women: bool = False) -> Bracket:
     cache_dir = Path(__file__).parent / ".cache"
-    espn = ESPNBracket(women=women, cache_dir=str(cache_dir))
+    # Use gender-specific subdirectory for WN standings so men's and women's
+    # ELO caches don't overwrite each other (both write to elo_YYYY.json).
+    gender_cache = cache_dir / ("women" if women else "men")
+    gender_cache.mkdir(parents=True, exist_ok=True)
+    espn = ESPNBracket(women=women, cache_dir=str(gender_cache))
     # First try loading cached bracket HTML directly (no expiry check)
     # so the deployed app doesn't need Selenium
     cache_file = cache_dir / f"bracket_{'women' if women else 'men'}_blank.json"
@@ -523,14 +527,17 @@ def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame |
     return pivot
 
 
-def compute_madness_scores(women: bool = False) -> dict[str, float]:
+def compute_madness_scores(src_bracket: Bracket) -> dict[str, float]:
     """Compute Madness Score (negative log probability) per round from current picks.
 
-    Builds a temporary bracket from current picks and delegates to
+    Uses a deep copy of the provided bracket (ESPN or WN) so matchups and ratings
+    are consistent with the user's picks. Delegates to
     Bracket.calculate_log_probability() from the bigdance package.
     Higher score = more surprising/upset-heavy picks in that round.
     """
-    tmp = create_teams_from_standings(load_standings(women=women))
+    import copy
+
+    tmp = copy.deepcopy(src_bracket)
     tmp.simulate_tournament(fixed_winners=build_fixed_winners())
     tmp.calculate_log_probability()
     return tmp.log_probability_by_round
@@ -597,6 +604,26 @@ with tab_strategy:
                 "Direction": direction,
             })
 
+        # Add total row
+        total_your = sum(r["Your Upsets"] for r in rows)
+        total_mean = sum(float(r["Winners Avg"]) for r in rows if r["Winners Avg"] != "—")
+        total_std_vals = [float(r["Winners Std"]) for r in rows if r["Winners Std"] != "—"]
+        total_std = (sum(s**2 for s in total_std_vals) ** 0.5) if total_std_vals else 0.0
+        if total_std > 0:
+            total_z = (total_your - total_mean) / total_std
+            total_dir = "—" if abs(total_z) < 0.1 else ("↑ too bold" if total_z > 0 else "↓ too chalk")
+        else:
+            total_z = 0.0
+            total_dir = "—"
+        z_scores_upsets.append(total_z)
+        rows.append({
+            "Round": "Total",
+            "Your Upsets": total_your,
+            "Winners Avg": f"{total_mean:.1f}",
+            "Winners Std": f"{total_std:.1f}",
+            "Direction": total_dir,
+        })
+
         display_df = pd.DataFrame(rows)
 
         def _color_col(z_scores: list[float], col: str):
@@ -616,7 +643,7 @@ with tab_strategy:
         if log_prob_df is None:
             st.info("Run `python app/generate_upset_analysis.py` to generate Madness Score data.")
         else:
-            madness_scores = compute_madness_scores(women=women)
+            madness_scores = compute_madness_scores(bracket)
             madness_rows = []
             z_scores_madness = []
             for _, row in log_prob_df.iterrows():
@@ -640,6 +667,26 @@ with tab_strategy:
                     "Winners Std": std_str,
                     "Direction": direction,
                 })
+
+            # Add total row
+            total_your_m = sum(float(r["Your Madness"]) for r in madness_rows)
+            total_mean_m = sum(float(r["Winners Avg"]) for r in madness_rows if r["Winners Avg"] != "—")
+            total_std_m_vals = [float(r["Winners Std"]) for r in madness_rows if r["Winners Std"] != "—"]
+            total_std_m = (sum(s**2 for s in total_std_m_vals) ** 0.5) if total_std_m_vals else 0.0
+            if total_std_m > 0:
+                total_z_m = (total_your_m - total_mean_m) / total_std_m
+                total_dir_m = "—" if abs(total_z_m) < 0.1 else ("↑ too bold" if total_z_m > 0 else "↓ too chalk")
+            else:
+                total_z_m = 0.0
+                total_dir_m = "—"
+            z_scores_madness.append(total_z_m)
+            madness_rows.append({
+                "Round": "Total",
+                "Your Madness": f"{total_your_m:.2f}",
+                "Winners Avg": f"{total_mean_m:.2f}",
+                "Winners Std": f"{total_std_m:.2f}",
+                "Direction": total_dir_m,
+            })
 
             madness_display = pd.DataFrame(madness_rows)
             styled_madness = madness_display.style.apply(
