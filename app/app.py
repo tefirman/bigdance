@@ -13,24 +13,6 @@ st.set_page_config(page_title="bigdance bracket pool", layout="wide")
 # Password gate
 # ---------------------------------------------------------------------------
 
-def check_password() -> bool:
-    if st.session_state.get("authenticated"):
-        return True
-    _, col, _ = st.columns([1, 1, 1])
-    with col:
-        st.title("March Madness Bracket Pool")
-        pwd = st.text_input("Password", type="password", key="pwd_input")
-        if pwd:
-            if pwd == st.secrets.get("password", ""):
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("Incorrect password.")
-    return False
-
-if not check_password():
-    st.stop()
-
 st.title("March Madness Bracket Pool Simulator")
 
 # ---------------------------------------------------------------------------
@@ -587,9 +569,9 @@ with tab_strategy:
             mean_val = row["mean_upsets"] if pd.notna(row.get("mean_upsets")) else None
             std_val = row["std_upsets"] if pd.notna(row.get("std_upsets")) else None
             losers_mean = row["losers_mean_upsets"] if pd.notna(row.get("losers_mean_upsets")) else None
-            mean_str = f"{mean_val:.1f}" if mean_val is not None else "—"
-            std_str = f"{std_val:.1f}" if std_val is not None else "—"
-            losers_str = f"{losers_mean:.1f}" if losers_mean is not None else "—"
+            losers_std = row["losers_std_upsets"] if pd.notna(row.get("losers_std_upsets")) else None
+            winners_str = f"{mean_val:.1f} ± {std_val:.1f}" if mean_val is not None and std_val is not None else "—"
+            losers_str = f"{losers_mean:.1f} ± {losers_std:.1f}" if losers_mean is not None and losers_std is not None else "—"
             your_count = user_upsets.get(rnd, 0)
             if mean_val is not None and std_val is not None and std_val > 0:
                 z = (your_count - mean_val) / std_val
@@ -601,18 +583,28 @@ with tab_strategy:
             rows.append({
                 "Round": rnd,
                 "Your Upsets": your_count,
-                "Winners Avg": mean_str,
-                "Losers Avg": losers_str,
-                "Winners Std": std_str,
+                "Winners (Avg ± Std)":winners_str,
+                "Losers (Avg ± Std)":losers_str,
                 "Direction": direction,
             })
 
         # Add total row
         total_your = sum(r["Your Upsets"] for r in rows)
-        total_mean = sum(float(r["Winners Avg"]) for r in rows if r["Winners Avg"] != "—")
-        total_losers = sum(float(r["Losers Avg"]) for r in rows if r["Losers Avg"] != "—")
-        total_std_vals = [float(r["Winners Std"]) for r in rows if r["Winners Std"] != "—"]
+        # Parse mean values back out of the "X ± Y" strings
+        def _parse_mean(s):
+            if s == "—":
+                return None
+            return float(s.split(" ± ")[0])
+        def _parse_std(s):
+            if s == "—":
+                return None
+            return float(s.split(" ± ")[1])
+        total_mean = sum(_parse_mean(r["Winners (Avg ± Std)"]) for r in rows if _parse_mean(r["Winners (Avg ± Std)"]) is not None)
+        total_losers = sum(_parse_mean(r["Losers (Avg ± Std)"]) for r in rows if _parse_mean(r["Losers (Avg ± Std)"]) is not None)
+        total_std_vals = [_parse_std(r["Winners (Avg ± Std)"]) for r in rows if _parse_std(r["Winners (Avg ± Std)"]) is not None]
+        total_losers_std_vals = [_parse_std(r["Losers (Avg ± Std)"]) for r in rows if _parse_std(r["Losers (Avg ± Std)"]) is not None]
         total_std = (sum(s**2 for s in total_std_vals) ** 0.5) if total_std_vals else 0.0
+        total_losers_std = (sum(s**2 for s in total_losers_std_vals) ** 0.5) if total_losers_std_vals else 0.0
         if total_std > 0:
             total_z = (total_your - total_mean) / total_std
             total_dir = "—" if abs(total_z) < 0.1 else ("↑ too bold" if total_z > 0 else "↓ too chalk")
@@ -623,9 +615,8 @@ with tab_strategy:
         rows.append({
             "Round": "Total",
             "Your Upsets": total_your,
-            "Winners Avg": f"{total_mean:.1f}",
-            "Losers Avg": f"{total_losers:.1f}",
-            "Winners Std": f"{total_std:.1f}",
+            "Winners (Avg ± Std)":f"{total_mean:.1f} ± {total_std:.1f}",
+            "Losers (Avg ± Std)":f"{total_losers:.1f} ± {total_losers_std:.1f}",
             "Direction": total_dir,
         })
 
@@ -656,10 +647,10 @@ with tab_strategy:
                 mean_val = row["mean_madness"] if pd.notna(row.get("mean_madness")) else None
                 std_val = row["std_madness"] if pd.notna(row.get("std_madness")) else None
                 losers_mean = row["losers_mean_madness"] if pd.notna(row.get("losers_mean_madness")) else None
+                losers_std = row["losers_std_madness"] if pd.notna(row.get("losers_std_madness")) else None
                 your_score = madness_scores.get(rnd, 0.0)
-                mean_str = f"{mean_val:.2f}" if mean_val is not None else "—"
-                std_str = f"{std_val:.2f}" if std_val is not None else "—"
-                losers_str = f"{losers_mean:.2f}" if losers_mean is not None else "—"
+                winners_str = f"{mean_val:.2f} ± {std_val:.2f}" if mean_val is not None and std_val is not None else "—"
+                losers_str = f"{losers_mean:.2f} ± {losers_std:.2f}" if losers_mean is not None and losers_std is not None else "—"
                 if mean_val is not None and std_val is not None and std_val > 0:
                     z = (your_score - mean_val) / std_val
                     direction = "—" if abs(z) < 0.1 else ("↑ too bold" if z > 0 else "↓ too chalk")
@@ -670,18 +661,19 @@ with tab_strategy:
                 madness_rows.append({
                     "Round": rnd,
                     "Your Madness": f"{your_score:.2f}",
-                    "Winners Avg": mean_str,
-                    "Losers Avg": losers_str,
-                    "Winners Std": std_str,
+                    "Winners (Avg ± Std)":winners_str,
+                    "Losers (Avg ± Std)":losers_str,
                     "Direction": direction,
                 })
 
             # Add total row
             total_your_m = sum(float(r["Your Madness"]) for r in madness_rows)
-            total_mean_m = sum(float(r["Winners Avg"]) for r in madness_rows if r["Winners Avg"] != "—")
-            total_losers_m = sum(float(r["Losers Avg"]) for r in madness_rows if r["Losers Avg"] != "—")
-            total_std_m_vals = [float(r["Winners Std"]) for r in madness_rows if r["Winners Std"] != "—"]
+            total_mean_m = sum(_parse_mean(r["Winners (Avg ± Std)"]) for r in madness_rows if _parse_mean(r["Winners (Avg ± Std)"]) is not None)
+            total_losers_m = sum(_parse_mean(r["Losers (Avg ± Std)"]) for r in madness_rows if _parse_mean(r["Losers (Avg ± Std)"]) is not None)
+            total_std_m_vals = [_parse_std(r["Winners (Avg ± Std)"]) for r in madness_rows if _parse_std(r["Winners (Avg ± Std)"]) is not None]
+            total_losers_std_m_vals = [_parse_std(r["Losers (Avg ± Std)"]) for r in madness_rows if _parse_std(r["Losers (Avg ± Std)"]) is not None]
             total_std_m = (sum(s**2 for s in total_std_m_vals) ** 0.5) if total_std_m_vals else 0.0
+            total_losers_std_m = (sum(s**2 for s in total_losers_std_m_vals) ** 0.5) if total_losers_std_m_vals else 0.0
             if total_std_m > 0:
                 total_z_m = (total_your_m - total_mean_m) / total_std_m
                 total_dir_m = "—" if abs(total_z_m) < 0.1 else ("↑ too bold" if total_z_m > 0 else "↓ too chalk")
@@ -692,9 +684,8 @@ with tab_strategy:
             madness_rows.append({
                 "Round": "Total",
                 "Your Madness": f"{total_your_m:.2f}",
-                "Winners Avg": f"{total_mean_m:.2f}",
-                "Losers Avg": f"{total_losers_m:.2f}",
-                "Winners Std": f"{total_std_m:.2f}",
+                "Winners (Avg ± Std)":f"{total_mean_m:.2f} ± {total_std_m:.2f}",
+                "Losers (Avg ± Std)":f"{total_losers_m:.2f} ± {total_losers_std_m:.2f}",
                 "Direction": total_dir_m,
             })
 
