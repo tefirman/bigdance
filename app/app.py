@@ -76,6 +76,8 @@ with st.sidebar:
         st.session_state.picks = {r: {} for r in range(6)}
         st.session_state.reset_count += 1
         st.rerun()
+    st.divider()
+    st.caption("Built by [Taylor Firman](https://github.com/tefirman)")
 
 bracket_key = f"bracket_{gender}"
 if bracket_key not in st.session_state:
