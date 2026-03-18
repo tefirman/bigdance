@@ -81,9 +81,9 @@ GAME #2: Duke vs Houston (Region: EAST)
 
 ## Interactive Demo
 
-A live web app is available at **[bigdance-bracket.streamlit.app](https://bigdance-bracket.streamlit.app)** — no installation required. It lets you pick your bracket, configure your pool size, and run simulations to estimate your win probability, all from the browser.
+A live web app is available at **[bigdance-bracket.streamlit.app](https://bigdance-bracket.streamlit.app)** — no installation or login required. It lets you pick your bracket, configure your pool size, and run simulations to estimate your win probability, all from the browser.
 
-The app supports both the men's and women's NCAA tournaments and includes an Upset Strategy tab with pre-computed analysis of winning bracket patterns by pool size.
+The app supports both the men's and women's NCAA tournaments and includes an Upset Strategy tab with pre-computed analysis of winning bracket patterns by pool size, comparing winners' and losers' upset counts and madness scores.
 
 See [app/README.md](app/README.md) for details on running the app locally or deploying your own instance.
 

@@ -4,14 +4,14 @@ A Streamlit web app for picking your March Madness bracket and estimating your w
 
 ## Overview
 
-The app lets you fill out a complete NCAA tournament bracket using real or simulated team data, specify your pool size, and run Monte Carlo simulations to estimate how likely your bracket is to win. It supports both the men's and women's NCAA tournaments. It is designed for personal and small-group use — no local server setup required for friends, just share the Streamlit Community Cloud URL.
+The app lets you fill out a complete NCAA tournament bracket using real or simulated team data, specify your pool size, and run Monte Carlo simulations to estimate how likely your bracket is to win. It supports both the men's and women's NCAA tournaments. The app is publicly accessible — no local server setup required, just share the Streamlit Community Cloud URL.
 
 ## User Flow
 
 ### Sidebar: Configure Your Pool
 
 - **Tournament:** Toggle between Men's and Women's NCAA tournament
-- **Pool size:** Number of entries in your bracket pool (options: 5, 10, 15, 20, 30, 50)
+- **Pool size:** Number of entries in your bracket pool (options: 10, 15, 20, 30, 50, 75, 100, 150, 200)
 - **Number of simulations:** How many Monte Carlo simulations to run (options: 500, 1000, 2500, 5000)
 - **Simulate button:** Runs the pool simulation with your current bracket picks
 - **Reset bracket:** Clears all picks back to the better-seed defaults
@@ -20,8 +20,8 @@ The app lets you fill out a complete NCAA tournament bracket using real or simul
 
 The bracket picker displays the 64-team field in a round-by-round cascading layout. For each game:
 
-- Two radio buttons show the current opponents (team name + seed)
-- Each matchup shows the Elo-based win probability for each team as a caption (e.g., `Auburn 78% · Florida 22%`)
+- Two radio buttons show the current opponents (team name + seed), each matchup displayed with a bordered container
+- Each matchup shows the Elo-based win probability for each team as a caption (e.g., `Auburn 78% · Florida 22%`), with team names truncated to prevent line wrapping
 - Selecting a team advances them to the next round as a radio button option
 - Defaults to the better seed throughout; all rounds populate automatically on page load
 - This continues through all six rounds: Round of 64, Round of 32, Sweet 16, Elite 8, Final Four, Championship
@@ -44,8 +44,8 @@ Displays after clicking **Simulate**:
 
 Pre-computed analysis of winning bracket patterns for your pool size, across three sections:
 
-- **Upset count by round:** How many upsets winning brackets typically pick per round, color-coded by how your current picks compare (green = on target, yellow = slightly off, red = too chalk or too bold)
-- **Madness Score by round:** Negative log probability of your picks per round — higher = more surprising. Shows how your picks compare to the typical winning bracket's surprise level
+- **Upset count by round:** How many upsets winning brackets typically pick per round, displayed as Avg ± Std for both winners and losers, color-coded by how your current picks compare (green = on target, yellow = slightly off, red = too chalk or too bold). Includes a total row across all rounds.
+- **Madness Score by round:** Negative log probability of your picks per round — higher = more surprising. Shows winners' and losers' Avg ± Std so you can see whether your picks' surprise level differentiates from the pack. Includes a total row.
 - **Common underdogs in winning brackets:** Which underdog teams appear most often in winning brackets, broken down by how far they upset through
 
 All data is pre-computed for the selected pool size and tournament (men's/women's) via `generate_upset_analysis.py` and stored in `app/data/{gender}/pool_{n}/`.
@@ -102,14 +102,18 @@ app/
 ├── README.md                    # this file
 ├── app.py                       # main Streamlit app
 ├── generate_upset_analysis.py   # pre-bake script for upset strategy data
+├── requirements.txt             # app-specific dependencies
+├── .cache/                      # cached ESPN bracket HTML and ELO data (git-ignored)
+│   ├── men/                     # men's ELO cache (avoids collision with women's)
+│   └── women/                   # women's ELO cache
 └── data/
     ├── men/
-    │   ├── pool_5/
     │   ├── pool_10/
+    │   ├── pool_15/
     │   └── ...
     └── women/
-        ├── pool_5/
         ├── pool_10/
+        ├── pool_15/
         └── ...
 ```
 
