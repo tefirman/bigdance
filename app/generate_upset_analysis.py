@@ -96,19 +96,36 @@ def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observ
             lambda r: r["std_upsets"] if pd.notna(r.get("std_upsets")) else std_by_round.get(r["round"]),
             axis=1,
         )
+
+        # Add losers' (non-winning) upset stats per round
+        for rnd_label, rnd_data_key in [*[(r, r) for r in ROUND_ORDER], ("Total Upsets", None)]:
+            if rnd_data_key is not None:
+                data = analyzer.non_winning_underdogs_by_round.get(rnd_data_key, [])
+            else:
+                data = analyzer.non_winning_total_underdogs or []
+            mask = strategy_df["round"] == rnd_label
+            if mask.any() and data:
+                strategy_df.loc[mask, "losers_mean_upsets"] = float(np.mean(data))
+                strategy_df.loc[mask, "losers_std_upsets"] = float(np.std(data))
+
         strategy_df["num_pools"] = num_pools
         strategy_df.to_csv(output_dir / "optimal_upset_strategy.csv", index=False)
 
         # Save Madness Score (negative log probability) stats for winners by round
         log_prob_rows = []
         for rnd in ROUND_ORDER:
-            data = analyzer.winning_log_probs_by_round.get(rnd, [])
-            if data:
-                log_prob_rows.append({
+            win_data = analyzer.winning_log_probs_by_round.get(rnd, [])
+            lose_data = analyzer.non_winning_log_probs_by_round.get(rnd, [])
+            if win_data:
+                row = {
                     "round": rnd,
-                    "mean_madness": float(np.mean(data)),
-                    "std_madness": float(np.std(data)),
-                })
+                    "mean_madness": float(np.mean(win_data)),
+                    "std_madness": float(np.std(win_data)),
+                }
+                if lose_data:
+                    row["losers_mean_madness"] = float(np.mean(lose_data))
+                    row["losers_std_madness"] = float(np.std(lose_data))
+                log_prob_rows.append(row)
         pd.DataFrame(log_prob_rows).to_csv(output_dir / "log_prob_strategy.csv", index=False)
 
         # Save common underdogs in winning brackets

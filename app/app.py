@@ -586,8 +586,10 @@ with tab_strategy:
                 continue
             mean_val = row["mean_upsets"] if pd.notna(row.get("mean_upsets")) else None
             std_val = row["std_upsets"] if pd.notna(row.get("std_upsets")) else None
+            losers_mean = row["losers_mean_upsets"] if pd.notna(row.get("losers_mean_upsets")) else None
             mean_str = f"{mean_val:.1f}" if mean_val is not None else "—"
             std_str = f"{std_val:.1f}" if std_val is not None else "—"
+            losers_str = f"{losers_mean:.1f}" if losers_mean is not None else "—"
             your_count = user_upsets.get(rnd, 0)
             if mean_val is not None and std_val is not None and std_val > 0:
                 z = (your_count - mean_val) / std_val
@@ -600,6 +602,7 @@ with tab_strategy:
                 "Round": rnd,
                 "Your Upsets": your_count,
                 "Winners Avg": mean_str,
+                "Losers Avg": losers_str,
                 "Winners Std": std_str,
                 "Direction": direction,
             })
@@ -607,6 +610,7 @@ with tab_strategy:
         # Add total row
         total_your = sum(r["Your Upsets"] for r in rows)
         total_mean = sum(float(r["Winners Avg"]) for r in rows if r["Winners Avg"] != "—")
+        total_losers = sum(float(r["Losers Avg"]) for r in rows if r["Losers Avg"] != "—")
         total_std_vals = [float(r["Winners Std"]) for r in rows if r["Winners Std"] != "—"]
         total_std = (sum(s**2 for s in total_std_vals) ** 0.5) if total_std_vals else 0.0
         if total_std > 0:
@@ -620,6 +624,7 @@ with tab_strategy:
             "Round": "Total",
             "Your Upsets": total_your,
             "Winners Avg": f"{total_mean:.1f}",
+            "Losers Avg": f"{total_losers:.1f}",
             "Winners Std": f"{total_std:.1f}",
             "Direction": total_dir,
         })
@@ -650,9 +655,11 @@ with tab_strategy:
                 rnd = row["round"]
                 mean_val = row["mean_madness"] if pd.notna(row.get("mean_madness")) else None
                 std_val = row["std_madness"] if pd.notna(row.get("std_madness")) else None
+                losers_mean = row["losers_mean_madness"] if pd.notna(row.get("losers_mean_madness")) else None
                 your_score = madness_scores.get(rnd, 0.0)
                 mean_str = f"{mean_val:.2f}" if mean_val is not None else "—"
                 std_str = f"{std_val:.2f}" if std_val is not None else "—"
+                losers_str = f"{losers_mean:.2f}" if losers_mean is not None else "—"
                 if mean_val is not None and std_val is not None and std_val > 0:
                     z = (your_score - mean_val) / std_val
                     direction = "—" if abs(z) < 0.1 else ("↑ too bold" if z > 0 else "↓ too chalk")
@@ -664,6 +671,7 @@ with tab_strategy:
                     "Round": rnd,
                     "Your Madness": f"{your_score:.2f}",
                     "Winners Avg": mean_str,
+                    "Losers Avg": losers_str,
                     "Winners Std": std_str,
                     "Direction": direction,
                 })
@@ -671,6 +679,7 @@ with tab_strategy:
             # Add total row
             total_your_m = sum(float(r["Your Madness"]) for r in madness_rows)
             total_mean_m = sum(float(r["Winners Avg"]) for r in madness_rows if r["Winners Avg"] != "—")
+            total_losers_m = sum(float(r["Losers Avg"]) for r in madness_rows if r["Losers Avg"] != "—")
             total_std_m_vals = [float(r["Winners Std"]) for r in madness_rows if r["Winners Std"] != "—"]
             total_std_m = (sum(s**2 for s in total_std_m_vals) ** 0.5) if total_std_m_vals else 0.0
             if total_std_m > 0:
@@ -684,6 +693,7 @@ with tab_strategy:
                 "Round": "Total",
                 "Your Madness": f"{total_your_m:.2f}",
                 "Winners Avg": f"{total_mean_m:.2f}",
+                "Losers Avg": f"{total_losers_m:.2f}",
                 "Winners Std": f"{total_std_m:.2f}",
                 "Direction": total_dir_m,
             })
