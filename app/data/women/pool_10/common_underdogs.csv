@@ -1,94 +1,143 @@
 advanced_through,to_reach,seed,team,frequency
-First Round,Second Round,12,James Madison,0.17
-First Round,Second Round,11,S Dakota St,0.14
-First Round,Second Round,9,USC,0.14
-First Round,Second Round,11,Fairfield,0.14
-First Round,Second Round,11,Rhode Island,0.13
-First Round,Second Round,10,Colorado,0.13
-First Round,Second Round,9,Virginia Tech,0.12
-First Round,Second Round,10,Villanova,0.12
-First Round,Second Round,13,Miami OH,0.11
-First Round,Second Round,9,Princeton,0.1
-First Round,Second Round,10,UVA/ASU,0.1
-First Round,Second Round,12,Murray St,0.09
-First Round,Second Round,15,Holy Cross,0.09
-First Round,Second Round,12,Gonzaga,0.08
-First Round,Second Round,9,Syracuse,0.08
-First Round,Second Round,10,Tennessee,0.07
-First Round,Second Round,12,Colorado St,0.06
-First Round,Second Round,13,Green Bay,0.06
-First Round,Second Round,13,Idaho,0.06
-First Round,Second Round,15,FDU,0.05
-First Round,Second Round,15,High Point,0.05
-First Round,Second Round,14,UC San Diego,0.05
-First Round,Second Round,11,NEB/RICH,0.04
-First Round,Second Round,16,UTSA,0.04
-First Round,Second Round,14,Vermont,0.04
-First Round,Second Round,14,Howard,0.03
-First Round,Second Round,14,Charleston,0.03
-First Round,Second Round,16,CA Baptist,0.02
-First Round,Second Round,13,W Illinois,0.01
-First Round,Second Round,15,Jacksonville,0.01
-Second Round,Sweet 16,7,NC State,0.13
-Second Round,Sweet 16,5,Kentucky,0.13
-Second Round,Sweet 16,5,Michigan St,0.13
-Second Round,Sweet 16,6,Notre Dame,0.11
-Second Round,Sweet 16,6,Baylor,0.1
-Second Round,Sweet 16,7,Georgia,0.09
-Second Round,Sweet 16,6,Washington,0.09
-Second Round,Sweet 16,5,Maryland,0.08
-Second Round,Sweet 16,6,Alabama,0.08
-Second Round,Sweet 16,5,Ole Miss,0.07
-Second Round,Sweet 16,7,Illinois,0.06
-Second Round,Sweet 16,8,Oklahoma St,0.04
-Second Round,Sweet 16,12,James Madison,0.03
-Second Round,Sweet 16,8,Iowa State,0.03
-Second Round,Sweet 16,8,Clemson,0.03
-Second Round,Sweet 16,7,Texas Tech,0.03
-Second Round,Sweet 16,13,Miami OH,0.02
-Second Round,Sweet 16,11,Fairfield,0.02
-Second Round,Sweet 16,16,UTSA,0.02
-Second Round,Sweet 16,15,High Point,0.02
-Second Round,Sweet 16,10,UVA/ASU,0.02
+First Round,Second Round,10,Villanova,0.132
+First Round,Second Round,12,James Madison,0.113
+First Round,Second Round,12,Murray St,0.109
+First Round,Second Round,9,Syracuse,0.109
+First Round,Second Round,9,USC,0.107
+First Round,Second Round,9,Virginia Tech,0.106
+First Round,Second Round,9,Princeton,0.106
+First Round,Second Round,11,Rhode Island,0.105
+First Round,Second Round,10,Colorado,0.104
+First Round,Second Round,11,S Dakota St,0.104
+First Round,Second Round,11,Fairfield,0.098
+First Round,Second Round,12,Gonzaga,0.088
+First Round,Second Round,13,W Illinois,0.079
+First Round,Second Round,10,UVA/ASU,0.078
+First Round,Second Round,13,Green Bay,0.077
+First Round,Second Round,10,Tennessee,0.071
+First Round,Second Round,13,Idaho,0.071
+First Round,Second Round,14,Vermont,0.068
+First Round,Second Round,12,Colorado St,0.062
+First Round,Second Round,13,Miami OH,0.055
+First Round,Second Round,14,Charleston,0.05
+First Round,Second Round,11,NEB/RICH,0.049
+First Round,Second Round,14,UC San Diego,0.048
+First Round,Second Round,14,Howard,0.039
+First Round,Second Round,15,FDU,0.038
+First Round,Second Round,15,High Point,0.038
+First Round,Second Round,15,Holy Cross,0.036
+First Round,Second Round,15,Jacksonville,0.032
+First Round,Second Round,16,UTSA,0.01
+First Round,Second Round,16,CA Baptist,0.01
+First Round,Second Round,16,MOST/SFA,0.003
+First Round,Second Round,16,SOU/SAM,0.002
+Second Round,Sweet 16,5,Michigan St,0.153
+Second Round,Sweet 16,5,Ole Miss,0.15
+Second Round,Sweet 16,5,Maryland,0.136
+Second Round,Sweet 16,6,Notre Dame,0.108
+Second Round,Sweet 16,6,Baylor,0.108
+Second Round,Sweet 16,6,Alabama,0.101
+Second Round,Sweet 16,5,Kentucky,0.09
+Second Round,Sweet 16,6,Washington,0.085
+Second Round,Sweet 16,7,NC State,0.082
+Second Round,Sweet 16,7,Texas Tech,0.07
+Second Round,Sweet 16,7,Illinois,0.07
+Second Round,Sweet 16,7,Georgia,0.067
+Second Round,Sweet 16,8,Oklahoma St,0.044
+Second Round,Sweet 16,8,Iowa State,0.028
+Second Round,Sweet 16,11,Rhode Island,0.024
+Second Round,Sweet 16,8,Clemson,0.023
+Second Round,Sweet 16,8,Oregon,0.02
+Second Round,Sweet 16,12,James Madison,0.017
+Second Round,Sweet 16,11,S Dakota St,0.014
+Second Round,Sweet 16,11,Fairfield,0.012
 Second Round,Sweet 16,12,Colorado St,0.01
-Second Round,Sweet 16,10,Tennessee,0.01
-Second Round,Sweet 16,15,Holy Cross,0.01
-Second Round,Sweet 16,11,Rhode Island,0.01
-Second Round,Sweet 16,15,FDU,0.01
-Second Round,Sweet 16,13,Green Bay,0.01
-Second Round,Sweet 16,10,Colorado,0.01
-Sweet 16,Elite 8,3,Louisville,0.27
-Sweet 16,Elite 8,3,TCU,0.18
-Sweet 16,Elite 8,3,Ohio State,0.15
-Sweet 16,Elite 8,4,North Carolina,0.08
-Sweet 16,Elite 8,3,Duke,0.07
-Sweet 16,Elite 8,4,Minnesota,0.06
-Sweet 16,Elite 8,4,West Virginia,0.05
-Sweet 16,Elite 8,4,Oklahoma,0.05
-Sweet 16,Elite 8,7,Texas Tech,0.02
-Sweet 16,Elite 8,6,Notre Dame,0.01
-Sweet 16,Elite 8,6,Baylor,0.01
-Sweet 16,Elite 8,15,Holy Cross,0.01
-Sweet 16,Elite 8,7,Illinois,0.01
-Sweet 16,Elite 8,5,Kentucky,0.01
-Sweet 16,Elite 8,5,Michigan St,0.01
-Sweet 16,Elite 8,7,NC State,0.01
-Sweet 16,Elite 8,13,Green Bay,0.01
-Sweet 16,Elite 8,6,Washington,0.01
-Elite 8,Final Four,2,Vanderbilt,0.11
-Elite 8,Final Four,2,LSU,0.1
-Elite 8,Final Four,2,Michigan,0.1
-Elite 8,Final Four,2,Iowa,0.09
-Elite 8,Final Four,3,Louisville,0.03
-Elite 8,Final Four,3,Ohio State,0.02
-Elite 8,Final Four,3,TCU,0.02
-Elite 8,Final Four,6,Notre Dame,0.01
-Elite 8,Final Four,4,West Virginia,0.01
-Elite 8,Final Four,6,Baylor,0.01
-Elite 8,Final Four,4,North Carolina,0.01
-Elite 8,Final Four,3,Duke,0.01
-Final Four,Championship,2,LSU,0.03
-Final Four,Championship,2,Iowa,0.03
-Final Four,Championship,6,Notre Dame,0.01
-Final Four,Championship,3,TCU,0.01
+Second Round,Sweet 16,13,Miami OH,0.01
+Second Round,Sweet 16,10,Villanova,0.01
+Second Round,Sweet 16,12,Murray St,0.01
+Second Round,Sweet 16,10,Colorado,0.009
+Second Round,Sweet 16,10,UVA/ASU,0.009
+Second Round,Sweet 16,12,Gonzaga,0.009
+Second Round,Sweet 16,13,Idaho,0.009
+Second Round,Sweet 16,14,UC San Diego,0.007
+Second Round,Sweet 16,13,W Illinois,0.007
+Second Round,Sweet 16,14,Vermont,0.007
+Second Round,Sweet 16,10,Tennessee,0.007
+Second Round,Sweet 16,9,Syracuse,0.006
+Second Round,Sweet 16,9,Virginia Tech,0.005
+Second Round,Sweet 16,14,Howard,0.005
+Second Round,Sweet 16,15,High Point,0.005
+Second Round,Sweet 16,15,FDU,0.004
+Second Round,Sweet 16,13,Green Bay,0.004
+Second Round,Sweet 16,14,Charleston,0.004
+Second Round,Sweet 16,11,NEB/RICH,0.003
+Second Round,Sweet 16,9,USC,0.003
+Second Round,Sweet 16,9,Princeton,0.002
+Second Round,Sweet 16,15,Jacksonville,0.001
+Sweet 16,Elite 8,3,Louisville,0.146
+Sweet 16,Elite 8,3,TCU,0.142
+Sweet 16,Elite 8,3,Ohio State,0.142
+Sweet 16,Elite 8,3,Duke,0.132
+Sweet 16,Elite 8,4,West Virginia,0.074
+Sweet 16,Elite 8,4,North Carolina,0.069
+Sweet 16,Elite 8,4,Minnesota,0.064
+Sweet 16,Elite 8,4,Oklahoma,0.062
+Sweet 16,Elite 8,6,Baylor,0.018
+Sweet 16,Elite 8,6,Notre Dame,0.017
+Sweet 16,Elite 8,5,Michigan St,0.016
+Sweet 16,Elite 8,5,Ole Miss,0.015
+Sweet 16,Elite 8,6,Alabama,0.013
+Sweet 16,Elite 8,7,NC State,0.012
+Sweet 16,Elite 8,6,Washington,0.008
+Sweet 16,Elite 8,5,Maryland,0.008
+Sweet 16,Elite 8,8,Oklahoma St,0.007
+Sweet 16,Elite 8,7,Georgia,0.006
+Sweet 16,Elite 8,5,Kentucky,0.006
+Sweet 16,Elite 8,10,Colorado,0.004
+Sweet 16,Elite 8,7,Illinois,0.004
+Sweet 16,Elite 8,11,Rhode Island,0.003
+Sweet 16,Elite 8,10,Villanova,0.003
+Sweet 16,Elite 8,8,Iowa State,0.003
+Sweet 16,Elite 8,7,Texas Tech,0.003
+Sweet 16,Elite 8,12,James Madison,0.003
+Sweet 16,Elite 8,11,S Dakota St,0.002
+Sweet 16,Elite 8,9,Virginia Tech,0.002
+Sweet 16,Elite 8,15,High Point,0.002
+Sweet 16,Elite 8,12,Murray St,0.001
+Sweet 16,Elite 8,13,W Illinois,0.001
+Sweet 16,Elite 8,13,Idaho,0.001
+Sweet 16,Elite 8,14,Vermont,0.001
+Sweet 16,Elite 8,10,UVA/ASU,0.001
+Sweet 16,Elite 8,8,Oregon,0.001
+Elite 8,Final Four,2,LSU,0.122
+Elite 8,Final Four,2,Michigan,0.119
+Elite 8,Final Four,2,Vanderbilt,0.099
+Elite 8,Final Four,2,Iowa,0.099
+Elite 8,Final Four,3,Ohio State,0.026
+Elite 8,Final Four,3,Duke,0.024
+Elite 8,Final Four,3,TCU,0.023
+Elite 8,Final Four,3,Louisville,0.015
+Elite 8,Final Four,4,West Virginia,0.013
+Elite 8,Final Four,4,Oklahoma,0.009
+Elite 8,Final Four,4,North Carolina,0.006
+Elite 8,Final Four,4,Minnesota,0.004
+Elite 8,Final Four,5,Maryland,0.003
+Elite 8,Final Four,8,Oklahoma St,0.002
+Elite 8,Final Four,5,Michigan St,0.002
+Elite 8,Final Four,10,Villanova,0.001
+Elite 8,Final Four,6,Alabama,0.001
+Elite 8,Final Four,10,Colorado,0.001
+Elite 8,Final Four,7,Illinois,0.001
+Final Four,Championship,2,LSU,0.025
+Final Four,Championship,2,Iowa,0.018
+Final Four,Championship,2,Vanderbilt,0.013
 Final Four,Championship,2,Michigan,0.01
+Final Four,Championship,3,TCU,0.003
+Final Four,Championship,3,Duke,0.002
+Final Four,Championship,4,West Virginia,0.001
+Final Four,Championship,4,North Carolina,0.001
+Final Four,Championship,3,Louisville,0.001
+Championship,N/A,2,Michigan,0.002
+Championship,N/A,2,Iowa,0.002
+Championship,N/A,2,LSU,0.002
+Championship,N/A,3,Duke,0.001
