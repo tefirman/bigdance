@@ -1,2 +1,2 @@
 streamlit>=1.55.0
-bigdance>=0.6.0
+bigdance>=0.7.0
