@@ -122,9 +122,9 @@ def render_standings(results_df: pd.DataFrame, my_bracket: str = ""):
             return [""] * len(row)
 
         styled = display_df.style.apply(highlight_row, axis=1)
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.dataframe(styled, width="stretch", hide_index=True)
     else:
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width="stretch", hide_index=True)
 
 
 def render_importance(importance_data: list[dict], my_bracket: str = ""):
@@ -175,9 +175,9 @@ def render_importance(importance_data: list[dict], my_bracket: str = ""):
                         return [""] * len(row)
 
                     styled = impact_df.style.apply(highlight_entry, axis=1)
-                    st.dataframe(styled, use_container_width=True, hide_index=True)
+                    st.dataframe(styled, width="stretch", hide_index=True)
                 else:
-                    st.dataframe(impact_df, use_container_width=True, hide_index=True)
+                    st.dataframe(impact_df, width="stretch", hide_index=True)
 
 
 def render_entry_details(
@@ -246,7 +246,7 @@ def render_entry_details(
 
         st.write(f"**{label}**")
         styled = picks_df.style.map(color_result, subset=["Result"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.dataframe(styled, width="stretch", hide_index=True)
 
     # Game impact for this entry
     if importance_data:
@@ -301,7 +301,7 @@ with st.sidebar:
         help="Highlights your entry in the results",
     )
 
-    analyze_btn = st.button("Analyze Pool", type="primary", use_container_width=True)
+    analyze_btn = st.button("Analyze Pool", type="primary", width="stretch")
 
     st.divider()
     st.caption("Built by [Taylor Firman](https://github.com/tefirman)")
