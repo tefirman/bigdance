@@ -3,7 +3,7 @@
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.7.1
+@Version :   0.8.0
 @Contact :   tefirman@gmail.com
 @Desc    :   ESPN Tournament Challenge integration via the Gambit JSON API
 """
