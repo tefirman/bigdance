@@ -198,9 +198,10 @@ def render_entry_details(
 
     # Score summary
     score = entry.get("score", {})
+    record = score.get("record", {})
     col1, col2, col3 = st.columns(3)
     col1.metric("Score", score.get("overallScore", 0))
-    col2.metric("Record", f"{score.get('recordWins', 0)}W - {score.get('recordLosses', 0)}L")
+    col2.metric("Record", f"{record.get('wins', 0)}W - {record.get('losses', 0)}L")
     col3.metric("Possible Points", score.get("possiblePointsRemaining", "?"))
 
     st.subheader("Picks by Round")
