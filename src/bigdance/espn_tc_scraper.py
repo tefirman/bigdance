@@ -604,7 +604,7 @@ class ESPNBracket:
                 winner_names = []
                 for tag in team_tags:
                     grandparent = tag.parent.parent if tag.parent else None
-                    gp_classes = " ".join(grandparent.get("class", [])) if grandparent else ""
+                    gp_classes = " ".join(grandparent.get("class") or []) if grandparent else ""
                     if "Proposition" not in gp_classes and "winner" in gp_classes:
                         winner_names.append(tag.text)
                 picks = winner_names
@@ -648,9 +648,7 @@ class ESPNBracket:
                             for tag in team_tags:
                                 grandparent = tag.parent.parent if tag.parent else None
                                 gp_classes = (
-                                    " ".join(grandparent.get("class", []))
-                                    if grandparent
-                                    else ""
+                                    " ".join(grandparent.get("class") or []) if grandparent else ""
                                 )
                                 if "Proposition" in gp_classes and "winner" in gp_classes:
                                     name = tag.text.replace("St.", "St")
