@@ -211,7 +211,9 @@ def render_entry_details(
         outcome_id = pick["outcomesPicked"][0]["outcomeId"]
         result = pick["outcomesPicked"][0].get("result", "UNDECIDED")
         period_reached = pick.get("periodReached", 1)
-        info = outcome_map.get(outcome_id, {})
+        info = outcome_map.get(outcome_id)
+        if not info:
+            continue  # Skip later-round picks with unknown outcome IDs
 
         prop_info = next(
             (p for p in challenge["propositions"] if p["id"] == pick["propositionId"]),
@@ -225,7 +227,7 @@ def render_entry_details(
             picks_by_round[period].append(
                 {
                     "Team": info.get("name", "Unknown"),
-                    "Seed": info.get("seed", "?"),
+                    "Seed": info.get("seed", 0),
                     "Result": result if period == base_period else "UNDECIDED",
                 }
             )
