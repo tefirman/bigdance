@@ -85,10 +85,15 @@ def run_pool_simulation(
         if bracket:
             pool.add_entry(entry_name, bracket, False)
 
+    # Deep copy the pool before simulation since simulate_pool mutates
+    # the actual bracket's results (fills in all rounds). We need the
+    # original state for importance analysis.
+    pool_for_importance = copy.deepcopy(pool)
+
     fixed_winners = copy.deepcopy(actual_bracket.results)
     results_df = pool.simulate_pool(num_sims=num_sims, fixed_winners=fixed_winners)
 
-    return pool, results_df
+    return pool_for_importance, results_df
 
 
 def run_importance_analysis(pool: Pool, num_sims: int) -> list[dict]:
@@ -106,8 +111,8 @@ def render_standings(results_df: pd.DataFrame, my_bracket: str = ""):
     """Render the pool standings table."""
     display_df = results_df[["name", "avg_score", "std_score", "win_prob"]].copy()
     display_df.columns = ["Entry", "Avg Score", "Std Score", "Win Prob"]
-    display_df["Avg Score"] = display_df["Avg Score"].round(1)
-    display_df["Std Score"] = display_df["Std Score"].round(1)
+    display_df["Avg Score"] = display_df["Avg Score"].apply(lambda x: f"{x:.1f}")
+    display_df["Std Score"] = display_df["Std Score"].apply(lambda x: f"{x:.1f}")
 
     if my_bracket:
 
