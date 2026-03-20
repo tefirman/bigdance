@@ -329,9 +329,15 @@ class ESPNScraper(BaseScraper):
                 # Single page mode
                 html_content = driver.page_source
 
-                # Cache result if needed
+                # Validate that bracket content actually rendered before caching
                 if cache_key and self.cache_dir:
-                    self._cache_response(cache_key, url, html_content)
+                    if "BracketOutcome" in html_content:
+                        self._cache_response(cache_key, url, html_content)
+                    else:
+                        logger.warning(
+                            "Page content appears incomplete (no BracketOutcome elements found). "
+                            "Skipping cache to avoid persisting a bad response."
+                        )
 
                 return cast(str, html_content)
             else:
@@ -541,6 +547,26 @@ class ESPNBracket:
             ids = [str(team.attrs["src"]).split("/")[-1].split(".")[0] for team in team_id_tags]
             seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1]
 
+            # Validate that the page rendered enough bracket content
+            if len(regions) < 4:
+                logger.error(
+                    f"Expected 4 regions but found {len(regions)}. "
+                    "The page may not have fully rendered (slow connection or JS timeout)."
+                )
+                return None
+            if len(names) < 64:
+                logger.error(
+                    f"Expected at least 64 team names but found {len(names)}. "
+                    "The page may not have fully rendered (slow connection or JS timeout)."
+                )
+                return None
+            if len(seeds) < 64:
+                logger.error(
+                    f"Expected at least 64 seeds but found {len(seeds)}. "
+                    "The page may not have fully rendered (slow connection or JS timeout)."
+                )
+                return None
+
             # Create mapping between team names and ESPN id
             name_mapping = {ids[ind]: names[ind] for ind in range(len(ids))}
 
@@ -571,8 +597,17 @@ class ESPNBracket:
             ]
 
             # Determine if we're looking at the actual results or picks
-            if len(pick_tags) == 0:  # Reality
-                picks = names[64:]
+            if len(pick_tags) == 0:  # Reality (blank bracket / actual tournament results)
+                # Extract actual winners using the BracketOutcome--winner class
+                # This handles both pre-tournament (no winners) and in-progress brackets
+                # where ESPN renders extra labels for completed games
+                winner_names = []
+                for tag in team_tags:
+                    grandparent = tag.parent.parent if tag.parent else None
+                    gp_classes = " ".join(grandparent.get("class", [])) if grandparent else ""
+                    if "Proposition" not in gp_classes and "winner" in gp_classes:
+                        winner_names.append(tag.text)
+                picks = winner_names
             else:
                 # Extract picks made by user
                 try:
@@ -585,28 +620,90 @@ class ESPNBracket:
                     logger.warning(f"Incomplete bracket, skipping: {e}")
                     return None
 
-            # Parse each round's picks
-            for round_ind in range(5):
-                bracket.results[round_names[round_ind]] = []
-                for pick in picks[64 - 2 ** (6 - round_ind) : 64 - 2 ** (5 - round_ind)]:
-                    pick = pick.replace("St.", "St")  # Fix Saint name mismatch
-                    winner = next((t for t in teams if pick == t.name), None)
+            # Parse results differently for actual results vs user picks
+            if len(pick_tags) == 0:
+                # Actual results: match winners to their bracket games round by round
+                # Start with First Round games already in the bracket
+                bracket.results["First Round"] = []
+                for pick_name in picks:
+                    pick_name = pick_name.replace("St.", "St")
+                    winner = next((t for t in teams if pick_name == t.name), None)
                     if winner:
-                        bracket.results[round_names[round_ind]].append(winner)
-                        if round_ind == 0:
-                            for game in bracket.games:
-                                if game.team1.name == winner.name or game.team2.name == winner.name:
-                                    game.winner = winner
-                                    break
+                        bracket.results["First Round"].append(winner)
+                        for game in bracket.games:
+                            if game.team1.name == winner.name or game.team2.name == winner.name:
+                                game.winner = winner
+                                break
 
-            # Extract champion pick
-            champ_tag = soup.find("span", attrs={"class": "PrintChampionshipPickBody-outcomeName"})
-            if champ_tag:
-                champion = champ_tag.text.replace("St.", "St")
-                winner = next((t for t in teams if champion.startswith(t.name)), None)
-                if winner:
-                    bracket.results["Championship"] = [winner]
-                    bracket.results["Champion"] = winner  # type: ignore[assignment]
+                # Build subsequent rounds from the game tree
+                current_games = bracket.games.copy()
+                for round_ind in range(1, 5):
+                    # Advance to get next round's matchups
+                    if all(g.winner for g in current_games):
+                        current_games = bracket.advance_round(current_games)
+                        # Check if any of these games have known winners
+                        # (from BracketOutcome--winner labels in deeper Proposition slots)
+                        round_winners = []
+                        for game in current_games:
+                            for tag in team_tags:
+                                grandparent = tag.parent.parent if tag.parent else None
+                                gp_classes = (
+                                    " ".join(grandparent.get("class", []))
+                                    if grandparent
+                                    else ""
+                                )
+                                if "Proposition" in gp_classes and "winner" in gp_classes:
+                                    name = tag.text.replace("St.", "St")
+                                    if name == game.team1.name:
+                                        game.winner = game.team1
+                                        round_winners.append(game.team1)
+                                        break
+                                    elif name == game.team2.name:
+                                        game.winner = game.team2
+                                        round_winners.append(game.team2)
+                                        break
+                        bracket.results[round_names[round_ind]] = round_winners
+                    else:
+                        bracket.results[round_names[round_ind]] = []
+
+                # Extract champion if available
+                champ_tag = soup.find(
+                    "span", attrs={"class": "PrintChampionshipPickBody-outcomeName"}
+                )
+                if champ_tag:
+                    champion = champ_tag.text.replace("St.", "St")
+                    winner = next((t for t in teams if champion.startswith(t.name)), None)
+                    if winner:
+                        bracket.results["Championship"] = [winner]
+                        bracket.results["Champion"] = winner  # type: ignore[assignment]
+            else:
+                # User picks: use positional slicing (picks are ordered by round)
+                for round_ind in range(5):
+                    bracket.results[round_names[round_ind]] = []
+                    for pick in picks[64 - 2 ** (6 - round_ind) : 64 - 2 ** (5 - round_ind)]:
+                        pick = pick.replace("St.", "St")
+                        winner = next((t for t in teams if pick == t.name), None)
+                        if winner:
+                            bracket.results[round_names[round_ind]].append(winner)
+                            if round_ind == 0:
+                                for game in bracket.games:
+                                    if (
+                                        game.team1.name == winner.name
+                                        or game.team2.name == winner.name
+                                    ):
+                                        game.winner = winner
+                                        break
+
+                # Extract champion pick
+                champ_tag = soup.find(
+                    "span", attrs={"class": "PrintChampionshipPickBody-outcomeName"}
+                )
+                if champ_tag:
+                    champion = champ_tag.text.replace("St.", "St")
+                    winner = next((t for t in teams if champion.startswith(t.name)), None)
+                    if winner:
+                        bracket.results["Championship"] = [winner]
+                        bracket.results["Champion"] = winner  # type: ignore[assignment]
 
             # Calculate bracket statistics
             bracket.log_probability = bracket.calculate_log_probability()
@@ -893,13 +990,11 @@ class GameImportanceAnalyzer:
 
         # Analyze each game
         game_importance = []
+        current_round_results = actual_bracket.results.get(current_round, [])
         for game_ind in range(len(teams_in_round) // 2):
             team1 = teams_in_round[game_ind * 2]
             team2 = teams_in_round[game_ind * 2 + 1]
-            if (
-                team1 in actual_bracket.results[current_round]
-                or team2 in actual_bracket.results[current_round]
-            ):
+            if team1 in current_round_results or team2 in current_round_results:
                 continue
 
             # Analyze importance of this matchup

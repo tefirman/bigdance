@@ -598,5 +598,123 @@ class TestGameImportanceAnalyzer:
             )
 
 
+class TestExtractBracketIntegration:
+    """Integration tests using real saved ESPN HTML files"""
+
+    @pytest.fixture
+    def bracket_handler(self):
+        """Create an ESPNBracket handler for testing"""
+        return ESPNBracket(cache_dir=".cache")
+
+    @pytest.fixture
+    def blank_bracket_html(self):
+        """Load the saved blank/actual bracket HTML"""
+        html_path = Path(__file__).parent.parent / "notes" / "espn_bracket_2026.html"
+        if not html_path.exists():
+            pytest.skip("Blank bracket HTML not available at notes/espn_bracket_2026.html")
+        return html_path.read_text()
+
+    @pytest.fixture
+    def entry_bracket_html(self):
+        """Load the saved filled-out bracket entry HTML"""
+        html_path = Path(__file__).parent.parent / "notes" / "espn_bracket_entry_2026.html"
+        if not html_path.exists():
+            pytest.skip("Entry bracket HTML not available at notes/espn_bracket_entry_2026.html")
+        return html_path.read_text()
+
+    def test_extract_blank_bracket(self, bracket_handler, blank_bracket_html):
+        """Test extraction from a blank/actual bracket (no picks, just the field)"""
+        bracket = bracket_handler.extract_bracket(blank_bracket_html)
+
+        assert bracket is not None, "extract_bracket returned None for blank bracket"
+        assert len(bracket.teams) == 64
+        assert len(bracket.games) == 32
+
+        # Should have exactly 4 regions
+        regions = list(dict.fromkeys([t.region for t in bracket.teams]))
+        assert len(regions) == 4
+
+        # Each region should have 16 teams with seeds 1-16
+        for region in regions:
+            region_teams = [t for t in bracket.teams if t.region == region]
+            assert len(region_teams) == 16
+            region_seeds = sorted([t.seed for t in region_teams])
+            assert region_seeds == list(range(1, 17))
+
+    def test_extract_entry_bracket(self, bracket_handler, entry_bracket_html):
+        """Test extraction from a filled-out bracket entry with picks"""
+        bracket = bracket_handler.extract_bracket(entry_bracket_html)
+
+        assert bracket is not None, "extract_bracket returned None for entry bracket"
+        assert len(bracket.teams) == 64
+        assert len(bracket.games) == 32
+
+        # Should have exactly 4 regions
+        regions = list(dict.fromkeys([t.region for t in bracket.teams]))
+        assert len(regions) == 4
+
+        # All rounds should be populated
+        expected_rounds = [
+            "First Round",
+            "Second Round",
+            "Sweet 16",
+            "Elite 8",
+            "Final Four",
+            "Championship",
+            "Champion",
+        ]
+        for round_name in expected_rounds:
+            assert round_name in bracket.results, f"Missing round: {round_name}"
+
+        # Verify correct number of winners per round
+        assert len(bracket.results["First Round"]) == 32
+        assert len(bracket.results["Second Round"]) == 16
+        assert len(bracket.results["Sweet 16"]) == 8
+        assert len(bracket.results["Elite 8"]) == 4
+        assert len(bracket.results["Final Four"]) == 2
+        assert len(bracket.results["Championship"]) == 1
+
+        # Champion should be a Team object
+        assert isinstance(bracket.results["Champion"], Team)
+
+    def test_entry_bracket_winners_are_valid_teams(self, bracket_handler, entry_bracket_html):
+        """Test that all winners in a filled-out bracket are from the original 64 teams"""
+        bracket = bracket_handler.extract_bracket(entry_bracket_html)
+        assert bracket is not None
+
+        team_names = {t.name for t in bracket.teams}
+
+        for round_name, winners in bracket.results.items():
+            if round_name == "Champion":
+                assert winners.name in team_names, (
+                    f"Champion '{winners.name}' not in original teams"
+                )
+            else:
+                for winner in winners:
+                    assert winner.name in team_names, (
+                        f"Winner '{winner.name}' in {round_name} not in original teams"
+                    )
+
+    def test_entry_bracket_first_round_games_have_winners(
+        self, bracket_handler, entry_bracket_html
+    ):
+        """Test that first round games have their winners set from picks"""
+        bracket = bracket_handler.extract_bracket(entry_bracket_html)
+        assert bracket is not None
+
+        games_with_winners = [g for g in bracket.games if g.winner is not None]
+        assert len(games_with_winners) == 32, (
+            f"Expected 32 first round games with winners, got {len(games_with_winners)}"
+        )
+
+    def test_entry_bracket_log_probability(self, bracket_handler, entry_bracket_html):
+        """Test that log probability is calculated for a filled-out bracket"""
+        bracket = bracket_handler.extract_bracket(entry_bracket_html)
+        assert bracket is not None
+
+        assert bracket.log_probability != float("inf"), "Log probability was not calculated"
+        assert bracket.log_probability > 0, "Log probability should be positive"
+
+
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
