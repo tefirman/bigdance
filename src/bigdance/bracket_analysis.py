@@ -26,7 +26,7 @@ from scipy.stats import ttest_ind as stats_ttest_ind
 
 from bigdance.bigdance_integration import create_teams_from_standings
 from bigdance.cbb_brackets import Bracket, Pool, Team
-from bigdance.espn_tc_scraper import ESPNBracket, ESPNScraper
+from bigdance.espn_tc_scraper import ESPNApi
 from bigdance.wn_cbb_scraper import Standings
 
 
@@ -76,23 +76,16 @@ class BracketAnalysis:
 
     def fetch_espn_bracket(self) -> Optional[Bracket]:
         """
-        Fetch the ESPN bracket either from the web or from a provided JSON file.
+        Fetch the ESPN bracket via the Gambit JSON API.
 
         Returns:
             Optional[Bracket]: ESPN bracket converted to bigdance Bracket format, or None if unavailable
         """
         try:
-            # Scrape from ESPN website
-            logging.info("Fetching bracket from ESPN website...")
-            scraper = ESPNScraper(self.women)
-            html_content = scraper.get_bracket()
-            if not html_content:
-                logging.error("Failed to get HTML content from ESPN")
-                return None
-
-            # Extract bracket data from blank ESPN entry
-            handler = ESPNBracket(self.women)
-            self.espn_bracket = handler.extract_bracket(html_content)
+            logging.info("Fetching bracket from ESPN API...")
+            api = ESPNApi(women=self.women)
+            challenge = api.fetch_challenge()
+            self.espn_bracket = api.build_actual_bracket(challenge)
 
             logging.info("Successfully created bracket from ESPN data")
 

@@ -16,8 +16,6 @@ dependencies = [
   "seaborn>=0.12",
   "matplotlib>=3.6",
   "scipy>=1.9",
-  "selenium>=4.8",
-  "webdriver_manager>=4.0",
 ]
 requires-python = ">=3.9"
 authors = [

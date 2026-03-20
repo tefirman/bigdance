@@ -12,8 +12,7 @@ Main components:
 - Matchups: Get game predictions and results
 - Bracket: Create and simulate tournament brackets
 - Pool: Simulate tournament pools with multiple entries
-- ESPNBracket: Extract bracket data from ESPN Tournament Challenge
-- ESPNPool: Analyze ESPN Tournament Challenge bracket pools
+- ESPNApi: JSON API client for ESPN Tournament Challenge
 - GameImportanceAnalyzer: Analyze the importance of specific games
 - BracketAnalysis: Analyze winning strategies across multiple pools
 """
@@ -25,7 +24,7 @@ from .bigdance_integration import (
 )
 from .bracket_analysis import BracketAnalysis
 from .cbb_brackets import Bracket, Game, Pool, Team
-from .espn_tc_scraper import ESPNBracket, ESPNPool, ESPNScraper, GameImportanceAnalyzer
+from .espn_tc_scraper import ESPNApi, GameImportanceAnalyzer
 from .wn_cbb_scraper import Matchups, Schedule, Standings, elo_prob
 
 __version__ = "0.7.1"
@@ -43,9 +42,7 @@ __all__ = [
     "Bracket",
     "Pool",
     # ESPN integration
-    "ESPNScraper",
-    "ESPNBracket",
-    "ESPNPool",
+    "ESPNApi",
     "GameImportanceAnalyzer",
     # Analysis tools
     "BracketAnalysis",

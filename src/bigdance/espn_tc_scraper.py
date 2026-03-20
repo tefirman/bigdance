@@ -3,60 +3,26 @@
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.4.0
+@Version :   0.7.1
 @Contact :   tefirman@gmail.com
-@Desc    :   Class-based implementation for extracting bracket data from ESPN Tournament Challenge
+@Desc    :   ESPN Tournament Challenge integration via the Gambit JSON API
 """
 
 import argparse
 import copy
-import json
 import logging
 import sys
-import time
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import Optional
 
 import numpy as np
 import pandas as pd
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import requests
 
 from bigdance.cbb_brackets import Bracket, Pool, Team
 from bigdance.wn_cbb_scraper import Standings
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# Constants
-DEFAULT_CACHE_EXPIRY = 3600  # 1 hour for actual results
-DEFAULT_ENTRY_CACHE_EXPIRY = 86400  # 1 day for entries
-DEFAULT_DELAY = 0.1  # Seconds to delay between requests
-MAX_RETRIES = 3  # Maximum number of retries for requests
-
-# Selectors for finding pagination elements
-PAGINATION_SELECTORS = [
-    ".Pagination",
-    "nav[aria-label='Pagination']",
-    ".pagination",
-    "div[role='navigation']",
-    "ul.pagination",
-]
-
-# Selectors for finding next buttons in pagination
-NEXT_BUTTON_SELECTORS = [
-    ".Pagination__Button--next",
-    "button[aria-label='Next']",
-    "button.pagination-next",
-    "a.pagination-next",
-    "button:contains('Next')",
-    "//button[contains(@class, 'next') or contains(text(), 'Next')]",
-]
 
 # Team name corrections to match ESPN to Warren Nolan
 NAME_CORRECTIONS = {
@@ -77,858 +43,293 @@ NAME_CORRECTIONS = {
 }
 
 
-class BaseScraper:
-    """Base class for scraping with common caching functionality"""
+class ESPNApi:
+    """ESPN Gambit API client — fetches bracket/pool data as JSON."""
 
-    def __init__(self, cache_dir: Optional[str] = None):
-        """Initialize base scraper with caching support"""
-        self.cache_dir = Path(cache_dir) if cache_dir else None
-        if self.cache_dir:
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
+    GAMBIT_API_BASE = "https://gambit-api.fantasy.espn.com/apis/v1/challenges"
 
-    def _get_cached_response(
-        self, cache_key: str, max_age: int = DEFAULT_CACHE_EXPIRY
-    ) -> Optional[str]:
-        """
-        Get cached response if available and not expired
-
-        Args:
-            cache_key: Key to identify the cached item
-            max_age: Maximum age in seconds (default: 1 hour)
-
-        Returns:
-            Cached content if available and fresh, None otherwise
-        """
-        if not self.cache_dir:
-            return None
-
-        try:
-            cache_file = self.cache_dir / f"{cache_key}.json"
-            if not cache_file.exists():
-                return None
-
-            cache_data = json.loads(cache_file.read_text())
-
-            # Check if cache is fresh
-            time_since = (
-                datetime.now() - datetime.fromisoformat(cache_data["timestamp"])
-            ).total_seconds()
-            if time_since > max_age:
-                logger.debug(f"Cache expired for key {cache_key} (age: {time_since:.1f}s)")
-                return None
-
-            logger.debug(f"Using cached response for {cache_key}")
-            return str(cache_data["content"])
-
-        except Exception as e:
-            logger.warning(f"Error reading cache for {cache_key}: {e}")
-            return None
-
-    def _cache_response(self, cache_key: str, url: str, content: str) -> None:
-        """
-        Cache a response for future use
-
-        Args:
-            cache_key: Key to identify the cached item
-            url: Original URL that was requested
-            content: Content to cache
-        """
-        if not self.cache_dir:
-            return
-
-        try:
-            cache_data = {
-                "timestamp": datetime.now().isoformat(),
-                "url": url,
-                "content": content,
-            }
-
-            cache_file = self.cache_dir / f"{cache_key}.json"
-            cache_file.write_text(json.dumps(cache_data))
-
-            logger.debug(f"Cached response to {cache_file}")
-
-        except Exception as e:
-            logger.warning(f"Error caching response for {cache_key}: {e}")
-
-    def clear_cache(self, older_than_days: int = 7) -> int:
-        """
-        Clear cached responses older than specified days
-
-        Args:
-            older_than_days: Age threshold in days
-
-        Returns:
-            Number of cache files removed
-        """
-        if not self.cache_dir:
-            return 0
-
-        removed_count = 0
-        now = datetime.now()
-
-        for cache_file in self.cache_dir.glob("*.json"):
-            try:
-                cache_data = json.loads(cache_file.read_text())
-                file_date = datetime.fromisoformat(cache_data["timestamp"])
-                age_days = (now - file_date).total_seconds() / 86400
-
-                if age_days > older_than_days:
-                    cache_file.unlink()
-                    removed_count += 1
-                    logger.debug(f"Removed cache file {cache_file} ({age_days:.1f} days old)")
-
-            except Exception as e:
-                logger.warning(f"Error processing cache file {cache_file}: {e}")
-
-        return removed_count
-
-
-class ESPNScraper(BaseScraper):
-    """Class for scraping data from ESPN Tournament Challenge"""
+    ROUND_NAMES = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
 
     def __init__(self, women: bool = False, cache_dir: Optional[str] = None):
         """
-        Initialize ESPN scraper
-
-        Args:
-            women: Whether to scrape women's tournament data
-            cache_dir: Directory to store cached responses
-        """
-        super().__init__(cache_dir)
-        self.women = women
-        self.gender_suffix = "-women" if women else ""
-        self.base_url = (
-            f"https://fantasy.espn.com/games/tournament-challenge-bracket{self.gender_suffix}-2026"
-        )
-
-        # Initialize cached Chrome options and service to avoid repeated setup
-        self._chrome_options: Optional[Options] = None
-        self._chrome_service: Optional[Service] = None
-
-    def _get_chrome_options(self) -> Options:
-        """
-        Get Chrome options for Selenium with proper settings
-
-        Returns:
-            Configured Chrome options
-        """
-        if self._chrome_options is None:
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--window-size=1920,1080")
-
-            # Add realistic user agent
-            chrome_options.add_argument(
-                "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/123.0.0.0 Safari/537.36"
-            )
-
-            self._chrome_options = chrome_options
-
-        return self._chrome_options
-
-    def _get_chrome_service(self) -> Service:
-        """
-        Get Chrome service for Selenium
-
-        Returns:
-            Configured Chrome service
-        """
-        if self._chrome_service is None:
-            self._chrome_service = Service(ChromeDriverManager().install())
-
-        return self._chrome_service
-
-    def get_page(
-        self,
-        url: str,
-        cache_key: Optional[str] = None,
-        check_pagination: bool = False,
-        max_pages: int = 10,
-    ) -> Optional[Union[str, dict[int, str]]]:
-        """
-        Retrieve a page using Selenium with support for pagination and caching
-
-        Args:
-            url: URL to retrieve
-            cache_key: Key for caching (optional)
-            check_pagination: Whether to check for pagination
-            max_pages: Maximum number of pages to retrieve
-
-        Returns:
-            HTML content string, or dictionary of pages if paginated
-        """
-        # Check if we should use complete cache for paginated content
-        if check_pagination and cache_key:
-            complete_cache_key = f"{cache_key}_complete"
-            cached_content = self._get_cached_response(
-                complete_cache_key, DEFAULT_ENTRY_CACHE_EXPIRY
-            )
-            if cached_content:
-                result: dict[int, str] = json.loads(cached_content)
-                return result
-
-        # Check regular cache for non-paginated content
-        if not check_pagination and cache_key:
-            cache_expiry = (
-                DEFAULT_CACHE_EXPIRY if "blank" in cache_key else DEFAULT_ENTRY_CACHE_EXPIRY
-            )
-            cached_content = self._get_cached_response(cache_key, cache_expiry)
-            if cached_content:
-                return cached_content
-
-        # Try retrieval with retries
-        for attempt in range(MAX_RETRIES):
-            try:
-                return self._retrieve_page(url, cache_key, check_pagination, max_pages)
-            except WebDriverException as e:
-                if attempt < MAX_RETRIES - 1:
-                    wait_time = 2**attempt  # Exponential backoff
-                    logger.warning(
-                        f"Retrieval attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s..."
-                    )
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"All retrieval attempts failed for {url}: {e}")
-                    return None
-            except Exception as e:
-                logger.error(f"Error retrieving {url}: {e}")
-                return None
-        return None
-
-    def _retrieve_page(
-        self, url: str, cache_key: Optional[str], check_pagination: bool, max_pages: int
-    ) -> Union[str, dict[int, str]]:
-        """
-        Internal method to retrieve a page with Selenium
-
-        Args:
-            url: URL to retrieve
-            cache_key: Cache key if caching is enabled
-            check_pagination: Whether to check for pagination
-            max_pages: Maximum number of pages to retrieve
-
-        Returns:
-            Page content or dictionary of pages
-        """
-        driver = webdriver.Chrome(
-            service=self._get_chrome_service(), options=self._get_chrome_options()
-        )
-
-        try:
-            # Navigate to URL
-            driver.get(url)
-            time.sleep(5)  # Wait for page to load
-
-            if not check_pagination:
-                # Single page mode
-                html_content = driver.page_source
-
-                # Validate that bracket content actually rendered before caching
-                if cache_key and self.cache_dir:
-                    if "BracketOutcome" in html_content:
-                        self._cache_response(cache_key, url, html_content)
-                    else:
-                        logger.warning(
-                            "Page content appears incomplete (no BracketOutcome elements found). "
-                            "Skipping cache to avoid persisting a bad response."
-                        )
-
-                return cast(str, html_content)
-            else:
-                # Pagination mode
-                all_pages_content = {}
-                page_num = 1
-
-                # Get first page
-                all_pages_content[page_num] = driver.page_source
-                logger.debug(f"Retrieved page {page_num}")
-
-                # Check for pagination elements
-                pagination = self._find_pagination_element(driver)
-
-                if pagination:
-                    # Process pagination
-                    while page_num < max_pages:
-                        next_button = self._find_next_button(driver)
-
-                        if not next_button or self._is_button_disabled(next_button):
-                            logger.debug(
-                                f"No more pages or next button disabled (at page {page_num})"
-                            )
-                            break
-
-                        # Try to click the next button
-                        self._click_next_button(driver, next_button)
-                        time.sleep(3)  # Wait for page to load
-
-                        # Store the new page content
-                        page_num += 1
-                        all_pages_content[page_num] = driver.page_source
-                        logger.debug(f"Retrieved page {page_num}")
-                else:
-                    logger.debug("No pagination controls found")
-
-                # Cache the complete result
-                if cache_key and self.cache_dir:
-                    complete_cache_key = f"{cache_key}_complete"
-                    self._cache_response(complete_cache_key, url, json.dumps(all_pages_content))
-
-                return all_pages_content
-
-        finally:
-            # Ensure driver is closed
-            driver.quit()
-
-    def _find_pagination_element(self, driver) -> Optional[Any]:
-        """Find pagination element using different selectors"""
-        for selector in PAGINATION_SELECTORS:
-            try:
-                element = driver.find_element("css selector", selector)
-                logger.debug(f"Pagination found with selector: {selector}")
-                return element
-            except Exception:
-                continue
-        return None
-
-    def _find_next_button(self, driver) -> Optional[Any]:
-        """Find next button in pagination"""
-        for selector in NEXT_BUTTON_SELECTORS:
-            try:
-                if selector.startswith("//"):
-                    element = driver.find_element("xpath", selector)
-                else:
-                    element = driver.find_element("css selector", selector)
-                logger.debug(f"Next button found with selector: {selector}")
-                return element
-            except Exception:
-                continue
-        return None
-
-    def _is_button_disabled(self, button) -> bool:
-        """Check if a button is disabled"""
-        return bool(
-            "disabled" in (button.get_attribute("class") or "") or button.get_attribute("disabled")
-        )
-
-    def _click_next_button(self, driver, button) -> None:
-        """Click a button with fallback strategies"""
-        # Scroll into view
-        driver.execute_script("arguments[0].scrollIntoView(true);", button)
-        time.sleep(1)
-
-        # Try JavaScript click first (more reliable)
-        try:
-            logger.debug("Clicking next button with JavaScript")
-            driver.execute_script("arguments[0].click();", button)
-        except Exception:
-            # Fall back to regular click
-            logger.debug("Falling back to regular click")
-            button.click()
-
-    def get_bracket(self, entry_id: str = "") -> Optional[str]:
-        """
-        Get an ESPN Tournament Challenge bracket page
-
-        Args:
-            entry_id: ESPN entry ID or empty string for blank/actual bracket
-
-        Returns:
-            HTML content of the bracket page
-        """
-        url = f"{self.base_url}/bracket?id={entry_id}"
-        cache_key = (
-            f"bracket_{'women' if self.women else 'men'}_{entry_id if entry_id else 'blank'}"
-        )
-
-        result = self.get_page(url, cache_key, check_pagination=False)
-        if isinstance(result, dict):
-            return None
-        return result
-
-    def get_pool(self, pool_id: str) -> Optional[dict[int, str]]:
-        """
-        Get an ESPN Tournament Challenge pool with support for pagination
-
-        Args:
-            pool_id: ESPN pool ID
-
-        Returns:
-            Dictionary mapping page numbers to HTML content
-        """
-        url = f"{self.base_url}/group?id={pool_id}"
-        cache_key = f"pool_{'women' if self.women else 'men'}_{pool_id}"
-
-        result = self.get_page(url, cache_key, check_pagination=True)
-        if isinstance(result, str):
-            return {1: result}
-        return result
-
-
-class ESPNBracket:
-    """Class for handling ESPN bracket data extraction and analysis"""
-
-    def __init__(self, women: bool = False, cache_dir: Optional[str] = None):
-        """
-        Initialize bracket handler
+        Initialize ESPN API client.
 
         Args:
             women: Whether to use women's tournament data
-            cache_dir: Directory for caching
+            cache_dir: Directory for caching (used for Warren Nolan ratings)
         """
         self.women = women
-        self.ratings_source = None
-        self.scraper = ESPNScraper(women, cache_dir)
+        gender_suffix = "-women" if women else ""
+        self.challenge_slug = f"tournament-challenge-bracket{gender_suffix}-2026"
+        self.ratings_source: Optional[Standings] = None
 
-        # Try to load ratings from Warren Nolan
         try:
             self.ratings_source = Standings(women=women, cache_dir=cache_dir)
-            logger.info(
-                f"Successfully loaded {len(self.ratings_source.elo)} teams from Warren Nolan"
-            )
         except Exception as e:
             logger.warning(f"Could not load Standings: {e}")
-            logger.warning("Will use approximate ratings based on seeds")
 
-    def get_bracket(self, entry_id: str = "") -> Optional[str]:
-        """
-        Get bracket HTML content
+    def fetch_challenge(self) -> dict:
+        """Fetch the master challenge data (propositions, scoring periods, etc.)."""
+        url = f"{self.GAMBIT_API_BASE}/{self.challenge_slug}"
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        return dict(resp.json())
 
-        Args:
-            entry_id: ESPN entry ID or empty string for blank/actual bracket
+    def fetch_group(self, group_id: str) -> dict:
+        """Fetch group (pool) data including all entries."""
+        url = f"{self.GAMBIT_API_BASE}/{self.challenge_slug}/groups/{group_id}"
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        return dict(resp.json())
 
-        Returns:
-            HTML content of the bracket page
-        """
-        return self.scraper.get_bracket(entry_id)
+    def fetch_entry(self, entry_id: str) -> dict:
+        """Fetch a single entry's picks."""
+        url = f"{self.GAMBIT_API_BASE}/{self.challenge_slug}/entries/{entry_id}"
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        return dict(resp.json())
 
-    def extract_bracket(self, html_content: str) -> Optional[Bracket]:
-        """
-        Extract bracket data from HTML content
+    def _build_outcome_map(self, challenge: dict) -> dict[str, dict]:
+        """Build a lookup from outcomeId to team info."""
+        outcome_map: dict[str, dict] = {}
+        for prop in challenge["propositions"]:
+            for outcome in prop["possibleOutcomes"]:
+                mappings = {m["type"]: m["value"] for m in outcome.get("mappings", [])}
+                outcome_map[outcome["id"]] = {
+                    "name": outcome["name"],
+                    "seed": outcome.get("regionSeed", 1),
+                    "region_id": outcome.get("regionId", 1),
+                    "espn_id": mappings.get("COMPETITOR_ID"),
+                    "proposition_id": prop["id"],
+                    "scoring_period": prop["scoringPeriodId"],
+                }
+        return outcome_map
 
-        Args:
-            html_content: HTML content of the bracket page
-
-        Returns:
-            Bracket object or None if extraction fails
-        """
-        if not html_content:
-            logger.error("No HTML content provided")
-            return None
-
-        try:
-            # Parse the HTML
-            soup = BeautifulSoup(html_content, "html.parser")
-
-            # Find all parts of the bracket
-            region_tags = soup.find_all(
-                "div",
-                attrs={"class": "EtBYj UkSPS ZSuWB viYac NgsOb GpQCA NqeUA Mxk xTell"},
-            )
-            pick_tags = soup.find_all(
-                "span", attrs={"class": "BracketPropositionHeaderDesktop-pickText"}
-            )
-            team_tags = soup.find_all(
-                "label", class_=lambda c: c and "BracketOutcome-label" in c and "truncate" in c
-            )
-            team_id_tags = soup.find_all(
-                "img", attrs={"class": "Image BracketOutcome-image printHide"}
-            )
-            seed_tags = soup.find_all("div", attrs={"class": "BracketOutcome-metadata"})
-
-            # Extract actual bracket outcomes
-            regions = [region.text for region in region_tags]
-            names = [team.text for team in team_tags]
-            ids = [str(team.attrs["src"]).split("/")[-1].split(".")[0] for team in team_id_tags]
-            seeds = [int(seed.text) for seed in seed_tags if len(seed.attrs["class"]) == 1]
-
-            # Validate that the page rendered enough bracket content
-            if len(regions) < 4:
-                logger.error(
-                    f"Expected 4 regions but found {len(regions)}. "
-                    "The page may not have fully rendered (slow connection or JS timeout)."
-                )
-                return None
-            if len(names) < 64:
-                logger.error(
-                    f"Expected at least 64 team names but found {len(names)}. "
-                    "The page may not have fully rendered (slow connection or JS timeout)."
-                )
-                return None
-            if len(seeds) < 64:
-                logger.error(
-                    f"Expected at least 64 seeds but found {len(seeds)}. "
-                    "The page may not have fully rendered (slow connection or JS timeout)."
-                )
-                return None
-
-            # Create mapping between team names and ESPN id
-            name_mapping = {ids[ind]: names[ind] for ind in range(len(ids))}
-
-            # Create Team objects
-            teams = []
-            for ind in range(64):  # First round teams
-                teams.append(
-                    Team(
-                        names[ind],
-                        seeds[ind],
-                        regions[ind // 16],
-                        self._get_team_rating(names[ind], seeds[ind]),
-                        self._get_team_conference(names[ind]),
-                    )
-                )
-
-            # Create bracket with these teams
-            bracket = Bracket(teams)
-
-            # Initialize results dictionary
-            bracket.results = {}
-            round_names = [
-                "First Round",
-                "Second Round",
-                "Sweet 16",
-                "Elite 8",
-                "Final Four",
-            ]
-
-            # Determine if we're looking at the actual results or picks
-            if len(pick_tags) == 0:  # Reality (blank bracket / actual tournament results)
-                # Extract actual winners using the BracketOutcome--winner class
-                # This handles both pre-tournament (no winners) and in-progress brackets
-                # where ESPN renders extra labels for completed games
-                winner_names = []
-                for tag in team_tags:
-                    grandparent = tag.parent.parent if tag.parent else None
-                    gp_classes = " ".join(grandparent.get("class") or []) if grandparent else ""
-                    if "Proposition" not in gp_classes and "winner" in gp_classes:
-                        winner_names.append(tag.text)
-                picks = winner_names
-            else:
-                # Extract picks made by user
-                try:
-                    pick_ids = [
-                        str(pick.find("img").attrs["src"]).split("/")[-1].split(".")[0]  # type: ignore[union-attr]
-                        for pick in pick_tags
-                    ]
-                    picks = [name_mapping[id_val] for id_val in pick_ids]
-                except Exception as e:
-                    logger.warning(f"Incomplete bracket, skipping: {e}")
-                    return None
-
-            # Parse results differently for actual results vs user picks
-            if len(pick_tags) == 0:
-                # Actual results: match winners to their bracket games round by round
-                # Start with First Round games already in the bracket
-                bracket.results["First Round"] = []
-                for pick_name in picks:
-                    pick_name = pick_name.replace("St.", "St")
-                    winner = next((t for t in teams if pick_name == t.name), None)
-                    if winner:
-                        bracket.results["First Round"].append(winner)
-                        for game in bracket.games:
-                            if game.team1.name == winner.name or game.team2.name == winner.name:
-                                game.winner = winner
-                                break
-
-                # Build subsequent rounds from the game tree
-                current_games = bracket.games.copy()
-                for round_ind in range(1, 5):
-                    # Advance to get next round's matchups
-                    if all(g.winner for g in current_games):
-                        current_games = bracket.advance_round(current_games)
-                        # Check if any of these games have known winners
-                        # (from BracketOutcome--winner labels in deeper Proposition slots)
-                        round_winners = []
-                        for game in current_games:
-                            for tag in team_tags:
-                                grandparent = tag.parent.parent if tag.parent else None
-                                gp_classes = (
-                                    " ".join(grandparent.get("class") or []) if grandparent else ""
-                                )
-                                if "Proposition" in gp_classes and "winner" in gp_classes:
-                                    name = tag.text.replace("St.", "St")
-                                    if name == game.team1.name:
-                                        game.winner = game.team1
-                                        round_winners.append(game.team1)
-                                        break
-                                    elif name == game.team2.name:
-                                        game.winner = game.team2
-                                        round_winners.append(game.team2)
-                                        break
-                        bracket.results[round_names[round_ind]] = round_winners
-                    else:
-                        bracket.results[round_names[round_ind]] = []
-
-                # Extract champion if available
-                champ_tag = soup.find(
-                    "span", attrs={"class": "PrintChampionshipPickBody-outcomeName"}
-                )
-                if champ_tag:
-                    champion = champ_tag.text.replace("St.", "St")
-                    winner = next((t for t in teams if champion.startswith(t.name)), None)
-                    if winner:
-                        bracket.results["Championship"] = [winner]
-                        bracket.results["Champion"] = winner  # type: ignore[assignment]
-            else:
-                # User picks: use positional slicing (picks are ordered by round)
-                for round_ind in range(5):
-                    bracket.results[round_names[round_ind]] = []
-                    for pick in picks[64 - 2 ** (6 - round_ind) : 64 - 2 ** (5 - round_ind)]:
-                        pick = pick.replace("St.", "St")
-                        winner = next((t for t in teams if pick == t.name), None)
-                        if winner:
-                            bracket.results[round_names[round_ind]].append(winner)
-                            if round_ind == 0:
-                                for game in bracket.games:
-                                    if (
-                                        game.team1.name == winner.name
-                                        or game.team2.name == winner.name
-                                    ):
-                                        game.winner = winner
-                                        break
-
-                # Extract champion pick
-                champ_tag = soup.find(
-                    "span", attrs={"class": "PrintChampionshipPickBody-outcomeName"}
-                )
-                if champ_tag:
-                    champion = champ_tag.text.replace("St.", "St")
-                    winner = next((t for t in teams if champion.startswith(t.name)), None)
-                    if winner:
-                        bracket.results["Championship"] = [winner]
-                        bracket.results["Champion"] = winner  # type: ignore[assignment]
-
-            # Calculate bracket statistics
-            bracket.log_probability = bracket.calculate_log_probability()
-            bracket.identify_underdogs()
-
-            return bracket
-
-        except Exception as e:
-            logger.error(f"Error extracting bracket data: {str(e)}")
-            return None
+    def _build_prop_map(self, challenge: dict) -> dict[str, dict]:
+        """Build a lookup from propositionId to proposition info."""
+        prop_map: dict[str, dict] = {}
+        for prop in challenge["propositions"]:
+            correct = prop.get("correctOutcomes", [])
+            prop_map[prop["id"]] = {
+                "name": prop["name"],
+                "status": prop["status"],
+                "scoring_period": prop["scoringPeriodId"],
+                "correct_outcome_ids": correct,
+                "winner_id": correct[0] if correct else None,
+            }
+        return prop_map
 
     def _get_team_rating(self, team_name: str, seed: int) -> float:
-        """
-        Get team rating from Standings or estimate based on seed
-
-        Args:
-            team_name: Team name
-            seed: Team seed
-
-        Returns:
-            Team rating
-        """
-        # Apply name corrections
+        """Get team rating from Standings or estimate from seed."""
         if team_name in NAME_CORRECTIONS:
             team_name = NAME_CORRECTIONS[team_name]
-
         if self.ratings_source is not None:
             try:
-                # Try exact match
-                team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
-                if not team_row.empty:
-                    return float(team_row.iloc[0]["ELO"])
-
-                # Try fuzzy matching
+                row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
+                if not row.empty:
+                    return float(row.iloc[0]["ELO"])
                 for team in self.ratings_source.elo["Team"]:
                     if team.lower() in team_name.lower() or team_name.lower() in team.lower():
-                        team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
-                        return float(team_row.iloc[0]["ELO"])
+                        row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
+                        return float(row.iloc[0]["ELO"])
             except Exception as e:
                 logger.warning(f"Error finding rating for {team_name}: {e}")
-
-        # Estimate rating based on seed if not found
         logger.info(f"Can't find {team_name}, using random seed-based rating...")
-        base_rating = 2000 - (seed * 50)
-        random_adjustment = np.random.normal(0, 25)
-        return base_rating + random_adjustment
+        return 2000 - (seed * 50) + np.random.normal(0, 25)
 
     def _get_team_conference(self, team_name: str, default: str = "Unknown") -> str:
-        """
-        Get team conference from Standings
-
-        Args:
-            team_name: Team name
-            default: Default conference name if not found
-
-        Returns:
-            Conference name
-        """
-        # Apply name corrections
+        """Get team conference from Standings."""
         if team_name in NAME_CORRECTIONS:
             team_name = NAME_CORRECTIONS[team_name]
-
         if self.ratings_source is not None:
             try:
-                # Try exact match
-                team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
-                if not team_row.empty:
-                    return str(team_row.iloc[0]["Conference"])
-
-                # Try fuzzy matching
+                row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team_name]
+                if not row.empty:
+                    return str(row.iloc[0]["Conference"])
                 for team in self.ratings_source.elo["Team"]:
                     if team.lower() in team_name.lower() or team_name.lower() in team.lower():
-                        team_row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
-                        return str(team_row.iloc[0]["Conference"])
+                        row = self.ratings_source.elo[self.ratings_source.elo["Team"] == team]
+                        return str(row.iloc[0]["Conference"])
             except Exception:
                 pass
-
         return default
 
+    def build_teams(self, challenge: dict) -> list[Team]:
+        """Build 64 Team objects from challenge propositions."""
+        region_names: dict[int, str] = {}
+        for prop in challenge["propositions"]:
+            for outcome in prop["possibleOutcomes"]:
+                rid = outcome.get("regionId")
+                if rid and rid not in region_names:
+                    region_names[rid] = f"Region {rid}"
 
-class ESPNPool:
-    """Class for managing ESPN Tournament Challenge pools"""
+        teams: list[Team] = []
+        seen: set[str] = set()
+        sorted_props = sorted(challenge["propositions"], key=lambda p: p.get("displayOrder", 0))
+        for prop in sorted_props:
+            for outcome in prop["possibleOutcomes"]:
+                key = f"{outcome.get('regionId')}-{outcome.get('regionSeed')}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                name = outcome["name"]
+                seed = outcome.get("regionSeed", 1)
+                region = region_names.get(outcome.get("regionId", 1), "Unknown")
+                teams.append(
+                    Team(
+                        name,
+                        seed,
+                        region,
+                        self._get_team_rating(name, seed),
+                        self._get_team_conference(name),
+                    )
+                )
+        return teams
 
-    def __init__(self, women: bool = False, cache_dir: Optional[str] = None):
-        """
-        Initialize pool manager
+    def build_actual_bracket(self, challenge: dict) -> Bracket:
+        """Build the actual tournament bracket with real results from completed games."""
+        teams = self.build_teams(challenge)
+        bracket = Bracket(teams)
+        prop_map = self._build_prop_map(challenge)
+        outcome_map = self._build_outcome_map(challenge)
+        team_by_name = {t.name: t for t in teams}
 
-        Args:
-            women: Whether to use women's tournament data
-            cache_dir: Directory for caching
-        """
-        self.women = women
-        self.cache_dir = cache_dir
-        self.scraper = ESPNScraper(women, cache_dir)
-        self.bracket_handler = ESPNBracket(women, cache_dir)
+        bracket.results = {rn: [] for rn in self.ROUND_NAMES}
 
-    def get_pool(self, pool_id: str) -> Optional[dict[int, str]]:
-        """
-        Get pool pages
+        # Fill in first round results
+        for _prop_id, prop_info in prop_map.items():
+            if prop_info["scoring_period"] == 1 and prop_info["winner_id"]:
+                winner_info = outcome_map.get(prop_info["winner_id"])
+                if winner_info:
+                    winner_team = team_by_name.get(winner_info["name"])
+                    if winner_team:
+                        bracket.results["First Round"].append(winner_team)
+                        for game in bracket.games:
+                            if (
+                                game.team1.name == winner_team.name
+                                or game.team2.name == winner_team.name
+                            ):
+                                game.winner = winner_team
+                                break
 
-        Args:
-            pool_id: ESPN pool ID
-
-        Returns:
-            Dictionary of page HTML content
-        """
-        return self.scraper.get_pool(pool_id)
-
-    def extract_entry_ids(self, html_content: Union[str, dict[int, str]]) -> dict[str, str]:
-        """
-        Extract entry IDs from pool HTML
-
-        Args:
-            html_content: HTML content of the pool page or dictionary of pages
-
-        Returns:
-            Dictionary mapping entry names to entry IDs
-        """
-        entry_ids = {}
-
-        # Handle both single page and paginated content
-        if isinstance(html_content, dict):
-            # Process each page
-            for page_num, page_html in html_content.items():
-                page_entries = self._extract_entries_from_html(page_html)
-                entry_ids.update(page_entries)
-                logger.debug(f"Found {len(page_entries)} entries on page {page_num}")
-        else:
-            # Single page as string
-            entry_ids = self._extract_entries_from_html(html_content)
-
-        return entry_ids
-
-    def _extract_entries_from_html(self, html: str) -> dict[str, str]:
-        """
-        Extract entries from a single HTML page
-
-        Args:
-            html: HTML content of a pool page
-
-        Returns:
-            Dictionary mapping entry names to entry IDs
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        entry_tags = soup.find_all(
-            "td", attrs={"class": "BracketEntryTable-column--entryName Table__TD"}
-        )
-
-        result: dict[str, str] = {}
-        for entry in entry_tags:
-            link = entry.find("a")
-            if link:
-                result[link.text] = str(link.attrs["href"]).split("bracket?id=")[-1]
-        return result
-
-    def load_pool_entries(self, pool_id: str) -> dict[str, Bracket]:
-        """
-        Load all entries from a pool
-
-        Args:
-            pool_id: ESPN pool ID
-
-        Returns:
-            Dictionary mapping entry names to Bracket objects
-        """
-        logger.info(f"Loading pool {pool_id}")
-
-        # Get pool HTML
-        pool_html = self.get_pool(pool_id)
-        if not pool_html:
-            logger.error(f"Failed to load pool {pool_id}")
-            return {}
-
-        # Extract entry IDs
-        entry_ids = self.extract_entry_ids(pool_html)
-        logger.info(f"Found {len(entry_ids)} entries in pool")
-
-        # Load each entry
-        entries = {}
-        for entry_name, entry_id in entry_ids.items():
-            logger.info(f"Loading entry: {entry_name}")
-            entry_html = self.bracket_handler.get_bracket(entry_id)
-            if entry_html:
-                bracket = self.bracket_handler.extract_bracket(entry_html)
-                if bracket:
-                    entries[entry_name] = bracket
-                else:
-                    logger.warning(f"Failed to extract bracket for {entry_name}")
+        # Build subsequent rounds from game tree
+        current_games = bracket.games.copy()
+        for round_ind in range(1, 5):
+            if all(g.winner for g in current_games):
+                current_games = bracket.advance_round(current_games)
+                for _prop_id, prop_info in prop_map.items():
+                    if prop_info["scoring_period"] == round_ind + 1 and prop_info["winner_id"]:
+                        winner_info = outcome_map.get(prop_info["winner_id"])
+                        if winner_info:
+                            for game in current_games:
+                                if game.team1.name == winner_info["name"]:
+                                    game.winner = game.team1
+                                    bracket.results[self.ROUND_NAMES[round_ind]].append(game.team1)
+                                    break
+                                elif game.team2.name == winner_info["name"]:
+                                    game.winner = game.team2
+                                    bracket.results[self.ROUND_NAMES[round_ind]].append(game.team2)
+                                    break
             else:
-                logger.warning(f"Failed to load HTML for {entry_name}")
+                bracket.results[self.ROUND_NAMES[round_ind]] = []
 
-        logger.info(f"Successfully loaded {len(entries)} entries")
-        return entries
+        return bracket
+
+    def build_entry_bracket(
+        self, entry_data: dict, challenge: dict, teams: list[Team]
+    ) -> Optional[Bracket]:
+        """
+        Build a Bracket from an entry's picks.
+
+        Args:
+            entry_data: Entry JSON from fetch_entry()
+            challenge: Challenge JSON from fetch_challenge()
+            teams: List of Team objects (from build_teams)
+
+        Returns:
+            Bracket with picks populated, or None if incomplete
+        """
+        outcome_map = self._build_outcome_map(challenge)
+        team_by_name = {t.name: t for t in teams}
+
+        bracket = Bracket(list(teams))
+        bracket.results = {rn: [] for rn in self.ROUND_NAMES}
+
+        picks = entry_data.get("picks", [])
+        if len(picks) != 63:
+            logger.warning(f"Expected 63 picks, got {len(picks)} for {entry_data.get('name')}")
+            return None
+
+        # periodReached = the furthest scoring period this team reaches.
+        # A team with periodReached=2 wins R1 (reaches R2), so rounds_won = periodReached - 1.
+        team_max_period: dict[str, int] = {}
+        for pick in picks:
+            outcome_id = pick["outcomesPicked"][0]["outcomeId"]
+            period_reached = pick.get("periodReached", 1)
+            info = outcome_map.get(outcome_id)
+            if info:
+                name = info["name"]
+                team_max_period[name] = max(team_max_period.get(name, 0), period_reached)
+
+        for team_name, max_period in team_max_period.items():
+            team = team_by_name.get(team_name)
+            if not team:
+                continue
+            rounds_won = max_period - 1
+            for round_idx in range(min(rounds_won, 5)):
+                if team not in bracket.results[self.ROUND_NAMES[round_idx]]:
+                    bracket.results[self.ROUND_NAMES[round_idx]].append(team)
+                if round_idx == 0:
+                    for game in bracket.games:
+                        if game.team1.name == team_name or game.team2.name == team_name:
+                            game.winner = team
+                            break
+
+            if max_period >= 6:
+                bracket.results["Championship"] = [team]
+                bracket.results["Champion"] = team  # type: ignore[assignment]
+
+        bracket.log_probability = bracket.calculate_log_probability()
+        bracket.identify_underdogs()
+        return bracket
 
     def create_simulation_pool(self, pool_id: str) -> Optional[Pool]:
         """
-        Create a simulation Pool from an ESPN pool
+        Create a simulation Pool from an ESPN pool using the JSON API.
 
         Args:
-            pool_id: ESPN pool ID
+            pool_id: ESPN group/pool ID
 
         Returns:
-            Pool object ready for simulation
+            Pool object ready for simulation, or None on failure
         """
-        # Load actual bracket from blank entry
-        blank_html = self.bracket_handler.get_bracket()
-        if not blank_html:
-            logger.error("Failed to load actual bracket template")
-            return None
+        logger.info("Fetching challenge data...")
+        challenge = self.fetch_challenge()
 
-        actual_bracket = self.bracket_handler.extract_bracket(blank_html)
-        if not actual_bracket:
-            logger.error("Failed to extract actual bracket data")
-            return None
-
-        # Add upset factor to actual tournament for realistic simulation
+        logger.info("Building actual bracket...")
+        actual_bracket = self.build_actual_bracket(challenge)
         for game in actual_bracket.games:
-            game.upset_factor = 0.25  # More realistic tournament has upsets
+            game.upset_factor = 0.25
 
-        # Initialize pool with actual bracket
         pool_sim = Pool(actual_bracket)
+        teams = actual_bracket.teams
 
-        # Load and add entries
-        entries = self.load_pool_entries(pool_id)
-        for entry_name, bracket in entries.items():
-            pool_sim.add_entry(entry_name, bracket, False)  # Don't re-simulate fixed picks
+        logger.info(f"Fetching pool {pool_id}...")
+        group = self.fetch_group(pool_id)
+        entries = group.get("entries", [])
+        logger.info(f"Found {len(entries)} entries")
 
+        for entry_info in entries:
+            entry_name = entry_info.get("name", "Unknown")
+            logger.info(f"Loading entry: {entry_name}")
+            entry_data = self.fetch_entry(entry_info["id"])
+            bracket = self.build_entry_bracket(entry_data, challenge, teams)
+            if bracket:
+                pool_sim.add_entry(entry_name, bracket, False)
+            else:
+                logger.warning(f"Failed to build bracket for {entry_name}")
+
+        logger.info(f"Successfully loaded {len(pool_sim.entries)} entries")
         return pool_sim
 
 
@@ -1039,8 +440,8 @@ class GameImportanceAnalyzer:
         team1: Team,
         team2: Team,
         round_name: str,
-        actual_bracket,
-        baseline,
+        actual_bracket: Bracket,
+        baseline: pd.DataFrame,
         num_sims: int,
     ) -> dict:
         """
@@ -1152,7 +553,8 @@ class GameImportanceAnalyzer:
         for i, details in enumerate(game_importance):
             print(f"GAME #{i + 1}: {details['matchup']} (Region: {details['region']})")
             print(
-                f"  Max Impact: {details['max_impact']:.4f} | Avg Impact: {details['avg_impact']:.4f}"
+                f"  Max Impact: {details['max_impact']:.4f} | "
+                f"Avg Impact: {details['avg_impact']:.4f}"
             )
 
             if entry_name:
@@ -1196,7 +598,8 @@ class GameImportanceAnalyzer:
                 worse_pct = team1_pct
 
             print(
-                f"    Win chances: {better_pct:.1f}% if {better_team} wins vs {worse_pct:.1f}% if {worse_team} wins"
+                f"    Win chances: {better_pct:.1f}% if {better_team} wins "
+                f"vs {worse_pct:.1f}% if {worse_team} wins"
             )
             print(f"    Currently at: {baseline_pct:.1f}% baseline win probability")
             print(f"    Difference: {abs(team1_pct - team2_pct):.1f}%")
@@ -1239,12 +642,6 @@ def main(argv=None):
         help="name of the specific bracket to focus on in importance analysis",
     )
     parser.add_argument(
-        "--cache_dir",
-        type=str,
-        default=".cache",
-        help="location of html cache directory",
-    )
-    parser.add_argument(
         "--team_probs",
         action="store_true",
         help="show each team's probability of reaching each round instead of pool standings",
@@ -1263,11 +660,9 @@ def main(argv=None):
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
-    # Create pool manager
-    pool_manager = ESPNPool(women=women, cache_dir=args.cache_dir)
-
-    # Load actual bracket and pool entries
-    pool_sim = pool_manager.create_simulation_pool(args.pool_id)
+    # Create API client and load pool
+    api = ESPNApi(women=women)
+    pool_sim = api.create_simulation_pool(args.pool_id)
     if not pool_sim:
         logging.error("Failed to create simulation pool")
         return 1
@@ -1298,7 +693,8 @@ def main(argv=None):
         ]
         if args.as_of not in round_names:
             logger.warning(
-                "Don't recognize the round name provided for as_of, simulating from current state..."
+                "Don't recognize the round name provided for as_of, "
+                "simulating from current state..."
             )
             if args.as_of in ["First", "Second", "Sweet", "Elite", "Final"]:
                 logger.warning(
