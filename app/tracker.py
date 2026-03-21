@@ -161,11 +161,11 @@ def render_importance(importance_data: list[dict], my_bracket: str = ""):
                     }
                 )
 
+                impact_df = impact_df.sort_values("Impact", ascending=False)
+
                 pct_cols = [c for c in impact_df.columns if "Win%" in c or c == "Impact"]
                 for col in pct_cols:
                     impact_df[col] = (impact_df[col] * 100).round(1).astype(str) + "%"
-
-                impact_df = impact_df.sort_values("Impact", ascending=False)
 
                 if my_bracket and my_bracket in impact_df["Entry"].values:
 
