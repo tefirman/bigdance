@@ -164,8 +164,10 @@ def render_importance(importance_data: list[dict], my_bracket: str = ""):
                 impact_df = impact_df.sort_values("Impact", ascending=False)
 
                 pct_cols = [c for c in impact_df.columns if "Win%" in c or c == "Impact"]
+                col_config = {}
                 for col in pct_cols:
-                    impact_df[col] = (impact_df[col] * 100).round(1).astype(str) + "%"
+                    impact_df[col] = (impact_df[col] * 100).round(1)
+                    col_config[col] = st.column_config.NumberColumn(format="%.1f%%")
 
                 if my_bracket and my_bracket in impact_df["Entry"].values:
 
@@ -175,9 +177,11 @@ def render_importance(importance_data: list[dict], my_bracket: str = ""):
                         return [""] * len(row)
 
                     styled = impact_df.style.apply(highlight_entry, axis=1)
-                    st.dataframe(styled, width="stretch", hide_index=True)
+                    st.dataframe(styled, column_config=col_config, width="stretch", hide_index=True)
                 else:
-                    st.dataframe(impact_df, width="stretch", hide_index=True)
+                    st.dataframe(
+                        impact_df, column_config=col_config, width="stretch", hide_index=True
+                    )
 
 
 def render_entry_details(
