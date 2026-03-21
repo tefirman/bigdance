@@ -414,29 +414,51 @@ class GameImportanceAnalyzer:
 
     def _get_teams_in_round(self, bracket: Bracket, round_name: str) -> list[Team]:
         """
-        Get teams participating in a specific round
+        Get teams participating in a specific round by walking the game tree.
+
+        Uses advance_round to build correct matchup pairings from the bracket
+        structure rather than relying on the flat results list ordering.
 
         Args:
             bracket: Bracket object
             round_name: Round name
 
         Returns:
-            List of teams in the round
+            List of teams in the round (ordered for sequential pairing)
         """
-        if round_name == "First Round":
+        round_order = [
+            "First Round",
+            "Second Round",
+            "Sweet 16",
+            "Elite 8",
+            "Final Four",
+            "Championship",
+        ]
+        target_idx = round_order.index(round_name)
+
+        if target_idx == 0:
             teams = []
             for game in bracket.games:
                 teams.extend([game.team1, game.team2])
             return teams
-        else:
-            prev_round = {
-                "Second Round": "First Round",
-                "Sweet 16": "Second Round",
-                "Elite 8": "Sweet 16",
-                "Final Four": "Elite 8",
-                "Championship": "Final Four",
-            }[round_name]
-            return bracket.results[prev_round]
+
+        # Walk the game tree forward using actual results to set winners
+        # on intermediate rounds so advance_round pairs teams correctly.
+        current_games = copy.deepcopy(bracket.games)
+        for step in range(target_idx):
+            completed_round = round_order[step]
+            winners_set = {t.name for t in bracket.results.get(completed_round, [])}
+            for game in current_games:
+                if not game.winner and game.team1.name in winners_set:
+                    game.winner = game.team1
+                elif not game.winner and game.team2.name in winners_set:
+                    game.winner = game.team2
+            current_games = bracket.advance_round(current_games)
+
+        teams = []
+        for game in current_games:
+            teams.extend([game.team1, game.team2])
+        return teams
 
     def _analyze_matchup(
         self,

@@ -96,10 +96,10 @@ def run_pool_simulation(
     return pool_for_importance, results_df
 
 
-def run_importance_analysis(pool: Pool, num_sims: int) -> list[dict]:
+def run_importance_analysis(pool: Pool, num_sims: int, current_round: str) -> list[dict]:
     """Run game importance analysis on the pool."""
     analyzer = GameImportanceAnalyzer(pool)
-    return analyzer.analyze_win_importance(num_sims=num_sims)
+    return analyzer.analyze_win_importance(current_round=current_round, num_sims=num_sims)
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ if analyze_btn:
 
     if current_round:
         with st.spinner(f"Analyzing game importance ({current_round})..."):
-            importance = run_importance_analysis(pool, min(num_sims, 500))
+            importance = run_importance_analysis(pool, min(num_sims, 500), current_round)
             st.session_state["importance"] = importance
     else:
         st.session_state["importance"] = []
