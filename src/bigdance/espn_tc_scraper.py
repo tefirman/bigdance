@@ -213,9 +213,7 @@ class ESPNApi:
 
         # Build first round results in game order so subsequent round
         # matchups are paired correctly (winner of game 1 vs game 2, etc.)
-        bracket.results["First Round"] = [
-            game.winner for game in bracket.games if game.winner
-        ]
+        bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
 
         # Build subsequent rounds from game tree
         current_games = bracket.games.copy()
