@@ -3,7 +3,7 @@
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.8.0
+@Version :   0.8.1
 @Contact :   tefirman@gmail.com
 @Desc    :   ESPN Tournament Challenge integration via the Gambit JSON API
 """
@@ -203,7 +203,6 @@ class ESPNApi:
                 if winner_info:
                     winner_team = team_by_name.get(winner_info["name"])
                     if winner_team:
-                        bracket.results["First Round"].append(winner_team)
                         for game in bracket.games:
                             if (
                                 game.team1.name == winner_team.name
@@ -211,6 +210,12 @@ class ESPNApi:
                             ):
                                 game.winner = winner_team
                                 break
+
+        # Build first round results in game order so subsequent round
+        # matchups are paired correctly (winner of game 1 vs game 2, etc.)
+        bracket.results["First Round"] = [
+            game.winner for game in bracket.games if game.winner
+        ]
 
         # Build subsequent rounds from game tree
         current_games = bracket.games.copy()
