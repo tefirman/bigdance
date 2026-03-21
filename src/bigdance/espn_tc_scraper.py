@@ -116,6 +116,7 @@ class ESPNApi:
                 "scoring_period": prop["scoringPeriodId"],
                 "correct_outcome_ids": correct,
                 "winner_id": correct[0] if correct else None,
+                "actual_outcome_ids": prop.get("actualOutcomeIds", []),
             }
         return prop_map
 
@@ -196,26 +197,74 @@ class ESPNApi:
 
         bracket.results = {rn: [] for rn in self.ROUND_NAMES}
 
-        # Fill in first round results
-        for _prop_id, prop_info in prop_map.items():
-            if prop_info["scoring_period"] == 1 and prop_info["winner_id"]:
-                winner_info = outcome_map.get(prop_info["winner_id"])
-                if winner_info:
-                    winner_team = team_by_name.get(winner_info["name"])
-                    if winner_team:
-                        for game in bracket.games:
-                            if (
-                                game.team1.name == winner_team.name
-                                or game.team2.name == winner_team.name
-                            ):
-                                game.winner = winner_team
-                                break
+        # Determine which scoring periods are available in the API response.
+        # ESPN only returns propositions for the current scoring period, so
+        # prior rounds must be inferred from actualOutcomeIds on later props.
+        min_period = min((p["scoring_period"] for p in prop_map.values()), default=1)
 
-        # Build first round results in game order so subsequent round
-        # matchups are paired correctly (winner of game 1 vs game 2, etc.)
-        bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
+        # Infer winners for prior rounds from actualOutcomeIds.
+        # Each prop's actualOutcomeIds lists the teams actually playing in
+        # that game, which means they won their prior round matchups.
+        if min_period > 1:
+            prior_winner_names: set[str] = set()
+            for prop_info in prop_map.values():
+                if prop_info["scoring_period"] == min_period:
+                    for oid in prop_info["actual_outcome_ids"]:
+                        info = outcome_map.get(oid)
+                        if info:
+                            prior_winner_names.add(info["name"])
 
-        # Build subsequent rounds from game tree
+            # Set winners on First Round games
+            for game in bracket.games:
+                if game.team1.name in prior_winner_names:
+                    game.winner = game.team1
+                elif game.team2.name in prior_winner_names:
+                    game.winner = game.team2
+
+            bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
+
+            # Advance through intermediate completed rounds if min_period > 2
+            current_games = bracket.games.copy()
+            for round_ind in range(1, min_period - 1):
+                if all(g.winner for g in current_games):
+                    current_games = bracket.advance_round(current_games)
+                    # For intermediate rounds, all teams must have advanced
+                    # since a later round's props exist. Use actualOutcomeIds
+                    # from the next period's props to identify winners.
+                    next_period_winners: set[str] = set()
+                    for prop_info in prop_map.values():
+                        if prop_info["scoring_period"] == round_ind + 1:
+                            for oid in prop_info["actual_outcome_ids"]:
+                                info = outcome_map.get(oid)
+                                if info:
+                                    next_period_winners.add(info["name"])
+
+                    for game in current_games:
+                        if game.team1.name in next_period_winners:
+                            game.winner = game.team1
+                            bracket.results[self.ROUND_NAMES[round_ind]].append(game.team1)
+                        elif game.team2.name in next_period_winners:
+                            game.winner = game.team2
+                            bracket.results[self.ROUND_NAMES[round_ind]].append(game.team2)
+        else:
+            # First Round props are available — use correctOutcomes directly
+            for _prop_id, prop_info in prop_map.items():
+                if prop_info["scoring_period"] == 1 and prop_info["winner_id"]:
+                    winner_info = outcome_map.get(prop_info["winner_id"])
+                    if winner_info:
+                        winner_team = team_by_name.get(winner_info["name"])
+                        if winner_team:
+                            for game in bracket.games:
+                                if (
+                                    game.team1.name == winner_team.name
+                                    or game.team2.name == winner_team.name
+                                ):
+                                    game.winner = winner_team
+                                    break
+
+            bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
+
+        # Build current and subsequent rounds from game tree
         current_games = bracket.games.copy()
         for round_ind in range(1, 5):
             if all(g.winner for g in current_games):
@@ -234,7 +283,8 @@ class ESPNApi:
                                     bracket.results[self.ROUND_NAMES[round_ind]].append(game.team2)
                                     break
             else:
-                bracket.results[self.ROUND_NAMES[round_ind]] = []
+                if not bracket.results[self.ROUND_NAMES[round_ind]]:
+                    break
 
         return bracket
 
