@@ -3,7 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 import pandas as pd
 from bigdance import Standings, create_teams_from_standings, simulate_round_probabilities
-from bigdance.espn_tc_scraper import ESPNBracket
+from bigdance.espn_tc_scraper import ESPNApi
 from bigdance.cbb_brackets import Bracket, Team, Game, Pool
 from bigdance.wn_cbb_scraper import elo_prob
 
@@ -19,6 +19,7 @@ st.title("March Madness Bracket Pool Simulator")
 # Session state
 # ---------------------------------------------------------------------------
 
+
 @st.cache_resource
 def load_standings(women: bool = False) -> Standings:
     return Standings(women=women)
@@ -27,31 +28,15 @@ def load_standings(women: bool = False) -> Standings:
 @st.cache_resource
 def load_bracket(women: bool = False) -> Bracket:
     cache_dir = Path(__file__).parent / ".cache"
-    # Use gender-specific subdirectory for WN standings so men's and women's
-    # ELO caches don't overwrite each other (both write to elo_YYYY.json).
     gender_cache = cache_dir / ("women" if women else "men")
     gender_cache.mkdir(parents=True, exist_ok=True)
-    espn = ESPNBracket(women=women, cache_dir=str(gender_cache))
-    # First try loading cached bracket HTML directly (no expiry check)
-    # so the deployed app doesn't need Selenium
-    cache_file = cache_dir / f"bracket_{'women' if women else 'men'}_blank.json"
-    html = None
-    if cache_file.exists():
-        import json
-        cache_data = json.loads(cache_file.read_text())
-        html = cache_data.get("content")
-    # Fall back to live scraping if no cached file
-    if html is None:
-        html = espn.get_bracket()
-    bracket = espn.extract_bracket(html)
-    if bracket is None:
+    try:
+        api = ESPNApi(women=women, cache_dir=str(gender_cache))
+        challenge = api.fetch_challenge()
+        bracket = api.build_actual_bracket(challenge)
+        return bracket
+    except Exception:
         return create_teams_from_standings(load_standings(women=women))
-    # Normalize region names to title case (ESPN returns all-caps)
-    for team in bracket.teams:
-        team.region = team.region.title()
-    for game in bracket.games:
-        game.region = game.region.title()
-    return bracket
 
 
 @st.cache_resource
@@ -68,7 +53,9 @@ with st.sidebar:
     gender = st.radio("Tournament", options=["Men's", "Women's"], horizontal=True)
     women = gender == "Women's"
     gender_key = "women" if women else "men"
-    pool_size = st.selectbox("Pool size (# of entries)", options=[10, 15, 20, 30, 50, 75, 100, 150, 200], index=1)
+    pool_size = st.selectbox(
+        "Pool size (# of entries)", options=[10, 15, 20, 30, 50, 75, 100, 150, 200], index=1
+    )
     num_sims = st.selectbox("Simulations", options=[500, 1000, 2500, 5000], index=1)
     simulate_btn = st.button("Simulate", type="primary", width="stretch")
     st.divider()
@@ -128,7 +115,7 @@ def seed_defaults() -> None:
     BLOCK = REGION_BLOCK
 
     def _rgidx(region: str, rnd: int, loc: int) -> int:
-        return BLOCK[region] * (8 // (2 ** rnd)) + loc
+        return BLOCK[region] * (8 // (2**rnd)) + loc
 
     # Round 0 — seeded from bracket.games directly
     for region in REGIONS_LOCAL:
@@ -138,7 +125,7 @@ def seed_defaults() -> None:
 
     # Rounds 1–3 — seeded from previous round's picks
     for rnd in range(1, 4):
-        block_size = 8 // (2 ** rnd)
+        block_size = 8 // (2**rnd)
         for region in REGIONS_LOCAL:
             for loc in range(block_size):
                 gidx = _rgidx(region, rnd, loc)
@@ -178,7 +165,7 @@ seed_defaults()
 
 def region_game_idx(region: str, round_idx: int, local_idx: int) -> int:
     """Return the flat game index for rounds 1–3 (not used for round 0)."""
-    block_size = 8 // (2 ** round_idx)
+    block_size = 8 // (2**round_idx)
     return REGION_BLOCK[region] * block_size + local_idx
 
 
@@ -259,7 +246,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_bracket, tab_results, tab_strategy, tab_probs = st.tabs(["🏀  Pick Your Bracket", "📊  Sim Results", "🎯  Upset Strategy", "📈  Team Probabilities"])
+tab_bracket, tab_results, tab_strategy, tab_probs = st.tabs(
+    ["🏀  Pick Your Bracket", "📊  Sim Results", "🎯  Upset Strategy", "📈  Team Probabilities"]
+)
 
 # ---------------------------------------------------------------------------
 # Tab 1: bracket picker
@@ -274,7 +263,7 @@ with tab_bracket:
         for col, round_label, round_idx in zip(cols, round_labels, range(4)):
             with col:
                 st.markdown(f"**{round_label}**")
-                block_size = 8 // (2 ** round_idx)
+                block_size = 8 // (2**round_idx)
                 # Spacers to vertically center games relative to their feeder games.
                 # Before the first game: 2^round_idx - 1 blank lines.
                 # Between games: 2^(round_idx+1) - 1 blank lines.
@@ -468,7 +457,9 @@ def count_upsets_from_picks() -> dict[str, int]:
 
 
 def load_upset_strategy(pool_size: int, gender: str = "men") -> pd.DataFrame | None:
-    strategy_path = Path(__file__).parent / "data" / gender / f"pool_{pool_size}" / "optimal_upset_strategy.csv"
+    strategy_path = (
+        Path(__file__).parent / "data" / gender / f"pool_{pool_size}" / "optimal_upset_strategy.csv"
+    )
     if not strategy_path.exists():
         return None
     return pd.read_csv(strategy_path)
@@ -490,7 +481,9 @@ def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame |
         return df
     # Pivot from long (one row per team×round) to wide (one row per team, one col per round)
     rounds = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
-    pivot = df.pivot_table(index=["seed", "team"], columns="advanced_through", values="frequency", aggfunc="first")
+    pivot = df.pivot_table(
+        index=["seed", "team"], columns="advanced_through", values="frequency", aggfunc="first"
+    )
     pivot = pivot.reindex(columns=[r for r in rounds if r in pivot.columns])
     pivot.columns = [c for c in pivot.columns]
     pivot = pivot.reset_index()
@@ -498,7 +491,9 @@ def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame |
     # For rounds before their first appearance, NaN means N/A (not an upset category).
     round_cols_present = [r for r in rounds if r in pivot.columns]
     for _, row in pivot.iterrows():
-        first_val_idx = next((i for i, r in enumerate(round_cols_present) if pd.notna(row[r])), None)
+        first_val_idx = next(
+            (i for i, r in enumerate(round_cols_present) if pd.notna(row[r])), None
+        )
         if first_val_idx is not None:
             for r in round_cols_present[first_val_idx:]:
                 if pd.isna(pivot.at[row.name, r]):
@@ -507,7 +502,9 @@ def load_common_underdogs(pool_size: int, gender: str = "men") -> pd.DataFrame |
     # Sort by First Round frequency desc (most common underdogs first), then by seed
     sort_col = next((r for r in rounds if r in pivot.columns), None)
     if sort_col:
-        pivot = pivot.sort_values(sort_col, ascending=False, na_position="last").reset_index(drop=True)
+        pivot = pivot.sort_values(sort_col, ascending=False, na_position="last").reset_index(
+            drop=True
+        )
     return pivot
 
 
@@ -535,7 +532,9 @@ with tab_strategy:
             "Run `python app/generate_upset_analysis.py` to generate it."
         )
     else:
-        num_pools_used = int(strategy_df["num_pools"].iloc[0]) if "num_pools" in strategy_df.columns else "?"
+        num_pools_used = (
+            int(strategy_df["num_pools"].iloc[0]) if "num_pools" in strategy_df.columns else "?"
+        )
         st.caption(
             f"Optimal upset counts per round for a {pool_size}-person pool, "
             f"based on {num_pools_used} simulated pools. Pick counts update live as you fill in your bracket."
@@ -570,10 +569,22 @@ with tab_strategy:
                 continue
             mean_val = row["mean_upsets"] if pd.notna(row.get("mean_upsets")) else None
             std_val = row["std_upsets"] if pd.notna(row.get("std_upsets")) else None
-            losers_mean = row["losers_mean_upsets"] if pd.notna(row.get("losers_mean_upsets")) else None
-            losers_std = row["losers_std_upsets"] if pd.notna(row.get("losers_std_upsets")) else None
-            winners_str = f"{mean_val:.1f} ± {std_val:.1f}" if mean_val is not None and std_val is not None else "—"
-            losers_str = f"{losers_mean:.1f} ± {losers_std:.1f}" if losers_mean is not None and losers_std is not None else "—"
+            losers_mean = (
+                row["losers_mean_upsets"] if pd.notna(row.get("losers_mean_upsets")) else None
+            )
+            losers_std = (
+                row["losers_std_upsets"] if pd.notna(row.get("losers_std_upsets")) else None
+            )
+            winners_str = (
+                f"{mean_val:.1f} ± {std_val:.1f}"
+                if mean_val is not None and std_val is not None
+                else "—"
+            )
+            losers_str = (
+                f"{losers_mean:.1f} ± {losers_std:.1f}"
+                if losers_mean is not None and losers_std is not None
+                else "—"
+            )
             your_count = user_upsets.get(rnd, 0)
             if mean_val is not None and std_val is not None and std_val > 0:
                 z = (your_count - mean_val) / std_val
@@ -582,54 +593,84 @@ with tab_strategy:
                 z = 0.0
                 direction = "—"
             z_scores_upsets.append(z)
-            rows.append({
-                "Round": rnd,
-                "Your Upsets": your_count,
-                "Winners (Avg ± Std)":winners_str,
-                "Losers (Avg ± Std)":losers_str,
-                "Direction": direction,
-            })
+            rows.append(
+                {
+                    "Round": rnd,
+                    "Your Upsets": your_count,
+                    "Winners (Avg ± Std)": winners_str,
+                    "Losers (Avg ± Std)": losers_str,
+                    "Direction": direction,
+                }
+            )
 
         # Add total row
         total_your = sum(r["Your Upsets"] for r in rows)
+
         # Parse mean values back out of the "X ± Y" strings
         def _parse_mean(s):
             if s == "—":
                 return None
             return float(s.split(" ± ")[0])
+
         def _parse_std(s):
             if s == "—":
                 return None
             return float(s.split(" ± ")[1])
-        total_mean = sum(_parse_mean(r["Winners (Avg ± Std)"]) for r in rows if _parse_mean(r["Winners (Avg ± Std)"]) is not None)
-        total_losers = sum(_parse_mean(r["Losers (Avg ± Std)"]) for r in rows if _parse_mean(r["Losers (Avg ± Std)"]) is not None)
-        total_std_vals = [_parse_std(r["Winners (Avg ± Std)"]) for r in rows if _parse_std(r["Winners (Avg ± Std)"]) is not None]
-        total_losers_std_vals = [_parse_std(r["Losers (Avg ± Std)"]) for r in rows if _parse_std(r["Losers (Avg ± Std)"]) is not None]
+
+        total_mean = sum(
+            _parse_mean(r["Winners (Avg ± Std)"])
+            for r in rows
+            if _parse_mean(r["Winners (Avg ± Std)"]) is not None
+        )
+        total_losers = sum(
+            _parse_mean(r["Losers (Avg ± Std)"])
+            for r in rows
+            if _parse_mean(r["Losers (Avg ± Std)"]) is not None
+        )
+        total_std_vals = [
+            _parse_std(r["Winners (Avg ± Std)"])
+            for r in rows
+            if _parse_std(r["Winners (Avg ± Std)"]) is not None
+        ]
+        total_losers_std_vals = [
+            _parse_std(r["Losers (Avg ± Std)"])
+            for r in rows
+            if _parse_std(r["Losers (Avg ± Std)"]) is not None
+        ]
         total_std = (sum(s**2 for s in total_std_vals) ** 0.5) if total_std_vals else 0.0
-        total_losers_std = (sum(s**2 for s in total_losers_std_vals) ** 0.5) if total_losers_std_vals else 0.0
+        total_losers_std = (
+            (sum(s**2 for s in total_losers_std_vals) ** 0.5) if total_losers_std_vals else 0.0
+        )
         if total_std > 0:
             total_z = (total_your - total_mean) / total_std
-            total_dir = "—" if abs(total_z) < 0.1 else ("↑ too bold" if total_z > 0 else "↓ too chalk")
+            total_dir = (
+                "—" if abs(total_z) < 0.1 else ("↑ too bold" if total_z > 0 else "↓ too chalk")
+            )
         else:
             total_z = 0.0
             total_dir = "—"
         z_scores_upsets.append(total_z)
-        rows.append({
-            "Round": "Total",
-            "Your Upsets": total_your,
-            "Winners (Avg ± Std)":f"{total_mean:.1f} ± {total_std:.1f}",
-            "Losers (Avg ± Std)":f"{total_losers:.1f} ± {total_losers_std:.1f}",
-            "Direction": total_dir,
-        })
+        rows.append(
+            {
+                "Round": "Total",
+                "Your Upsets": total_your,
+                "Winners (Avg ± Std)": f"{total_mean:.1f} ± {total_std:.1f}",
+                "Losers (Avg ± Std)": f"{total_losers:.1f} ± {total_losers_std:.1f}",
+                "Direction": total_dir,
+            }
+        )
 
         display_df = pd.DataFrame(rows)
 
         def _color_col(z_scores: list[float], col: str):
             def _styler(s):
                 return [_z_to_color(z) for z in z_scores]
+
             return _styler
 
-        styled = display_df.style.apply(_color_col(z_scores_upsets, "Your Upsets"), subset=["Your Upsets"])
+        styled = display_df.style.apply(
+            _color_col(z_scores_upsets, "Your Upsets"), subset=["Your Upsets"]
+        )
         st.dataframe(styled, width="stretch", hide_index=True)
 
         st.markdown("#### Madness Score by Round")
@@ -648,11 +689,23 @@ with tab_strategy:
                 rnd = row["round"]
                 mean_val = row["mean_madness"] if pd.notna(row.get("mean_madness")) else None
                 std_val = row["std_madness"] if pd.notna(row.get("std_madness")) else None
-                losers_mean = row["losers_mean_madness"] if pd.notna(row.get("losers_mean_madness")) else None
-                losers_std = row["losers_std_madness"] if pd.notna(row.get("losers_std_madness")) else None
+                losers_mean = (
+                    row["losers_mean_madness"] if pd.notna(row.get("losers_mean_madness")) else None
+                )
+                losers_std = (
+                    row["losers_std_madness"] if pd.notna(row.get("losers_std_madness")) else None
+                )
                 your_score = madness_scores.get(rnd, 0.0)
-                winners_str = f"{mean_val:.2f} ± {std_val:.2f}" if mean_val is not None and std_val is not None else "—"
-                losers_str = f"{losers_mean:.2f} ± {losers_std:.2f}" if losers_mean is not None and losers_std is not None else "—"
+                winners_str = (
+                    f"{mean_val:.2f} ± {std_val:.2f}"
+                    if mean_val is not None and std_val is not None
+                    else "—"
+                )
+                losers_str = (
+                    f"{losers_mean:.2f} ± {losers_std:.2f}"
+                    if losers_mean is not None and losers_std is not None
+                    else "—"
+                )
                 if mean_val is not None and std_val is not None and std_val > 0:
                     z = (your_score - mean_val) / std_val
                     direction = "—" if abs(z) < 0.1 else ("↑ too bold" if z > 0 else "↓ too chalk")
@@ -660,36 +713,64 @@ with tab_strategy:
                     z = 0.0
                     direction = "—"
                 z_scores_madness.append(z)
-                madness_rows.append({
-                    "Round": rnd,
-                    "Your Madness": f"{your_score:.2f}",
-                    "Winners (Avg ± Std)":winners_str,
-                    "Losers (Avg ± Std)":losers_str,
-                    "Direction": direction,
-                })
+                madness_rows.append(
+                    {
+                        "Round": rnd,
+                        "Your Madness": f"{your_score:.2f}",
+                        "Winners (Avg ± Std)": winners_str,
+                        "Losers (Avg ± Std)": losers_str,
+                        "Direction": direction,
+                    }
+                )
 
             # Add total row
             total_your_m = sum(float(r["Your Madness"]) for r in madness_rows)
-            total_mean_m = sum(_parse_mean(r["Winners (Avg ± Std)"]) for r in madness_rows if _parse_mean(r["Winners (Avg ± Std)"]) is not None)
-            total_losers_m = sum(_parse_mean(r["Losers (Avg ± Std)"]) for r in madness_rows if _parse_mean(r["Losers (Avg ± Std)"]) is not None)
-            total_std_m_vals = [_parse_std(r["Winners (Avg ± Std)"]) for r in madness_rows if _parse_std(r["Winners (Avg ± Std)"]) is not None]
-            total_losers_std_m_vals = [_parse_std(r["Losers (Avg ± Std)"]) for r in madness_rows if _parse_std(r["Losers (Avg ± Std)"]) is not None]
+            total_mean_m = sum(
+                _parse_mean(r["Winners (Avg ± Std)"])
+                for r in madness_rows
+                if _parse_mean(r["Winners (Avg ± Std)"]) is not None
+            )
+            total_losers_m = sum(
+                _parse_mean(r["Losers (Avg ± Std)"])
+                for r in madness_rows
+                if _parse_mean(r["Losers (Avg ± Std)"]) is not None
+            )
+            total_std_m_vals = [
+                _parse_std(r["Winners (Avg ± Std)"])
+                for r in madness_rows
+                if _parse_std(r["Winners (Avg ± Std)"]) is not None
+            ]
+            total_losers_std_m_vals = [
+                _parse_std(r["Losers (Avg ± Std)"])
+                for r in madness_rows
+                if _parse_std(r["Losers (Avg ± Std)"]) is not None
+            ]
             total_std_m = (sum(s**2 for s in total_std_m_vals) ** 0.5) if total_std_m_vals else 0.0
-            total_losers_std_m = (sum(s**2 for s in total_losers_std_m_vals) ** 0.5) if total_losers_std_m_vals else 0.0
+            total_losers_std_m = (
+                (sum(s**2 for s in total_losers_std_m_vals) ** 0.5)
+                if total_losers_std_m_vals
+                else 0.0
+            )
             if total_std_m > 0:
                 total_z_m = (total_your_m - total_mean_m) / total_std_m
-                total_dir_m = "—" if abs(total_z_m) < 0.1 else ("↑ too bold" if total_z_m > 0 else "↓ too chalk")
+                total_dir_m = (
+                    "—"
+                    if abs(total_z_m) < 0.1
+                    else ("↑ too bold" if total_z_m > 0 else "↓ too chalk")
+                )
             else:
                 total_z_m = 0.0
                 total_dir_m = "—"
             z_scores_madness.append(total_z_m)
-            madness_rows.append({
-                "Round": "Total",
-                "Your Madness": f"{total_your_m:.2f}",
-                "Winners (Avg ± Std)":f"{total_mean_m:.2f} ± {total_std_m:.2f}",
-                "Losers (Avg ± Std)":f"{total_losers_m:.2f} ± {total_losers_std_m:.2f}",
-                "Direction": total_dir_m,
-            })
+            madness_rows.append(
+                {
+                    "Round": "Total",
+                    "Your Madness": f"{total_your_m:.2f}",
+                    "Winners (Avg ± Std)": f"{total_mean_m:.2f} ± {total_std_m:.2f}",
+                    "Losers (Avg ± Std)": f"{total_losers_m:.2f} ± {total_losers_std_m:.2f}",
+                    "Direction": total_dir_m,
+                }
+            )
 
             madness_display = pd.DataFrame(madness_rows)
             styled_madness = madness_display.style.apply(
@@ -698,15 +779,25 @@ with tab_strategy:
             st.dataframe(styled_madness, width="stretch", hide_index=True)
 
         st.markdown("#### Common Underdogs in Winning Brackets")
-        st.caption("How often each underdog team appears in winning pool brackets, by the round they upset through. Blue cells indicate rounds you've already picked that team to reach.")
+        st.caption(
+            "How often each underdog team appears in winning pool brackets, by the round they upset through. Blue cells indicate rounds you've already picked that team to reach."
+        )
         underdogs_df = load_common_underdogs(pool_size, gender=gender_key)
         if underdogs_df is None:
-            st.info("Run `python app/generate_upset_analysis.py` to generate common underdogs data.")
+            st.info(
+                "Run `python app/generate_upset_analysis.py` to generate common underdogs data."
+            )
         elif underdogs_df.empty:
             st.info("No common underdog data available for this pool size.")
         else:
             round_cols = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
-            round_col_to_idx = {"First Round": 0, "Second Round": 1, "Sweet 16": 2, "Elite 8": 3, "Final Four": 4}
+            round_col_to_idx = {
+                "First Round": 0,
+                "Second Round": 1,
+                "Sweet 16": 2,
+                "Elite 8": 3,
+                "Final Four": 4,
+            }
 
             # Build set of (team_name, round_col) the user has picked
             picked = set()
@@ -735,11 +826,14 @@ with tab_strategy:
                 if rnd in display_underdogs.columns
             }
             styled_underdogs = display_underdogs.style.apply(highlight_picked, axis=1)
-            st.dataframe(styled_underdogs, column_config=col_config, width="stretch", hide_index=True)
+            st.dataframe(
+                styled_underdogs, column_config=col_config, width="stretch", hide_index=True
+            )
 
 # ---------------------------------------------------------------------------
 # Tab 4: team round probabilities
 # ---------------------------------------------------------------------------
+
 
 def american_odds(p: float) -> str:
     """Convert a win probability to American-style odds string."""
@@ -752,7 +846,9 @@ def american_odds(p: float) -> str:
 
 
 with tab_probs:
-    st.caption("Probability of each team reaching each round, based on 1,000 simulated tournaments using current Warren Nolan Elo ratings.")
+    st.caption(
+        "Probability of each team reaching each round, based on 1,000 simulated tournaments using current Warren Nolan Elo ratings."
+    )
     with st.spinner("Computing team probabilities..."):
         probs_df = load_round_probabilities(women=women).copy()
     champ_pct = probs_df["Championship"].str.rstrip("%").astype(float) / 100

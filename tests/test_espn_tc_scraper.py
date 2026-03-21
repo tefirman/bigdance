@@ -1,68 +1,21 @@
-import contextlib
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-from bigdance.cbb_brackets import Bracket, Pool, Team
+from bigdance.cbb_brackets import Bracket, Team
 from bigdance.espn_tc_scraper import (
-    BaseScraper,
-    ESPNBracket,
-    ESPNPool,
-    ESPNScraper,
+    ESPNApi,
     GameImportanceAnalyzer,
 )
-
-# Sample HTML content for testing
-SAMPLE_BLANK_BRACKET_HTML = """
-<div class="BracketPropositionHeaderDesktop">
-  <span class="BracketPropositionHeaderDesktop-pickText">Some Text</span>
-</div>
-<div class="EtBYj UkSPS ZSuWB viYac NgsOb GpQCA NqeUA Mxk xTell">East</div>
-<div class="EtBYj UkSPS ZSuWB viYac NgsOb GpQCA NqeUA Mxk xTell">West</div>
-<label class="BracketOutcome-label truncate">Kansas</label>
-<img class="Image BracketOutcome-image printHide" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/2305.png"/>
-<div class="BracketOutcome-metadata">1</div>
-<span class="PrintChampionshipPickBody-outcomeName">Kansas</span>
-"""
-
-SAMPLE_POOL_HTML = """
-<table>
-  <tr>
-    <td class="BracketEntryTable-column--entryName Table__TD">
-      <a href="/games/tournament-challenge-bracket-2026/bracket?id=1234">Entry 1</a>
-    </td>
-  </tr>
-</table>
-"""
 
 
 # Fixtures
 @pytest.fixture
-def sample_cache_dir(tmp_path):
-    """Create a temporary directory for cache testing"""
-    cache_dir = tmp_path / "cache"
-    cache_dir.mkdir()
-    return str(cache_dir)
-
-
-@pytest.fixture
-def mock_chrome_driver():
-    """Create a mock for Chrome WebDriver"""
-    with patch("selenium.webdriver.Chrome") as mock:
-        driver = mock.return_value
-        driver.page_source = SAMPLE_BLANK_BRACKET_HTML
-        yield driver
-
-
-@pytest.fixture
 def mock_bracket_with_teams():
     """Create a valid bracket with 64 teams across 4 regions"""
     teams = []
-    for region in ["East", "West", "South", "Midwest"]:
+    for region in ["Region 1", "Region 2", "Region 3", "Region 4"]:
         for seed in range(1, 17):
             teams.append(
                 Team(
@@ -76,397 +29,282 @@ def mock_bracket_with_teams():
     return Bracket(teams)
 
 
-# Tests for BaseScraper
-class TestBaseScraper:
-    def test_initialization(self, sample_cache_dir):
-        """Test that the BaseScraper initializes properly with a cache directory"""
-        scraper = BaseScraper(cache_dir=sample_cache_dir)
-        assert scraper.cache_dir == Path(sample_cache_dir)
-        assert scraper.cache_dir.exists()
+@pytest.fixture
+def sample_challenge():
+    """Create a minimal challenge response for testing."""
+    propositions = []
+    seed_matchups = [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10), (2, 15)]
 
-    def test_cache_operations(self, sample_cache_dir):
-        """Test cache read/write operations"""
-        scraper = BaseScraper(cache_dir=sample_cache_dir)
-        url = "https://example.com"
-        content = "<html>Test content</html>"
-        cache_key = "test_key"
-
-        # Initially no cache exists
-        assert scraper._get_cached_response(cache_key) is None
-
-        # Write to cache
-        scraper._cache_response(cache_key, url, content)
-
-        # Verify cache file was created
-        cache_file = Path(sample_cache_dir) / f"{cache_key}.json"
-        assert cache_file.exists()
-
-        # Read from cache
-        cached_content = scraper._get_cached_response(cache_key)
-        assert cached_content == content
-
-    def test_cache_expiry(self, sample_cache_dir):
-        """Test that cache entries expire after their max age"""
-        scraper = BaseScraper(cache_dir=sample_cache_dir)
-        url = "https://example.com"
-        content = "<html>Test content</html>"
-        cache_key = "expiry_test"
-
-        # Create cache file directly with a timestamp in the past
-        cache_file = Path(sample_cache_dir) / f"{cache_key}.json"
-        cache_data = {
-            "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
-            "url": url,
-            "content": content,
-        }
-        cache_file.write_text(json.dumps(cache_data))
-
-        # Now cached response should be None due to expiry
-        assert scraper._get_cached_response(cache_key) is None
-
-    def test_clear_cache(self, sample_cache_dir):
-        """Test clearing cache files older than specified days"""
-        scraper = BaseScraper(cache_dir=sample_cache_dir)
-
-        # Create cache files with different dates
-        recent_file = Path(sample_cache_dir) / "recent.json"
-        old_file = Path(sample_cache_dir) / "old.json"
-
-        recent_data = {
-            "timestamp": (datetime.now() - timedelta(days=5)).isoformat(),
-            "url": "https://example.com/recent",
-            "content": "recent content",
-        }
-
-        old_data = {
-            "timestamp": (datetime.now() - timedelta(days=60)).isoformat(),
-            "url": "https://example.com/old",
-            "content": "old content",
-        }
-
-        recent_file.write_text(json.dumps(recent_data))
-        old_file.write_text(json.dumps(old_data))
-
-        # Clear cache files older than 30 days
-        removed = scraper.clear_cache(older_than_days=30)
-
-        # Should have removed 1 file
-        assert removed == 1
-
-        # Verify only old file was removed
-        assert not old_file.exists()
-        assert recent_file.exists()
-
-
-# Tests for ESPNScraper
-class TestESPNScraper:
-    def test_initialization(self, sample_cache_dir):
-        """Test ESPNScraper initialization"""
-        scraper = ESPNScraper(cache_dir=sample_cache_dir)
-        assert scraper.women is False
-        assert scraper.gender_suffix == ""
-        assert (
-            scraper.base_url == "https://fantasy.espn.com/games/tournament-challenge-bracket-2026"
-        )
-
-        # Test women's tournament initialization
-        women_scraper = ESPNScraper(women=True, cache_dir=sample_cache_dir)
-        assert women_scraper.women is True
-        assert women_scraper.gender_suffix == "-women"
-        assert (
-            women_scraper.base_url
-            == "https://fantasy.espn.com/games/tournament-challenge-bracket-women-2026"
-        )
-
-    @patch("selenium.webdriver.Chrome")
-    def test_get_page(self, mock_chrome, sample_cache_dir):
-        """Test page retrieval with Selenium"""
-        with (
-            patch("selenium.webdriver.chrome.service.Service"),
-            patch("webdriver_manager.chrome.ChromeDriverManager"),
-            patch("selenium.webdriver.chrome.options.Options"),
-        ):
-            # Configure mock driver
-            driver_instance = mock_chrome.return_value
-            driver_instance.page_source = SAMPLE_BLANK_BRACKET_HTML
-
-            scraper = ESPNScraper(cache_dir=sample_cache_dir)
-            url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/bracket"
-
-            # Test page retrieval
-            content = scraper.get_page(url, cache_key="test_page")
-            assert content is not None
-            assert "BracketPropositionHeaderDesktop" in content
-
-    @patch("selenium.webdriver.Chrome")
-    def test_get_page_with_pagination(self, mock_chrome, sample_cache_dir):
-        """Test page retrieval with pagination"""
-        with (
-            patch("selenium.webdriver.chrome.service.Service"),
-            patch("webdriver_manager.chrome.ChromeDriverManager"),
-            patch("selenium.webdriver.chrome.options.Options"),
-        ):
-            # Configure mock driver
-            driver_instance = mock_chrome.return_value
-            driver_instance.page_source = SAMPLE_POOL_HTML
-
-            # Simulate a situation where pagination methods work successfully
-            # by directly returning a dictionary of pages
-            with patch.object(ESPNScraper, "_retrieve_page") as mock_retrieve:
-                mock_retrieve.return_value = {
-                    1: SAMPLE_POOL_HTML,
-                    2: "<html>Page 2</html>",
-                }
-
-                scraper = ESPNScraper(cache_dir=sample_cache_dir)
-                url = "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/group"
-
-                # Test paginated retrieval
-                pages = scraper.get_page(url, cache_key="test_pool", check_pagination=True)
-
-                # Should return a dictionary with pages
-                assert isinstance(pages, dict)
-                assert 1 in pages  # Page 1 should exist
-                assert 2 in pages  # Page 2 should exist
-
-    def test_get_bracket(self, sample_cache_dir):
-        """Test bracket page retrieval"""
-        with patch.object(ESPNScraper, "get_page") as mock_get_page:
-            mock_get_page.return_value = SAMPLE_BLANK_BRACKET_HTML
-
-            scraper = ESPNScraper(cache_dir=sample_cache_dir)
-
-            # Test getting blank bracket
-            bracket_html = scraper.get_bracket()
-            assert bracket_html == SAMPLE_BLANK_BRACKET_HTML
-
-            # Check if get_page was called with the right URL and parameters
-            # The assertion needs to match how get_page is actually called in the implementation
-            # Here we're using a more flexible approach that doesn't depend on named vs positional args
-            mock_get_page.assert_called_once()
-            call_args = mock_get_page.call_args[0]  # Positional args
-            call_kwargs = mock_get_page.call_args[1]  # Keyword args
-
-            # Check arguments regardless of how they were passed
-            assert (
-                "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/bracket?id="
-                in call_args
-            )
-
-            # The cache_key might be in args or kwargs
-            cache_key_found = False
-            if "bracket_men_blank" in call_args:
-                cache_key_found = True
-            if call_kwargs.get("cache_key") == "bracket_men_blank":
-                cache_key_found = True
-            assert cache_key_found, "cache_key not found in the call"
-
-            # Same for check_pagination
-            pagination_found = False
-            if False in call_args:
-                pagination_found = True
-            if call_kwargs.get("check_pagination") is False:
-                pagination_found = True
-            assert pagination_found, "check_pagination not found in the call"
-
-    def test_get_pool(self, sample_cache_dir):
-        """Test pool page retrieval"""
-        with patch.object(ESPNScraper, "get_page") as mock_get_page:
-            mock_get_page.return_value = {1: SAMPLE_POOL_HTML}
-
-            scraper = ESPNScraper(cache_dir=sample_cache_dir)
-
-            # Test getting pool page
-            pool_id = "9876"
-            pool_html = scraper.get_pool(pool_id)
-            assert pool_html == {1: SAMPLE_POOL_HTML}
-
-            # Check call parameters using a more flexible approach
-            mock_get_page.assert_called_once()
-            call_args = mock_get_page.call_args[0]  # Positional args
-            call_kwargs = mock_get_page.call_args[1]  # Keyword args
-
-            # Check URL
-            url_found = False
-            for arg in call_args:
-                if isinstance(arg, str) and pool_id in arg:
-                    url_found = True
-                    break
-            assert url_found, "Pool URL not found in call arguments"
-
-            # Check other parameters are present somewhere
-            assert "pool_men_9876" in str(call_args) or "pool_men_9876" in str(call_kwargs)
-            assert True in call_args or call_kwargs.get("check_pagination") is True
-
-
-# Tests for ESPNBracket
-class TestESPNBracket:
-    def test_initialization(self, sample_cache_dir):
-        """Test ESPNBracket initialization"""
-        with patch("bigdance.wn_cbb_scraper.Standings") as mock_standings:
-            # Configure mock Standings
-            mock_standings_instance = mock_standings.return_value
-            mock_standings_instance.elo = pd.DataFrame(
+    display_order = 0
+    for region_id in range(1, 5):
+        for seed1, seed2 in seed_matchups:
+            prop_id = f"prop-r{region_id}-{seed1}v{seed2}"
+            propositions.append(
                 {
-                    "Team": ["Kansas", "Duke"],
-                    "ELO": [1800, 1750],
-                    "Conference": ["Big 12", "ACC"],
+                    "id": prop_id,
+                    "name": f"Team{seed1} vs Team{seed2}",
+                    "status": "LOCKED",
+                    "scoringPeriodId": 1,
+                    "displayOrder": display_order,
+                    "correctOutcomes": [],
+                    "possibleOutcomes": [
+                        {
+                            "id": f"outcome-r{region_id}-s{seed1}",
+                            "name": f"Team{seed1}_Region {region_id}",
+                            "regionId": region_id,
+                            "regionSeed": seed1,
+                            "mappings": [
+                                {"type": "COMPETITOR_ID", "value": str(seed1 + region_id * 100)},
+                            ],
+                        },
+                        {
+                            "id": f"outcome-r{region_id}-s{seed2}",
+                            "name": f"Team{seed2}_Region {region_id}",
+                            "regionId": region_id,
+                            "regionSeed": seed2,
+                            "mappings": [
+                                {"type": "COMPETITOR_ID", "value": str(seed2 + region_id * 100)},
+                            ],
+                        },
+                    ],
                 }
             )
+            display_order += 1
 
-            # Initialize with mock Standings
-            bracket_handler = ESPNBracket(cache_dir=sample_cache_dir)
-
-            assert bracket_handler.women is False
-            assert bracket_handler.ratings_source is not None
-            assert isinstance(bracket_handler.scraper, ESPNScraper)
-
-    def test_get_bracket(self, sample_cache_dir):
-        """Test getting bracket HTML"""
-        with patch.object(ESPNScraper, "get_bracket") as mock_get_bracket:
-            mock_get_bracket.return_value = SAMPLE_BLANK_BRACKET_HTML
-
-            bracket_handler = ESPNBracket(cache_dir=sample_cache_dir)
-            bracket_html = bracket_handler.get_bracket()
-
-            assert bracket_html == SAMPLE_BLANK_BRACKET_HTML
-            mock_get_bracket.assert_called_once()
-
-    def test_get_team_rating(self, sample_cache_dir):
-        """Test getting team rating from Standings or estimating based on seed"""
-        with patch("bigdance.wn_cbb_scraper.Standings") as mock_standings:
-            # Configure mock Standings
-            mock_standings_instance = mock_standings.return_value
-            mock_standings_instance.elo = pd.DataFrame(
-                {
-                    "Team": ["Kansas", "Duke", "North Carolina"],
-                    "ELO": [1800, 1750, 1725],
-                    "Conference": ["Big 12", "ACC", "ACC"],
-                }
+    return {
+        "propositions": propositions,
+        "currentScoringPeriod": {"id": 1, "label": "Round of 64"},
+        "scoringPeriods": [
+            {"id": i, "label": label}
+            for i, label in enumerate(
+                ["Round of 64", "Round of 32", "Sweet 16", "Elite 8", "Final Four", "Championship"],
+                start=1,
             )
-
-            bracket_handler = ESPNBracket(cache_dir=sample_cache_dir)
-            bracket_handler.ratings_source = mock_standings_instance
-
-            # Test exact match
-            rating = bracket_handler._get_team_rating("Kansas", 1)
-            assert rating == 1800
-
-            # Test name correction
-            with patch.dict("bigdance.espn_tc_scraper.NAME_CORRECTIONS", {"UNC": "North Carolina"}):
-                rating = bracket_handler._get_team_rating("UNC", 3)
-                assert rating == 1725
-
-    def test_extract_bracket(self, sample_cache_dir):
-        """Test extracting bracket data from HTML"""
-        with patch("bigdance.wn_cbb_scraper.Standings") as mock_standings:
-            # Configure mock Standings
-            mock_standings_instance = mock_standings.return_value
-            mock_standings_instance.elo = pd.DataFrame(
-                {
-                    "Team": ["Kansas", "Duke"],
-                    "ELO": [1800, 1750],
-                    "Conference": ["Big 12", "ACC"],
-                }
-            )
-
-            # Test with empty or None HTML
-            bracket_handler = ESPNBracket(cache_dir=sample_cache_dir)
-            assert bracket_handler.extract_bracket(None) is None
-            assert bracket_handler.extract_bracket("") is None
-
-            # Skip testing with actual HTML content since it's complex to mock
-            # Instead, we'll just test the method signature by creating a minimal
-            # implementation that verifies the method was called with the right parameters
-
-            # Test with a complete mock that bypasses all the internal logic
-            with patch.object(
-                bracket_handler,
-                "extract_bracket",
-                wraps=bracket_handler.extract_bracket,
-            ) as mock_method:
-                # This is just used to verify the method was called
-                with contextlib.suppress(Exception):
-                    mock_method(SAMPLE_BLANK_BRACKET_HTML)
-
-                # The method should have been called once with our HTML
-                mock_method.assert_called_once_with(SAMPLE_BLANK_BRACKET_HTML)
+        ],
+    }
 
 
-# Tests for ESPNPool
-class TestESPNPool:
-    def test_initialization(self, sample_cache_dir):
-        """Test ESPNPool initialization"""
-        pool_manager = ESPNPool(cache_dir=sample_cache_dir)
-        assert pool_manager.women is False
-        assert pool_manager.cache_dir == sample_cache_dir
-        assert isinstance(pool_manager.scraper, ESPNScraper)
-        assert isinstance(pool_manager.bracket_handler, ESPNBracket)
-
-    def test_extract_entry_ids(self, sample_cache_dir):
-        """Test extracting entry IDs from pool HTML"""
-        pool_manager = ESPNPool(cache_dir=sample_cache_dir)
-
-        # Test with single page as string
-        entry_ids = pool_manager.extract_entry_ids(SAMPLE_POOL_HTML)
-        assert entry_ids == {"Entry 1": "1234"}
-
-        # Test with dictionary of pages
-        entry_ids = pool_manager.extract_entry_ids(
+@pytest.fixture
+def sample_entry(sample_challenge):
+    """Create a sample entry with 63 picks."""
+    picks = []
+    # For each first-round game, pick the higher seed (lower number)
+    for prop in sample_challenge["propositions"]:
+        outcome = prop["possibleOutcomes"][0]  # higher seed
+        picks.append(
             {
-                1: SAMPLE_POOL_HTML,
-                2: SAMPLE_POOL_HTML,  # Same content on both pages for simplicity
+                "propositionId": prop["id"],
+                "outcomesPicked": [{"outcomeId": outcome["id"], "result": "UNDECIDED"}],
+                "periodReached": 2,  # wins first round
             }
         )
 
-        # Should find entries from both pages (in this case, duplicates)
-        assert len(entry_ids) == 1  # Duplicates are overwritten
-        assert entry_ids == {"Entry 1": "1234"}
+    # Add later-round picks (31 more for rounds 2-6)
+    # Pick teams from region 1 to go far
+    region1_outcomes = [
+        p["possibleOutcomes"][0]
+        for p in sample_challenge["propositions"]
+        if p["possibleOutcomes"][0]["regionId"] == 1
+    ]
+    for i, outcome in enumerate(region1_outcomes[:8]):
+        # Sweet 16 picks (8)
+        picks.append(
+            {
+                "propositionId": f"prop-r2-{i}",
+                "outcomesPicked": [{"outcomeId": outcome["id"], "result": "UNDECIDED"}],
+                "periodReached": 3,
+            }
+        )
+    for i, outcome in enumerate(region1_outcomes[:4]):
+        # Elite 8 picks (4)
+        picks.append(
+            {
+                "propositionId": f"prop-r3-{i}",
+                "outcomesPicked": [{"outcomeId": outcome["id"], "result": "UNDECIDED"}],
+                "periodReached": 4,
+            }
+        )
+    for i, outcome in enumerate(region1_outcomes[:2]):
+        # Final Four picks (2)
+        picks.append(
+            {
+                "propositionId": f"prop-r4-{i}",
+                "outcomesPicked": [{"outcomeId": outcome["id"], "result": "UNDECIDED"}],
+                "periodReached": 5,
+            }
+        )
+    # Championship pick (1)
+    picks.append(
+        {
+            "propositionId": "prop-r5-0",
+            "outcomesPicked": [{"outcomeId": region1_outcomes[0]["id"], "result": "UNDECIDED"}],
+            "periodReached": 6,
+        }
+    )
+    # Pad remaining picks to reach 63
+    while len(picks) < 63:
+        picks.append(
+            {
+                "propositionId": f"prop-pad-{len(picks)}",
+                "outcomesPicked": [{"outcomeId": region1_outcomes[0]["id"], "result": "UNDECIDED"}],
+                "periodReached": 2,
+            }
+        )
 
-    def test_load_pool_entries(self, sample_cache_dir, mock_bracket_with_teams):
-        """Test loading all entries from a pool"""
-        with patch.object(ESPNPool, "get_pool") as mock_get_pool:
-            mock_get_pool.return_value = {1: SAMPLE_POOL_HTML}
+    return {"id": "test-entry-id", "name": "Test Entry", "picks": picks[:63]}
 
-            with patch.object(ESPNBracket, "get_bracket") as mock_get_bracket:
-                mock_get_bracket.return_value = SAMPLE_BLANK_BRACKET_HTML
 
-                with patch.object(ESPNBracket, "extract_bracket") as mock_extract_bracket:
-                    # Return an actual valid bracket
-                    mock_extract_bracket.return_value = mock_bracket_with_teams
+# Tests for ESPNApi
+class TestESPNApi:
+    def test_initialization(self):
+        """Test ESPNApi initialization"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            assert api.women is False
+            assert "tournament-challenge-bracket-2026" in api.challenge_slug
 
-                    pool_manager = ESPNPool(cache_dir=sample_cache_dir)
-                    entries = pool_manager.load_pool_entries("9876")
+            api_women = ESPNApi(women=True)
+            assert api_women.women is True
+            assert "-women-" in api_women.challenge_slug
 
-                    # Should have one valid entry
-                    assert len(entries) == 1
-                    assert "Entry 1" in entries
-                    assert entries["Entry 1"] is mock_bracket_with_teams
+    def test_build_outcome_map(self, sample_challenge):
+        """Test building outcome map from challenge data"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            outcome_map = api._build_outcome_map(sample_challenge)
 
-    def test_create_simulation_pool(self, sample_cache_dir, mock_bracket_with_teams):
-        """Test creating a simulation Pool from an ESPN pool"""
-        with patch.object(ESPNBracket, "get_bracket") as mock_get_bracket:
-            mock_get_bracket.return_value = SAMPLE_BLANK_BRACKET_HTML
+            # Should have 64 outcomes (2 per proposition × 32 propositions)
+            assert len(outcome_map) == 64
 
-            with patch.object(ESPNBracket, "extract_bracket") as mock_extract_bracket:
-                # Use a valid bracket with 64 teams across 4 regions
-                mock_extract_bracket.return_value = mock_bracket_with_teams
+            # Check structure of an outcome
+            first_key = list(outcome_map.keys())[0]
+            entry = outcome_map[first_key]
+            assert "name" in entry
+            assert "seed" in entry
+            assert "region_id" in entry
 
-                # Mock load_pool_entries to avoid complexity
-                with patch.object(ESPNPool, "load_pool_entries") as mock_load_entries:
-                    mock_load_entries.return_value = {"Entry 1": mock_bracket_with_teams}
+    def test_build_prop_map(self, sample_challenge):
+        """Test building proposition map from challenge data"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            prop_map = api._build_prop_map(sample_challenge)
 
-                    pool_manager = ESPNPool(cache_dir=sample_cache_dir)
-                    pool = pool_manager.create_simulation_pool("9876")
+            assert len(prop_map) == 32
+            first_key = list(prop_map.keys())[0]
+            entry = prop_map[first_key]
+            assert "status" in entry
+            assert "scoring_period" in entry
+            assert "winner_id" in entry
 
-                    # Verify Pool was created
-                    assert isinstance(pool, Pool)
-                    assert len(pool.entries) == 1
-                    assert pool.entries[0][0] == "Entry 1"
+    def test_build_teams(self, sample_challenge):
+        """Test building teams from challenge data"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            api.ratings_source = None  # Force seed-based ratings
+            teams = api.build_teams(sample_challenge)
 
-                    # Verify upset factor was added to actual games
-                    game = pool.actual_results.games[0]
-                    assert game.upset_factor == 0.25
+            assert len(teams) == 64
+            regions = set(t.region for t in teams)
+            assert len(regions) == 4
+            for region in regions:
+                region_teams = [t for t in teams if t.region == region]
+                assert len(region_teams) == 16
+                seeds = sorted(t.seed for t in region_teams)
+                assert seeds == list(range(1, 17))
+
+    def test_build_actual_bracket_no_results(self, sample_challenge):
+        """Test building actual bracket when no games are complete"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            api.ratings_source = None
+            bracket = api.build_actual_bracket(sample_challenge)
+
+            assert len(bracket.teams) == 64
+            assert len(bracket.games) == 32
+            assert len(bracket.results["First Round"]) == 0
+
+    def test_build_actual_bracket_with_results(self, sample_challenge):
+        """Test building actual bracket with some completed games"""
+        # Mark first proposition as complete with team1 winning
+        prop = sample_challenge["propositions"][0]
+        prop["status"] = "COMPLETE"
+        prop["correctOutcomes"] = [prop["possibleOutcomes"][0]["id"]]
+
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            api.ratings_source = None
+            bracket = api.build_actual_bracket(sample_challenge)
+
+            assert len(bracket.results["First Round"]) == 1
+
+    def test_build_entry_bracket(self, sample_challenge, sample_entry):
+        """Test building an entry bracket from picks"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            api.ratings_source = None
+            teams = api.build_teams(sample_challenge)
+            bracket = api.build_entry_bracket(sample_entry, sample_challenge, teams)
+
+            assert bracket is not None
+            assert len(bracket.results["First Round"]) == 32
+            # Fixture picks 8 teams from region 1 to advance past R1
+            assert len(bracket.results["Second Round"]) == 8
+
+    def test_build_entry_bracket_incomplete(self, sample_challenge):
+        """Test that incomplete entries return None"""
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            api.ratings_source = None
+            teams = api.build_teams(sample_challenge)
+
+            incomplete_entry = {"name": "Bad Entry", "picks": [{"fake": "data"}] * 10}
+            result = api.build_entry_bracket(incomplete_entry, sample_challenge, teams)
+            assert result is None
+
+    @patch("bigdance.espn_tc_scraper.requests.get")
+    def test_fetch_challenge(self, mock_get):
+        """Test fetching challenge data"""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"propositions": [], "scoringPeriods": []}
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            result = api.fetch_challenge()
+
+            assert "propositions" in result
+            mock_get.assert_called_once()
+            assert "gambit-api" in mock_get.call_args[0][0]
+
+    @patch("bigdance.espn_tc_scraper.requests.get")
+    def test_fetch_group(self, mock_get):
+        """Test fetching group data"""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"entries": [{"id": "e1", "name": "Entry 1"}]}
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            result = api.fetch_group("test-group-id")
+
+            assert "entries" in result
+            assert len(result["entries"]) == 1
+
+    @patch("bigdance.espn_tc_scraper.requests.get")
+    def test_fetch_entry(self, mock_get):
+        """Test fetching entry data"""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"name": "Test Entry", "picks": []}
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        with patch("bigdance.wn_cbb_scraper.Standings"):
+            api = ESPNApi()
+            result = api.fetch_entry("test-entry-id")
+
+            assert result["name"] == "Test Entry"
 
 
 # Tests for GameImportanceAnalyzer
@@ -479,44 +317,34 @@ class TestGameImportanceAnalyzer:
 
     def test_analyze_win_importance(self):
         """Test analyzing the importance of games"""
-        # Create a mock Pool with minimal necessary components
         mock_pool = MagicMock()
-
-        # Create a mock Bracket
         mock_bracket = MagicMock()
-
-        # Configure bracket.infer_current_round to return a valid round
         mock_bracket.infer_current_round.return_value = "Sweet 16"
 
-        # Set up teams in the current round
         team1 = Team("Kansas", 1, "Midwest", 1800, "Big 12")
         team2 = Team("Duke", 1, "East", 1750, "ACC")
 
-        # Configure results to include ALL rounds
         mock_bracket.results = {
             "First Round": [team1, team2],
             "Second Round": [team1, team2],
-            "Sweet 16": [],  # Current round (empty but defined)
+            "Sweet 16": [],
             "Elite 8": [],
             "Final Four": [],
             "Championship": [],
         }
 
-        # Set up pool.simulate_pool to return mock results
         mock_pool.actual_results = mock_bracket
         mock_pool.simulate_pool.return_value = pd.DataFrame(
             {"name": ["Entry1", "Entry2"], "win_pct": [0.6, 0.4]}
         )
 
-        # Create analyzer
         analyzer = GameImportanceAnalyzer(mock_pool)
 
-        # Mock the internal methods to simplify testing
         with patch.object(analyzer, "_get_teams_in_round") as mock_get_teams:
             mock_get_teams.return_value = [team1, team2]
 
-            with patch.object(analyzer, "_analyze_matchup") as mock_analyze_matchup:
-                mock_analyze_matchup.return_value = {
+            with patch.object(analyzer, "_analyze_matchup") as mock_analyze:
+                mock_analyze.return_value = {
                     "matchup": "Kansas vs Duke",
                     "region": "Midwest",
                     "max_impact": 0.3,
@@ -526,18 +354,15 @@ class TestGameImportanceAnalyzer:
                     "max_impact_entry": "Entry1",
                 }
 
-                # Call the analyze_win_importance method
                 results = analyzer.analyze_win_importance()
 
-                # Verify results
-                assert len(results) == 1  # One matchup (team1 vs team2)
-                assert mock_analyze_matchup.call_count == 1
+                assert len(results) == 1
+                assert mock_analyze.call_count == 1
 
     def test_print_importance_summary(self):
         """Test printing a human-readable summary of game importance analysis"""
         analyzer = GameImportanceAnalyzer(MagicMock())
 
-        # Create sample game importance data
         game_importance = [
             {
                 "matchup": "Kansas vs Duke",
@@ -574,146 +399,23 @@ class TestGameImportanceAnalyzer:
             }
         ]
 
-        # Test with no entry name specified
         with patch("builtins.print") as mock_print:
             analyzer.print_importance_summary(game_importance)
-            assert mock_print.call_count > 5  # Should print multiple lines
+            assert mock_print.call_count > 5
 
-        # Test with specific entry name
         with patch("builtins.print") as mock_print:
             analyzer.print_importance_summary(game_importance, entry_name="Entry1")
             assert mock_print.call_count > 5
 
-        # Test with empty importance data
         with patch("builtins.print") as mock_print:
             analyzer.print_importance_summary([])
             mock_print.assert_called_with("No games analyzed.")
 
-        # Test with non-existent entry
         with patch("builtins.print") as mock_print:
             analyzer.print_importance_summary(game_importance, entry_name="NonExistentEntry")
-            # Should print a warning and fall back to max impact entries
             mock_print.assert_any_call(
                 "Warning: Entry 'NonExistentEntry' not found in the analysis data."
             )
-
-
-class TestExtractBracketIntegration:
-    """Integration tests using real saved ESPN HTML files"""
-
-    @pytest.fixture
-    def bracket_handler(self):
-        """Create an ESPNBracket handler for testing"""
-        return ESPNBracket(cache_dir=".cache")
-
-    @pytest.fixture
-    def blank_bracket_html(self):
-        """Load the saved blank/actual bracket HTML"""
-        html_path = Path(__file__).parent.parent / "notes" / "espn_bracket_2026.html"
-        if not html_path.exists():
-            pytest.skip("Blank bracket HTML not available at notes/espn_bracket_2026.html")
-        return html_path.read_text()
-
-    @pytest.fixture
-    def entry_bracket_html(self):
-        """Load the saved filled-out bracket entry HTML"""
-        html_path = Path(__file__).parent.parent / "notes" / "espn_bracket_entry_2026.html"
-        if not html_path.exists():
-            pytest.skip("Entry bracket HTML not available at notes/espn_bracket_entry_2026.html")
-        return html_path.read_text()
-
-    def test_extract_blank_bracket(self, bracket_handler, blank_bracket_html):
-        """Test extraction from a blank/actual bracket (no picks, just the field)"""
-        bracket = bracket_handler.extract_bracket(blank_bracket_html)
-
-        assert bracket is not None, "extract_bracket returned None for blank bracket"
-        assert len(bracket.teams) == 64
-        assert len(bracket.games) == 32
-
-        # Should have exactly 4 regions
-        regions = list(dict.fromkeys([t.region for t in bracket.teams]))
-        assert len(regions) == 4
-
-        # Each region should have 16 teams with seeds 1-16
-        for region in regions:
-            region_teams = [t for t in bracket.teams if t.region == region]
-            assert len(region_teams) == 16
-            region_seeds = sorted([t.seed for t in region_teams])
-            assert region_seeds == list(range(1, 17))
-
-    def test_extract_entry_bracket(self, bracket_handler, entry_bracket_html):
-        """Test extraction from a filled-out bracket entry with picks"""
-        bracket = bracket_handler.extract_bracket(entry_bracket_html)
-
-        assert bracket is not None, "extract_bracket returned None for entry bracket"
-        assert len(bracket.teams) == 64
-        assert len(bracket.games) == 32
-
-        # Should have exactly 4 regions
-        regions = list(dict.fromkeys([t.region for t in bracket.teams]))
-        assert len(regions) == 4
-
-        # All rounds should be populated
-        expected_rounds = [
-            "First Round",
-            "Second Round",
-            "Sweet 16",
-            "Elite 8",
-            "Final Four",
-            "Championship",
-            "Champion",
-        ]
-        for round_name in expected_rounds:
-            assert round_name in bracket.results, f"Missing round: {round_name}"
-
-        # Verify correct number of winners per round
-        assert len(bracket.results["First Round"]) == 32
-        assert len(bracket.results["Second Round"]) == 16
-        assert len(bracket.results["Sweet 16"]) == 8
-        assert len(bracket.results["Elite 8"]) == 4
-        assert len(bracket.results["Final Four"]) == 2
-        assert len(bracket.results["Championship"]) == 1
-
-        # Champion should be a Team object
-        assert isinstance(bracket.results["Champion"], Team)
-
-    def test_entry_bracket_winners_are_valid_teams(self, bracket_handler, entry_bracket_html):
-        """Test that all winners in a filled-out bracket are from the original 64 teams"""
-        bracket = bracket_handler.extract_bracket(entry_bracket_html)
-        assert bracket is not None
-
-        team_names = {t.name for t in bracket.teams}
-
-        for round_name, winners in bracket.results.items():
-            if round_name == "Champion":
-                assert winners.name in team_names, (
-                    f"Champion '{winners.name}' not in original teams"
-                )
-            else:
-                for winner in winners:
-                    assert winner.name in team_names, (
-                        f"Winner '{winner.name}' in {round_name} not in original teams"
-                    )
-
-    def test_entry_bracket_first_round_games_have_winners(
-        self, bracket_handler, entry_bracket_html
-    ):
-        """Test that first round games have their winners set from picks"""
-        bracket = bracket_handler.extract_bracket(entry_bracket_html)
-        assert bracket is not None
-
-        games_with_winners = [g for g in bracket.games if g.winner is not None]
-        assert len(games_with_winners) == 32, (
-            f"Expected 32 first round games with winners, got {len(games_with_winners)}"
-        )
-
-    def test_entry_bracket_log_probability(self, bracket_handler, entry_bracket_html):
-        """Test that log probability is calculated for a filled-out bracket"""
-        bracket = bracket_handler.extract_bracket(entry_bracket_html)
-        assert bracket is not None
-
-        assert bracket.log_probability != float("inf"), "Log probability was not calculated"
-        assert bracket.log_probability > 0, "Log probability should be positive"
 
 
 if __name__ == "__main__":
