@@ -1,10 +1,12 @@
-import streamlit as st
 from collections import defaultdict
 from pathlib import Path
+
 import pandas as pd
+import streamlit as st
+
 from bigdance import Standings, create_teams_from_standings, simulate_round_probabilities
+from bigdance.cbb_brackets import Bracket, Game, Pool, Team
 from bigdance.espn_tc_scraper import ESPNApi
-from bigdance.cbb_brackets import Bracket, Team, Game, Pool
 from bigdance.wn_cbb_scraper import elo_prob
 
 st.set_page_config(page_title="bigdance bracket pool", layout="wide")
@@ -119,7 +121,7 @@ def seed_defaults() -> None:
 
     # Round 0 — seeded from bracket.games directly
     for region in REGIONS_LOCAL:
-        for local_idx, (bracket_idx, game) in enumerate(_region_r0[region]):
+        for _local_idx, (bracket_idx, game) in enumerate(_region_r0[region]):
             if bracket_idx not in picks[0]:
                 picks[0][bracket_idx] = better_seed(game.team1, game.team2)
 

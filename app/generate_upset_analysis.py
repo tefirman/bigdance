@@ -22,6 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
 from bigdance import Standings
 from bigdance.bracket_analysis import BracketAnalysis
 
@@ -82,7 +83,7 @@ def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observ
             # Re-sort to canonical round order, keeping Total Upsets at the end
             order = {r: i for i, r in enumerate(ROUND_ORDER)}
             order["Total Upsets"] = len(ROUND_ORDER)
-            strategy_df["_order"] = strategy_df["round"].map(lambda r: order.get(r, 99))
+            strategy_df["_order"] = strategy_df["round"].map(lambda r, _order=order: _order.get(r, 99))
             strategy_df = strategy_df.sort_values("_order").drop(columns="_order").reset_index(drop=True)
 
         # Add std_upsets for rounds already in the df that came from histogram data
@@ -93,7 +94,7 @@ def run(use_espn: bool = False, pool_sizes: list[int] | None = None, base_observ
         std_by_round["Total Upsets"] = np.std(analyzer.winning_total_underdogs or [])
         # Only fill std_upsets where not already set by the extra_rows block above
         strategy_df["std_upsets"] = strategy_df.apply(
-            lambda r: r["std_upsets"] if pd.notna(r.get("std_upsets")) else std_by_round.get(r["round"]),
+            lambda r, _std=std_by_round: r["std_upsets"] if pd.notna(r.get("std_upsets")) else _std.get(r["round"]),
             axis=1,
         )
 

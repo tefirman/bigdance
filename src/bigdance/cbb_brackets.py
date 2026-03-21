@@ -3,7 +3,7 @@
 @File    :   cbb_brackets.py
 @Time    :   2024/01/11
 @Author  :   Taylor Firman
-@Version :   0.8.1
+@Version :   0.4.0
 @Contact :   tefirman@gmail.com
 @Desc    :   Generalized March Madness bracket simulation package
 """
@@ -110,19 +110,17 @@ class Bracket:
         ]
 
         # Validate seeds and regions (preserve insertion order from teams list)
-        seen = set()
-        regions = []
+        regions: list[str] = []
         for team in self.teams:
             if not 1 <= team.seed <= 16:
                 raise ValueError(f"Invalid seed {team.seed} for {team.name}")
-            if team.region not in seen:
-                seen.add(team.region)
+            if team.region not in regions:
                 regions.append(team.region)
 
         if len(regions) != 4:
             raise ValueError("Tournament must have exactly 4 regions")
 
-        # Create games for each region (order preserved from teams list)
+        # Create games for each region
         for region in regions:
             # Get teams in this region
             region_teams = {t.seed: t for t in self.teams if t.region == region}
