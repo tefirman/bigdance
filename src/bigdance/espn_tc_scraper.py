@@ -69,11 +69,39 @@ class ESPNApi:
             logger.warning(f"Could not load Standings: {e}")
 
     def fetch_challenge(self) -> dict:
-        """Fetch the master challenge data (propositions, scoring periods, etc.)."""
+        """Fetch the master challenge data (propositions, scoring periods, etc.).
+
+        ESPN only returns propositions for the current scoring period.  To
+        build a complete outcome map (needed for resolving entry picks that
+        reference earlier rounds), we fetch each prior period's propositions
+        and merge them into the response.
+        """
         url = f"{self.GAMBIT_API_BASE}/{self.challenge_slug}"
         resp = requests.get(url, timeout=30)
         resp.raise_for_status()
-        return dict(resp.json())
+        data = dict(resp.json())
+
+        # Collect proposition IDs already present (current period)
+        current_prop_ids = {p["id"] for p in data.get("propositions", [])}
+        current_period = data.get("currentScoringPeriod", {}).get("id", 1)
+
+        # Fetch propositions from prior scoring periods
+        for period in data.get("scoringPeriods", []):
+            pid = period.get("id", 0)
+            if pid >= current_period:
+                continue
+            try:
+                prior_resp = requests.get(url, params={"scoringPeriodId": pid}, timeout=30)
+                prior_resp.raise_for_status()
+                prior_data = prior_resp.json()
+                for prop in prior_data.get("propositions", []):
+                    if prop["id"] not in current_prop_ids:
+                        data["propositions"].append(prop)
+                        current_prop_ids.add(prop["id"])
+            except Exception as e:
+                logger.warning(f"Could not fetch scoring period {pid}: {e}")
+
+        return data
 
     def fetch_group(self, group_id: str) -> dict:
         """Fetch group (pool) data including all entries."""
@@ -214,38 +242,41 @@ class ESPNApi:
                         if info:
                             prior_winner_names.add(info["name"])
 
-            # Set winners on First Round games
+            # Set winners on First Round games. Teams in prior_winner_names
+            # definitely won their First Round game. For games where neither
+            # team is in prior_winner_names (both were eliminated before the
+            # current round), assign the higher seed as winner — their runs
+            # are over so the choice doesn't affect current-round analysis,
+            # but we need all games resolved to advance the bracket tree.
             for game in bracket.games:
                 if game.team1.name in prior_winner_names:
                     game.winner = game.team1
                 elif game.team2.name in prior_winner_names:
                     game.winner = game.team2
+                elif not game.winner:
+                    game.winner = game.team1 if game.team1.seed <= game.team2.seed else game.team2
 
             bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
 
-            # Advance through intermediate completed rounds if min_period > 2
+            # Advance through intermediate completed rounds if min_period > 2.
+            # The teams in prior_winner_names won ALL rounds before min_period,
+            # so they are the winners in every intermediate round as well.
             current_games = bracket.games.copy()
             for round_ind in range(1, min_period - 1):
                 if all(g.winner for g in current_games):
                     current_games = bracket.advance_round(current_games)
-                    # For intermediate rounds, all teams must have advanced
-                    # since a later round's props exist. Use actualOutcomeIds
-                    # from the next period's props to identify winners.
-                    next_period_winners: set[str] = set()
-                    for prop_info in prop_map.values():
-                        if prop_info["scoring_period"] == round_ind + 1:
-                            for oid in prop_info["actual_outcome_ids"]:
-                                info = outcome_map.get(oid)
-                                if info:
-                                    next_period_winners.add(info["name"])
-
                     for game in current_games:
-                        if game.team1.name in next_period_winners:
+                        if game.team1.name in prior_winner_names:
                             game.winner = game.team1
                             bracket.results[self.ROUND_NAMES[round_ind]].append(game.team1)
-                        elif game.team2.name in next_period_winners:
+                        elif game.team2.name in prior_winner_names:
                             game.winner = game.team2
                             bracket.results[self.ROUND_NAMES[round_ind]].append(game.team2)
+                        elif not game.winner:
+                            game.winner = (
+                                game.team1 if game.team1.seed <= game.team2.seed else game.team2
+                            )
+                            bracket.results[self.ROUND_NAMES[round_ind]].append(game.winner)
         else:
             # First Round props are available — use correctOutcomes directly
             for _prop_id, prop_info in prop_map.items():
@@ -264,9 +295,26 @@ class ESPNApi:
 
             bracket.results["First Round"] = [game.winner for game in bracket.games if game.winner]
 
-        # Build current and subsequent rounds from game tree
+        # Build current and subsequent rounds from game tree.
+        # Start from where prior-round reconstruction left off to avoid
+        # duplicating work and to ensure we use the same game objects.
+        start_round = max(min_period - 1, 1)
         current_games = bracket.games.copy()
-        for round_ind in range(1, 5):
+        for step in range(start_round):
+            # Set winners from already-populated results so advance_round()
+            # uses actual winners instead of randomly simulating.
+            round_winners = {t.name for t in bracket.results.get(self.ROUND_NAMES[step], [])}
+            for game in current_games:
+                if not game.winner and game.team1.name in round_winners:
+                    game.winner = game.team1
+                elif not game.winner and game.team2.name in round_winners:
+                    game.winner = game.team2
+            # Advance all but the last completed round — the main loop
+            # expects current_games to be the last fully-completed round
+            # so it can call advance_round() to enter the current round.
+            if step < start_round - 1 and all(g.winner for g in current_games):
+                current_games = bracket.advance_round(current_games)
+        for round_ind in range(start_round, 5):
             if all(g.winner for g in current_games):
                 current_games = bracket.advance_round(current_games)
                 for _prop_id, prop_info in prop_map.items():
