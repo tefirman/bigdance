@@ -3,7 +3,7 @@
 @File    :   bigdance_integration.py
 @Time    :   2025/01/19
 @Author  :   Taylor Firman
-@Version :   0.8.4
+@Version :   0.8.5
 @Contact :   tefirman@gmail.com
 @Desc    :   Integration module between Warren Nolan scraper and bracket simulator
 """

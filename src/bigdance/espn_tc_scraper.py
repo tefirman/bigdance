@@ -3,7 +3,7 @@
 @File    :   espn_tc_scraper.py
 @Time    :   2025/03/17
 @Author  :   Taylor Firman
-@Version :   0.8.4
+@Version :   0.8.5
 @Contact :   tefirman@gmail.com
 @Desc    :   ESPN Tournament Challenge integration via the Gambit JSON API
 """
@@ -80,8 +80,8 @@ class ESPNApi:
 
         ESPN only returns propositions for the current scoring period.  To
         build a complete outcome map (needed for resolving entry picks that
-        reference earlier rounds), we fetch each prior period's propositions
-        and merge them into the response.
+        reference earlier or later rounds), we fetch each other period's
+        propositions and merge them into the response.
         """
         url = f"{self.GAMBIT_API_BASE}/{self.challenge_slug}"
         resp = requests.get(url, timeout=30)
@@ -92,10 +92,10 @@ class ESPNApi:
         current_prop_ids = {p["id"] for p in data.get("propositions", [])}
         current_period = data.get("currentScoringPeriod", {}).get("id", 1)
 
-        # Fetch propositions from prior scoring periods
+        # Fetch propositions from other scoring periods (prior and future)
         for period in data.get("scoringPeriods", []):
             pid = period.get("id", 0)
-            if pid >= current_period:
+            if pid == current_period:
                 continue
             try:
                 prior_resp = requests.get(url, params={"scoringPeriodId": pid}, timeout=30)
@@ -374,7 +374,11 @@ class ESPNApi:
 
         # periodReached = the furthest scoring period this team reaches.
         # A team with periodReached=2 wins R1 (reaches R2), so rounds_won = periodReached - 1.
+        # Note: both finalists have periodReached=6 (both reach the Championship game),
+        # so we identify the champion from the scoring period 6 proposition pick.
+        prop_map = self._build_prop_map(challenge)
         team_max_period: dict[str, int] = {}
+        champion_name: Optional[str] = None
         for pick in picks:
             outcome_id = pick["outcomesPicked"][0]["outcomeId"]
             period_reached = pick.get("periodReached", 1)
@@ -382,6 +386,10 @@ class ESPNApi:
             if info:
                 name = info["name"]
                 team_max_period[name] = max(team_max_period.get(name, 0), period_reached)
+            # Identify the champion from the period 6 (Championship) proposition
+            prop_info = prop_map.get(pick.get("propositionId", ""))
+            if prop_info and prop_info["scoring_period"] == 6 and info:
+                champion_name = info["name"]
 
         for team_name, max_period in team_max_period.items():
             team = team_by_name.get(team_name)
@@ -397,9 +405,11 @@ class ESPNApi:
                             game.winner = team
                             break
 
-            if max_period >= 6:
-                bracket.results["Championship"] = [team]
-                bracket.results["Champion"] = team  # type: ignore[assignment]
+        # Set the champion from the period 6 proposition pick
+        if champion_name and champion_name in team_by_name:
+            champ = team_by_name[champion_name]
+            bracket.results["Championship"] = [champ]
+            bracket.results["Champion"] = champ  # type: ignore[assignment]
 
         bracket.log_probability = bracket.calculate_log_probability()
         bracket.identify_underdogs()
