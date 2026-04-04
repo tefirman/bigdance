@@ -48,7 +48,14 @@ class ESPNApi:
 
     GAMBIT_API_BASE = "https://gambit-api.fantasy.espn.com/apis/v1/challenges"
 
-    ROUND_NAMES = ["First Round", "Second Round", "Sweet 16", "Elite 8", "Final Four"]
+    ROUND_NAMES = [
+        "First Round",
+        "Second Round",
+        "Sweet 16",
+        "Elite 8",
+        "Final Four",
+        "Championship",
+    ]
 
     def __init__(self, women: bool = False, cache_dir: Optional[str] = None):
         """
@@ -314,7 +321,7 @@ class ESPNApi:
             # so it can call advance_round() to enter the current round.
             if step < start_round - 1 and all(g.winner for g in current_games):
                 current_games = bracket.advance_round(current_games)
-        for round_ind in range(start_round, 5):
+        for round_ind in range(start_round, len(self.ROUND_NAMES)):
             if all(g.winner for g in current_games):
                 current_games = bracket.advance_round(current_games)
                 for _prop_id, prop_info in prop_map.items():
@@ -325,10 +332,14 @@ class ESPNApi:
                                 if game.team1.name == winner_info["name"]:
                                     game.winner = game.team1
                                     bracket.results[self.ROUND_NAMES[round_ind]].append(game.team1)
+                                    if self.ROUND_NAMES[round_ind] == "Championship":
+                                        bracket.results["Champion"] = game.team1  # type: ignore[assignment]
                                     break
                                 elif game.team2.name == winner_info["name"]:
                                     game.winner = game.team2
                                     bracket.results[self.ROUND_NAMES[round_ind]].append(game.team2)
+                                    if self.ROUND_NAMES[round_ind] == "Championship":
+                                        bracket.results["Champion"] = game.team2  # type: ignore[assignment]
                                     break
             else:
                 if not bracket.results[self.ROUND_NAMES[round_ind]]:
@@ -377,7 +388,7 @@ class ESPNApi:
             if not team:
                 continue
             rounds_won = max_period - 1
-            for round_idx in range(min(rounds_won, 5)):
+            for round_idx in range(min(rounds_won, len(self.ROUND_NAMES))):
                 if team not in bracket.results[self.ROUND_NAMES[round_idx]]:
                     bracket.results[self.ROUND_NAMES[round_idx]].append(team)
                 if round_idx == 0:
