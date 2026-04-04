@@ -3,7 +3,7 @@
 @File    :   bracket_analysis.py
 @Time    :   2024/02/13
 @Author  :   Taylor Firman
-@Version :   0.8.3
+@Version :   0.8.4
 @Contact :   tefirman@gmail.com
 @Desc    :   Analyzing trends in March Madness bracket pool simulations
 """
