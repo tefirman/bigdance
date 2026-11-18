@@ -40,6 +40,12 @@ def create_parser() -> argparse.ArgumentParser:
         add_help=False,
     )
 
+    subparsers.add_parser(
+        "edges",
+        help="Compare Elo win probabilities to sportsbook odds and track closing line value",
+        add_help=False,
+    )
+
     return parser
 
 
@@ -74,6 +80,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         from bigdance.bracket_analysis import main as analyze_main
 
         return analyze_main(remaining) or 0
+
+    elif args.command == "edges":
+        from bigdance.betting import main as edges_main
+
+        return edges_main(remaining) or 0
 
     return 0
 
