@@ -25,8 +25,8 @@ case "$MODE" in
     "$BIGDANCE_BIN" edges --date "$(date +%Y-%m-%d)" --log "$BETS" \
       --snapshot "$BETS_DIR/snapshots.csv" ;;
   closing)
-    # Costs an API request only when a logged bet tips off within the window (> run interval)
-    "$BIGDANCE_BIN" edges --update-closing "$BETS" --closing-window 20 ;;
+    # Costs an API request only when a logged bet tips off within the window (> 2x run interval, so one failed run isn't fatal)
+    "$BIGDANCE_BIN" edges --update-closing "$BETS" --closing-window 35 ;;
   settle)
     "$BIGDANCE_BIN" edges --settle "$BETS" ;;
   *)

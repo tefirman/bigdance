@@ -5,7 +5,7 @@ Three jobs wrap `bigdance edges` (see `src/bigdance/betting.py`):
 | Job | Schedule | What it does |
 |---|---|---|
 | `picks` | daily 10:00 | Logs +EV bets to `bets.csv`; records Elo vs market for every game in `snapshots.csv` |
-| `closing` | every 15 min | Captures closing lines; skips the API call unless a logged bet tips off within 20 min |
+| `closing` | every 15 min | Captures closing lines; skips the API call unless a logged bet tips off within 35 min |
 | `settle` | daily 06:00 | Grades finished bets from Warren Nolan final scores |
 
 Data and logs live in `~/bigdance-bets/`. The Odds API key is read from `~/.zshrc` by

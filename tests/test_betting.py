@@ -5,6 +5,8 @@ import pytest
 
 from bigdance.betting import (
     BetLog,
+    OddsApi,
+    OddsApiError,
     american_to_decimal,
     american_to_prob,
     append_snapshot,
@@ -258,3 +260,56 @@ def test_game_snapshot_covers_all_games_and_dedupes(tmp_path):
     assert append_snapshot(path, snap) == 1
     assert append_snapshot(path, snap) == 1  # same game replaced, not duplicated
     assert len(pd.read_csv(path)) == 1
+
+
+class _FakeResp:
+    def __init__(self, status=200, payload=None):
+        self.status_code = status
+        self._payload = payload if payload is not None else []
+        self.headers = {"x-requests-remaining": "123"}
+
+    def json(self):
+        return self._payload
+
+
+def test_odds_api_retries_network_errors_and_hides_key(monkeypatch):
+    import requests
+
+    calls = []
+    sleeps = []
+
+    def flaky_get(url, params=None, timeout=None):
+        calls.append(1)
+        if len(calls) < 3:
+            raise requests.ConnectionError(f"DNS failed for {url}?apiKey={params['apiKey']}")
+        return _FakeResp(payload=make_events())
+
+    monkeypatch.setattr(requests, "get", flaky_get)
+    monkeypatch.setattr("bigdance.betting.time.sleep", sleeps.append)
+    api = OddsApi(api_key="SECRETKEY")
+    assert len(api.fetch_h2h()) == 2
+    assert len(calls) == 3 and len(sleeps) == 2 and api.requests_remaining == "123"
+
+    def always_down(url, params=None, timeout=None):
+        raise requests.ConnectionError(f"boom {url}?apiKey={params['apiKey']}")
+
+    monkeypatch.setattr(requests, "get", always_down)
+    with pytest.raises(OddsApiError) as exc:
+        api.fetch_h2h()
+    assert "SECRETKEY" not in str(exc.value) and exc.value.__cause__ is None
+
+
+def test_odds_api_client_errors_fail_fast(monkeypatch):
+    import requests
+
+    calls = []
+
+    def unauthorized(url, params=None, timeout=None):
+        calls.append(1)
+        return _FakeResp(status=401)
+
+    monkeypatch.setattr(requests, "get", unauthorized)
+    monkeypatch.setattr("bigdance.betting.time.sleep", lambda s: None)
+    with pytest.raises(OddsApiError, match="HTTP 401"):
+        OddsApi(api_key="SECRETKEY").fetch_h2h()
+    assert len(calls) == 1  # no retry on a 4xx

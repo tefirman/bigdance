@@ -10,7 +10,7 @@
     <string>__REPO__/scripts/launchd/run_edges.sh</string>
     <string>closing</string>
   </array>
-  <!-- every 15 minutes; a no-op (no API call) unless a logged bet tips within 20 min -->
+  <!-- every 15 minutes; a no-op (no API call) unless a logged bet tips within 35 min -->
   <key>StartInterval</key>
   <integer>900</integer>
   <key>StandardOutPath</key>

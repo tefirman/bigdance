@@ -16,6 +16,8 @@ import argparse
 import logging
 import os
 import re
+import sys
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -184,14 +186,26 @@ def parse_odds_response(events: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=ODDS_COLUMNS)
 
 
+class OddsApiError(RuntimeError):
+    """Odds API failure. Messages never include the request URL, which contains the API key."""
+
+
 class OddsApi:
     """Minimal The Odds API client. Reads the key from ODDS_API_KEY if not given."""
 
-    def __init__(self, api_key: Optional[str] = None, timeout: float = 15.0):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        timeout: float = 15.0,
+        retries: int = 4,
+        backoff: float = 5.0,
+    ):
         self.api_key = api_key or os.environ.get("ODDS_API_KEY")
         if not self.api_key:
             raise ValueError("No Odds API key: pass api_key or set the ODDS_API_KEY env variable")
         self.timeout = timeout
+        self.retries = retries
+        self.backoff = backoff
         self.requests_remaining: Optional[str] = None
 
     def fetch_h2h(
@@ -211,10 +225,25 @@ class OddsApi:
             params["bookmakers"] = bookmakers
         else:
             params["regions"] = regions
-        resp = requests.get(
-            f"{ODDS_API_BASE}/sports/{SPORT_KEYS[women]}/odds", params=params, timeout=self.timeout
-        )
-        resp.raise_for_status()
+        url = f"{ODDS_API_BASE}/sports/{SPORT_KEYS[women]}/odds"
+        for attempt in range(self.retries):
+            try:
+                resp = requests.get(url, params=params, timeout=self.timeout)
+            except requests.RequestException as e:
+                # Network trouble (e.g. a Mac waking from sleep): retry with backoff. Exception
+                # text embeds the URL and thus the API key, so only the type is surfaced.
+                failure = f"network error ({type(e).__name__})"
+            else:
+                if resp.status_code < 400:
+                    break
+                failure = f"HTTP {resp.status_code}"
+                if resp.status_code < 500 and resp.status_code != 429:
+                    raise OddsApiError(f"Odds API request failed: {failure}") from None
+            if attempt == self.retries - 1:
+                raise OddsApiError(
+                    f"Odds API request failed after {self.retries} attempts: {failure}"
+                ) from None
+            time.sleep(self.backoff * 3**attempt)
         self.requests_remaining = resp.headers.get("x-requests-remaining")
         return parse_odds_response(resp.json())
 
@@ -709,7 +738,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     api = OddsApi(args.api_key)
-    odds = api.fetch_h2h(women=args.women, regions=args.regions, bookmakers=args.bookmakers)
+    try:
+        odds = api.fetch_h2h(women=args.women, regions=args.regions, bookmakers=args.bookmakers)
+    except OddsApiError as e:
+        print(e, file=sys.stderr)
+        return 1
 
     if closing_log is not None:
         n = closing_log.update_closing(odds, window_minutes=args.closing_window)
