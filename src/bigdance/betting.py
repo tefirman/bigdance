@@ -389,6 +389,9 @@ SNAPSHOT_COLUMNS = [
     "away_team",
     "model_prob_home",
     "market_prob_home",
+    "closing_prob_home",
+    "closing_at",
+    "home_won",
 ]
 
 
@@ -437,15 +440,165 @@ def game_snapshot(
     return pd.DataFrame(rows, columns=SNAPSHOT_COLUMNS)
 
 
+def _read_snapshots(path: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+    df = pd.read_csv(path).reindex(columns=SNAPSHOT_COLUMNS)
+    df["closing_at"] = df["closing_at"].astype(object)
+    return df
+
+
 def append_snapshot(path: str, snapshot: pd.DataFrame) -> int:
-    """Append to a snapshot CSV, keeping only the latest row per game. Returns rows written."""
+    """
+    Add new games to a snapshot CSV, one row per game. Re-running never clobbers rows that
+    already have closing lines or results. Returns the number of games in the file.
+    """
     if snapshot.empty:
         return 0
-    if os.path.exists(path):
-        snapshot = pd.concat([pd.read_csv(path), snapshot], ignore_index=True)
-    snapshot = snapshot.drop_duplicates("game_id", keep="last")
-    snapshot.to_csv(path, index=False)
-    return len(snapshot)
+    old = _read_snapshots(path)
+    locked = old[old["closing_prob_home"].notna() | old["home_won"].notna()]
+    frames = [
+        old[~old["game_id"].isin(snapshot["game_id"])],
+        locked,
+        snapshot[~snapshot["game_id"].isin(locked["game_id"])],
+    ]
+    combined = pd.concat([f for f in frames if not f.empty]).drop_duplicates("game_id")
+    combined.reindex(columns=SNAPSHOT_COLUMNS).to_csv(path, index=False)
+    return len(combined)
+
+
+def _tipping_soon(df: pd.DataFrame, now_ts: pd.Timestamp, window_minutes: float) -> pd.Series:
+    tip = pd.to_datetime(df["commence_time"], utc=True)
+    return (tip > now_ts) & (tip <= now_ts + pd.Timedelta(minutes=window_minutes))
+
+
+def snapshot_games_due(
+    path: str, window_minutes: float = 35, now: Optional[datetime] = None
+) -> int:
+    """Number of snapshot games tipping off within the window (cheap, local, no API call)."""
+    df = _read_snapshots(path)
+    if df.empty:
+        return 0
+    return int(_tipping_soon(df, BetLog._utc(now), window_minutes).sum())
+
+
+def update_snapshot_closing(
+    path: str,
+    odds: pd.DataFrame,
+    now: Optional[datetime] = None,
+    window_minutes: float = 35,
+) -> int:
+    """
+    Record the latest pre-game no-vig market probability for every snapshot game tipping within
+    the window. Later runs overwrite earlier ones, so the final pre-tip value is the closing line.
+    """
+    df = _read_snapshots(path)
+    odds = odds.dropna(subset=["home_price", "away_price"])
+    if df.empty or odds.empty:
+        return 0
+    now_ts = BetLog._utc(now)
+    market_home = consensus_home_prob(odds)
+    tips = odds.drop_duplicates("game_id").set_index("game_id")["commence_time"]
+    updated = 0
+    for i, row in df[_tipping_soon(df, now_ts, window_minutes)].iterrows():
+        gid = row["game_id"]
+        if gid not in market_home.index or now_ts >= tips[gid]:
+            continue
+        df.loc[i, "closing_prob_home"] = market_home[gid]
+        df.loc[i, "closing_at"] = now_ts.isoformat()
+        updated += 1
+    if updated:
+        df.to_csv(path, index=False)
+    return updated
+
+
+def _default_matchups_fetcher(women: bool):
+    from bigdance.wn_cbb_scraper import Matchups
+
+    def fetch(date: str) -> pd.DataFrame:
+        return Matchups(date, women=women, elos=False).matchups
+
+    return fetch
+
+
+def _team_won(
+    matchups: pd.DataFrame,
+    team: str,
+    opponent: str,
+    overrides: Optional[dict[str, str]] = None,
+) -> Optional[bool]:
+    """
+    Did `team` beat `opponent` per Warren Nolan final scores? None if the game can't be found
+    or has no score yet (postponed, or not updated).
+    """
+    wn_names = sorted(set(matchups["team1"]) | set(matchups["team2"]))
+    mapping, _ = map_team_names([team, opponent], wn_names, overrides)
+    mine, theirs = mapping.get(team), mapping.get(opponent)
+    if mine is None or theirs is None:
+        return None
+    row = matchups[
+        ((matchups["team1"] == mine) & (matchups["team2"] == theirs))
+        | ((matchups["team1"] == theirs) & (matchups["team2"] == mine))
+    ]
+    if row.empty:
+        return None
+    r = row.iloc[0]
+    if r["score1"] == 0 and r["score2"] == 0:
+        return None
+    my_score = r["score1"] if r["team1"] == mine else r["score2"]
+    their_score = r["score2"] if r["team1"] == mine else r["score1"]
+    return bool(my_score > their_score)
+
+
+def settle_snapshots(
+    path: str,
+    now: Optional[datetime] = None,
+    min_hours_after_tip: float = 4.0,
+    matchups_for_date=None,
+    women: bool = False,
+    name_overrides: Optional[dict[str, str]] = None,
+) -> int:
+    """Fill in `home_won` for snapshot games that have finished. Returns games settled."""
+    df = _read_snapshots(path)
+    if df.empty:
+        return 0
+    now_ts = BetLog._utc(now)
+    tip = pd.to_datetime(df["commence_time"], utc=True)
+    due = df["home_won"].isna() & (tip <= now_ts - pd.Timedelta(hours=min_hours_after_tip))
+    if not due.any():
+        return 0
+    fetch = matchups_for_date or _default_matchups_fetcher(women)
+    dates = tip[due].dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
+    settled = 0
+    for date, idx in dates.groupby(dates).groups.items():
+        m = fetch(date)
+        if m.empty:
+            continue
+        for i in idx:
+            won = _team_won(m, df.loc[i, "home_team"], df.loc[i, "away_team"], name_overrides)
+            if won is not None:
+                df.loc[i, "home_won"] = float(won)
+                settled += 1
+    if settled:
+        df.to_csv(path, index=False)
+    return settled
+
+
+def read_quota(path: str) -> Optional[int]:
+    """Last known Odds API credits remaining (stored beside the snapshot file)."""
+    try:
+        with open(path + ".quota") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def write_quota(path: str, remaining) -> None:
+    try:
+        with open(path + ".quota", "w") as f:
+            f.write(str(int(remaining)))
+    except (OSError, TypeError, ValueError):
+        pass
 
 
 # --------------------------------------------------------------------------------------
@@ -598,40 +751,19 @@ class BetLog:
         due = self.df["result"].isna() & (tip <= now_ts - pd.Timedelta(hours=min_hours_after_tip))
         if not due.any():
             return 0
-        if matchups_for_date is None:
-            from bigdance.wn_cbb_scraper import Matchups
-
-            def matchups_for_date(date: str) -> pd.DataFrame:
-                return Matchups(date, women=women, elos=False).matchups
-
+        fetch = matchups_for_date or _default_matchups_fetcher(women)
         dates = tip[due].dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
         settled = 0
         for date, idx in dates.groupby(dates).groups.items():
-            m = matchups_for_date(date)
+            m = fetch(date)
             if m.empty:
                 continue
-            wn_names = sorted(set(m["team1"]) | set(m["team2"]))
             for i in idx:
                 bet = self.df.loc[i]
-                mapping, _ = map_team_names(
-                    [bet["odds_team"], bet["opponent"]], wn_names, name_overrides
-                )
-                mine, theirs = mapping.get(bet["odds_team"]), mapping.get(bet["opponent"])
-                if mine is None or theirs is None:
-                    continue
-                row = m[
-                    ((m["team1"] == mine) & (m["team2"] == theirs))
-                    | ((m["team1"] == theirs) & (m["team2"] == mine))
-                ]
-                if row.empty:
-                    continue
-                r = row.iloc[0]
-                if r["score1"] == 0 and r["score2"] == 0:
-                    continue
-                my_score = r["score1"] if r["team1"] == mine else r["score2"]
-                their_score = r["score2"] if r["team1"] == mine else r["score1"]
-                self._settle_row(i, won=my_score > their_score)
-                settled += 1
+                won = _team_won(m, bet["odds_team"], bet["opponent"], name_overrides)
+                if won is not None:
+                    self._settle_row(i, won=won)
+                    settled += 1
         if settled:
             self.save()
         return settled
@@ -713,11 +845,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Minutes before tip-off to capture closing lines; keep above the scheduler "
         "interval (default: 20)",
     )
+    parser.add_argument(
+        "--credit-reserve",
+        type=int,
+        default=100,
+        help="With --snapshot, capture closing lines for ALL games only while at least this many "
+        "Odds API credits remain; below it, only logged bets are tracked (default: 100)",
+    )
     parser.add_argument("--settle", metavar="CSV", help="Grade finished bets from final scores")
     parser.add_argument(
         "--snapshot",
         metavar="CSV",
-        help="Also record Elo vs market probabilities for every game (for calibration)",
+        help="Track every game, not just bets: record Elo vs market probabilities (with the "
+        "picks run), closing lines (--update-closing) and results (--settle)",
     )
     parser.add_argument("--summary", metavar="CSV", help="Print CLV/results summary and exit")
     args = parser.parse_args(argv)
@@ -728,14 +868,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.settle:
-        n = BetLog(args.settle).settle(women=args.women)
-        print(f"Settled {n} bets")
+        msg = f"Settled {BetLog(args.settle).settle(women=args.women)} bets"
+        if args.snapshot:
+            msg += f", {settle_snapshots(args.snapshot, women=args.women)} snapshot games"
+        print(msg)
         return 0
 
     closing_log = BetLog(args.update_closing) if args.update_closing else None
-    if closing_log is not None and not closing_log.due_for_closing(args.closing_window):
-        print(f"No logged bets tip off within {args.closing_window:g} min; skipping API call")
-        return 0
+    track_games = False
+    if closing_log is not None:
+        due = closing_log.due_for_closing(args.closing_window)
+        if args.snapshot:
+            games_due = snapshot_games_due(args.snapshot, args.closing_window)
+            remaining = read_quota(args.snapshot)
+            track_games = games_due > 0 and (remaining is None or remaining >= args.credit_reserve)
+            if games_due and not track_games:
+                print(
+                    f"Credit reserve reached ({remaining} < {args.credit_reserve}): "
+                    "tracking logged bets only"
+                )
+            due += games_due if track_games else 0
+        if not due:
+            print(f"No games tip off within {args.closing_window:g} min; skipping API call")
+            return 0
 
     api = OddsApi(args.api_key)
     try:
@@ -743,10 +898,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     except OddsApiError as e:
         print(e, file=sys.stderr)
         return 1
+    if args.snapshot and api.requests_remaining is not None:
+        write_quota(args.snapshot, api.requests_remaining)
 
     if closing_log is not None:
         n = closing_log.update_closing(odds, window_minutes=args.closing_window)
-        print(f"Updated closing lines for {n} bets (API requests left: {api.requests_remaining})")
+        msg = f"Updated closing lines for {n} bets"
+        if track_games:
+            msg += f" and {update_snapshot_closing(args.snapshot, odds, window_minutes=args.closing_window)} games"
+        print(f"{msg} (API requests left: {api.requests_remaining})")
         return 0
 
     from bigdance.wn_cbb_scraper import Matchups

@@ -18,6 +18,11 @@ from bigdance.betting import (
     normalize_name,
     parse_odds_response,
     prob_to_american,
+    read_quota,
+    settle_snapshots,
+    snapshot_games_due,
+    update_snapshot_closing,
+    write_quota,
 )
 
 TIP = "2026-11-20T00:00:00Z"  # 7pm ET on Nov 19
@@ -313,3 +318,57 @@ def test_odds_api_client_errors_fail_fast(monkeypatch):
     with pytest.raises(OddsApiError, match="HTTP 401"):
         OddsApi(api_key="SECRETKEY").fetch_h2h()
     assert len(calls) == 1  # no retry on a 4xx
+
+
+def test_snapshot_closing_results_and_rerun_safety(tmp_path):
+    odds = parse_odds_response(make_events())  # tips 2026-11-20T00:00Z
+    path = str(tmp_path / "snap.csv")
+    snap = game_snapshot(make_matchups(0.72), odds)
+    append_snapshot(path, snap)
+
+    early = datetime(2026, 11, 19, 22, 0, tzinfo=timezone.utc)
+    near = datetime(2026, 11, 19, 23, 45, tzinfo=timezone.utc)
+    assert snapshot_games_due(path, 35, now=early) == 0
+    assert snapshot_games_due(path, 35, now=near) == 1
+    assert update_snapshot_closing(path, odds, now=early, window_minutes=35) == 0
+    assert update_snapshot_closing(path, odds, now=near, window_minutes=35) == 1
+    row = pd.read_csv(path).iloc[0]
+    assert 0.6 < row["closing_prob_home"] < 0.7
+
+    # Re-running the morning snapshot must not wipe captured closing data
+    append_snapshot(path, snap)
+    assert pd.read_csv(path).iloc[0]["closing_prob_home"] == pytest.approx(row["closing_prob_home"])
+
+    final = pd.DataFrame(
+        {"team1": ["Michigan St."], "team2": ["Duke"], "score1": [60], "score2": [72]}
+    )
+    too_soon = datetime(2026, 11, 20, 2, 0, tzinfo=timezone.utc)
+    assert settle_snapshots(path, now=too_soon, matchups_for_date=lambda d: final) == 0
+    later = datetime(2026, 11, 20, 6, 0, tzinfo=timezone.utc)
+    assert settle_snapshots(path, now=later, matchups_for_date=lambda d: final) == 1
+    assert pd.read_csv(path).iloc[0]["home_won"] == 1.0  # Duke (home) won
+
+
+def test_snapshot_file_from_older_version_still_loads(tmp_path):
+    path = str(tmp_path / "old.csv")
+    pd.DataFrame(
+        {
+            "snapshot_at": ["x"],
+            "game_id": ["g1"],
+            "commence_time": [TIP],
+            "home_team": ["Duke Blue Devils"],
+            "away_team": ["Michigan State Spartans"],
+            "model_prob_home": [0.7],
+            "market_prob_home": [0.65],
+        }
+    ).to_csv(path, index=False)
+    assert (
+        snapshot_games_due(path, 35, now=datetime(2026, 11, 19, 23, 45, tzinfo=timezone.utc)) == 1
+    )
+
+
+def test_quota_roundtrip(tmp_path):
+    path = str(tmp_path / "snap.csv")
+    assert read_quota(path) is None
+    write_quota(path, "367")
+    assert read_quota(path) == 367

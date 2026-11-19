@@ -26,9 +26,10 @@ case "$MODE" in
       --snapshot "$BETS_DIR/snapshots.csv" ;;
   closing)
     # Costs an API request only when a logged bet tips off within the window (> 2x run interval, so one failed run isn't fatal)
-    "$BIGDANCE_BIN" edges --update-closing "$BETS" --closing-window 35 ;;
+    "$BIGDANCE_BIN" edges --update-closing "$BETS" --closing-window 35 \
+      --snapshot "$BETS_DIR/snapshots.csv" ;;
   settle)
-    "$BIGDANCE_BIN" edges --settle "$BETS" ;;
+    "$BIGDANCE_BIN" edges --settle "$BETS" --snapshot "$BETS_DIR/snapshots.csv" ;;
   *)
     echo "unknown mode: $MODE" >&2
     exit 2 ;;
