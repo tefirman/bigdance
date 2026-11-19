@@ -17,7 +17,7 @@ dependencies = [
   "matplotlib>=3.6",
   "scipy>=1.9",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   {name = "Taylor Firman", email = "tefirman@gmail.com"},
 ]
@@ -30,7 +30,6 @@ license = {file = "LICENSE"}
 keywords = ["college basketball", "march madness", "bracket", "warren nolan", "espn", "tournament challenge"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -109,7 +108,7 @@ known_first_party = ["bigdance"]
 src_paths = ["src", "tests"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
