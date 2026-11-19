@@ -50,7 +50,7 @@ make check
 
 - **Line length**: 100 characters
 - **Linter**: ruff (rules: E, W, F, I, UP, B, SIM). CI runs both `ruff check` and `ruff format --check` on `src/`, `tests/`, and `app/`
-- **Python**: supports 3.9-3.13, target 3.9 for ruff/black
+- **Python**: supports 3.10-3.13 (ruff/black still target py39; bump to py310 in a separate cleanup)
 - **Type checking**: mypy (continue-on-error in CI, not blocking)
 - **Tests**: pytest. ESPN scraper tests take ~3-5 minutes (they hit live APIs)
 - **Pre-commit**: ruff check + format, trailing whitespace, YAML validation
@@ -78,7 +78,7 @@ Release notes go in `notes/release_notes_vX.Y.Z.md` (git-ignored, used for GitHu
 
 ## CI/CD Pipeline
 
-- **test.yml**: On PR/push to main. Lint job (Python 3.12) must pass before test matrix (3.9-3.13). Coverage uploaded to Codecov on 3.12.
+- **test.yml**: On PR/push to main. Lint job (Python 3.12) must pass before test matrix (3.10-3.13). Coverage uploaded to Codecov on 3.12.
 - **publish.yml**: On GitHub release. Builds and publishes to PyPI.
 - **generate_upset_analysis.yml**: Manual dispatch. Pre-computes strategy data across pool sizes.
 
