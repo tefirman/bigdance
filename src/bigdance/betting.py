@@ -45,6 +45,20 @@ NAME_OVERRIDES: dict[str, str] = {
     "Presbyterian Blue Hose": "Presbyterian College",
     "Hawai'i Rainbow Warriors": "Hawaii",
     "UConn Huskies": "Connecticut",
+    "Arkansas-Little Rock Trojans": "Little Rock",
+    "CSU Bakersfield Roadrunners": "Cal State Bakersfield",
+    "CSU Northridge Matadors": "Cal State Northridge",
+    "GW Revolutionaries": "George Washington",
+    "Mt. St. Mary's Mountaineers": "Mount Saint Mary's",
+    "NC State Wolfpack": "North Carolina State",
+    "SE Louisiana Lions": "Southeastern Louisiana",
+    "SE Missouri St Redhawks": "Southeast Missouri",
+    "Tenn-Martin Skyhawks": "Tennessee-Martin",
+    "UT-Arlington Mavericks": "UTA",
+    "Cal Baptist Lancers": "California Baptist",
+    "Massachusetts Minutemen": "UMass",
+    "New Orleans Privateers": "LSU New Orleans",
+    "Pennsylvania Quakers": "Penn",
 }
 
 

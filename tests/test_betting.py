@@ -372,3 +372,24 @@ def test_quota_roundtrip(tmp_path):
     assert read_quota(path) is None
     write_quota(path, "367")
     assert read_quota(path) == 367
+
+
+def test_known_name_overrides_resolve_to_warren_nolan_names():
+    wn = [
+        "Little Rock", "Cal State Bakersfield", "Cal State Northridge", "George Washington",
+        "Mount Saint Mary's", "North Carolina State", "Southeastern Louisiana",
+        "Southeast Missouri", "Tennessee-Martin", "UTA", "Connecticut", "Hawaii",
+        "California Baptist", "UMass", "LSU New Orleans", "Penn",
+    ]  # fmt: skip
+    odds = [
+        "Arkansas-Little Rock Trojans", "CSU Bakersfield Roadrunners", "CSU Northridge Matadors",
+        "GW Revolutionaries", "Mt. St. Mary's Mountaineers", "NC State Wolfpack",
+        "SE Louisiana Lions", "SE Missouri St Redhawks", "Tenn-Martin Skyhawks",
+        "UT-Arlington Mavericks", "UConn Huskies", "Hawai'i Rainbow Warriors",
+        "Cal Baptist Lancers", "Massachusetts Minutemen", "New Orleans Privateers",
+        "Pennsylvania Quakers",
+    ]  # fmt: skip
+    mapping, unmatched = map_team_names(odds, wn)
+    assert unmatched == []
+    assert mapping["NC State Wolfpack"] == "North Carolina State"
+    assert mapping["UT-Arlington Mavericks"] == "UTA"
