@@ -13,9 +13,12 @@ tracks closing line value (CLV), a much faster signal of real edge than win/loss
 """
 
 import argparse
+import html
 import logging
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 import uuid
@@ -59,6 +62,8 @@ NAME_OVERRIDES: dict[str, str] = {
     "Massachusetts Minutemen": "UMass",
     "New Orleans Privateers": "LSU New Orleans",
     "Pennsylvania Quakers": "Penn",
+    "UT Rio Grande Valley Vaqueros": "UTRGV",
+    "Texas A&M-CC Islanders": "Texas A&M-Corpus Christi",
 }
 
 
@@ -815,6 +820,354 @@ class BetLog:
 
 
 # --------------------------------------------------------------------------------------
+# Shortlist: a phone-friendly page of upcoming games with prices, fair prices and Elo's view
+# --------------------------------------------------------------------------------------
+SHORTLIST_COLUMNS = [
+    "day",
+    "game_id",
+    "tip",
+    "home",
+    "away",
+    "home_best_price",
+    "home_best_book",
+    "away_best_price",
+    "away_best_book",
+    "home_fair_price",
+    "away_fair_price",
+    "market_home",
+    "elo_home",
+    "elo_away",
+    "venue_flag",
+    "lean_side",
+    "lean_price",
+    "lean_book",
+    "lean_min_price",
+    "lean_ev",
+]
+
+
+def build_shortlist(
+    matchups: pd.DataFrame,
+    odds: pd.DataFrame,
+    game_date: Optional[str] = None,
+    model_weight: float = 0.5,
+    min_ev: float = 0.02,
+    max_divergence: float = 0.10,
+    max_ev: float = 0.25,
+    neutral: Optional[set[str]] = None,
+    name_overrides: Optional[dict[str, str]] = None,
+    now: Optional[datetime] = None,
+) -> pd.DataFrame:
+    """
+    One row per upcoming game: best price per side, no-vig fair price, Elo's probability, and an
+    optional "lean" (same blending and sanity caps as `find_edges`).
+
+    The odds feed has no venue information, but Elo gives the listed home team a home bonus. Games
+    involving a team named in `neutral` (Warren Nolan names) are marked neutral-site and use Elo
+    without the bonus.
+    """
+    cols = SHORTLIST_COLUMNS
+    odds = odds.dropna(subset=["home_price", "away_price"])
+    if game_date is not None and not odds.empty:
+        local = odds["commence_time"].dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
+        odds = odds[local == pd.to_datetime(game_date).strftime("%Y-%m-%d")]
+    odds = odds[odds["commence_time"] > BetLog._utc(now)]
+    if odds.empty or matchups.empty or "elo1" not in matchups.columns:
+        return pd.DataFrame(columns=cols)
+
+    from bigdance.wn_cbb_scraper import elo_prob
+
+    neutral = neutral or set()
+    wn_names = sorted(set(matchups["team1"]) | set(matchups["team2"]))
+    mapping, unmatched = map_team_names(
+        list(set(odds["home_team"]) | set(odds["away_team"])), wn_names, name_overrides
+    )
+    if unmatched:
+        logging.warning("Unmatched team names (add to name_overrides): %s", ", ".join(unmatched))
+    market_home = consensus_home_prob(odds)
+
+    rows = []
+    for gid, g in odds.groupby("game_id"):
+        home_wn, away_wn = mapping.get(g["home_team"].iloc[0]), mapping.get(g["away_team"].iloc[0])
+        if home_wn is None or away_wn is None:
+            continue
+        m = matchups[(matchups["team1"] == away_wn) & (matchups["team2"] == home_wn)]
+        if m.empty:
+            continue
+        r = m.iloc[0]
+        mh = float(market_home[gid])
+        elo_home = float(r["elo_prob2"])
+        elo_neutral = 1 - elo_prob(r["elo1"], r["elo2"], 1.0, 0.0)
+        is_neutral = home_wn in neutral or away_wn in neutral
+        model_home = elo_neutral if is_neutral else elo_home
+        flag = "neutral" if is_neutral else None
+
+        best, fair, side_prob = {}, {}, {"home": model_home, "away": 1 - model_home}
+        for side, mkt in (("home", mh), ("away", 1 - mh)):
+            decimals = g[f"{side}_price"].map(american_to_decimal)
+            idx = decimals.idxmax()
+            best[side] = (
+                float(g.loc[idx, f"{side}_price"]),
+                g.loc[idx, "book"],
+                float(decimals[idx]),
+            )
+            fair[side] = prob_to_american(mkt)
+
+        lean = None
+        for side, mkt in (("home", mh), ("away", 1 - mh)):
+            blended = model_weight * side_prob[side] + (1 - model_weight) * mkt
+            ev = expected_value(blended, best[side][2])
+            if (
+                min_ev <= ev <= max_ev
+                and abs(side_prob[side] - mkt) <= max_divergence
+                and (lean is None or ev > lean[1])
+            ):
+                lean = (side, ev, prob_to_american(blended))
+        rows.append(
+            {
+                "day": game_date or g["commence_time"].iloc[0].strftime("%Y-%m-%d"),
+                "game_id": gid,
+                "tip": g["commence_time"].iloc[0],
+                "home": home_wn,
+                "away": away_wn,
+                "home_best_price": best["home"][0],
+                "home_best_book": best["home"][1],
+                "away_best_price": best["away"][0],
+                "away_best_book": best["away"][1],
+                "home_fair_price": fair["home"],
+                "away_fair_price": fair["away"],
+                "market_home": mh,
+                "elo_home": side_prob["home"],
+                "elo_away": side_prob["away"],
+                "venue_flag": flag,
+                "lean_side": lean[0] if lean else None,
+                "lean_price": best[lean[0]][0] if lean else None,
+                "lean_book": best[lean[0]][1] if lean else None,
+                "lean_min_price": lean[2] if lean else None,
+                "lean_ev": lean[1] if lean else None,
+            }
+        )
+    out = pd.DataFrame(rows, columns=cols)
+    return out.sort_values(["day", "tip"]).reset_index(drop=True)
+
+
+def _price(x: float) -> str:
+    return f"{x:+.0f}"
+
+
+def _book(name: str) -> str:
+    pretty = {
+        "draftkings": "DraftKings",
+        "fanduel": "FanDuel",
+        "betmgm": "BetMGM",
+        "betrivers": "BetRivers",
+        "bovada": "Bovada",
+        "betonlineag": "BetOnline",
+        "lowvig": "LowVig",
+        "betus": "BetUS",
+        "mybookieag": "MyBookie",
+        "williamhill_us": "Caesars",
+        "espnbet": "ESPN BET",
+        "fanatics": "Fanatics",
+        "hardrockbet": "Hard Rock",
+    }
+    return pretty.get(name, name)
+
+
+SHORTLIST_CSS = """
+:root{--bg:#f4f6f8;--card:#fff;--fg:#14202b;--muted:#5b6b7a;--line:#dde3e9;--accent:#0b6bcb;
+--accent-bg:#e7f1fc;--warn:#a85a00;--warn-bg:#fdf0dc;--font:'Inter',system-ui,sans-serif;
+--display:'Barlow Condensed','Arial Narrow',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e151c;--card:#16202a;
+--fg:#e7edf3;--muted:#93a3b3;--line:#263341;--accent:#6cb0ff;--accent-bg:#14304d;--warn:#f0b35c;
+--warn-bg:#3a2a10;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e151c;--card:#16202a;--fg:#e7edf3;--muted:#93a3b3;--line:#263341;
+--accent:#6cb0ff;--accent-bg:#14304d;--warn:#f0b35c;--warn-bg:#3a2a10;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--font);
+padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));
+padding-right:max(16px,env(safe-area-inset-right,0px))}
+main,header.top,footer{max-width:640px;margin-inline:auto}
+h1{font:700 2rem/1 var(--display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:.85rem;margin:.35rem 0 0}
+nav.days{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+nav.days a{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--fg);
+text-decoration:none;font-weight:600;font-size:.85rem;background:var(--card)}
+.filter{display:flex;align-items:center;gap:8px;margin:12px auto;font-size:.9rem;max-width:640px}
+.filter input{width:18px;height:18px}
+details{max-width:640px;margin:10px auto;font-size:.85rem;color:var(--muted)}
+details summary{cursor:pointer;font-weight:600;color:var(--fg)}
+details p{margin:.5rem 0}
+section.day h2{font:700 1.5rem/1.1 var(--display);margin:22px 0 10px;letter-spacing:.01em}
+.game{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;
+margin-bottom:10px;break-inside:avoid}
+.game.has-lean{background:var(--accent-bg);border-color:var(--accent)}
+.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tip{font:700 1.15rem/1 var(--display);letter-spacing:.02em}
+.tag{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+padding:3px 7px;border-radius:5px}
+.tag.lean{background:var(--accent);color:var(--card)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.info{background:var(--line);color:var(--muted)}
+.game h3{font:600 1rem/1.25 var(--font);margin:8px 0}
+.game h3 span{color:var(--muted);font-weight:400}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+text-align:right;font-weight:600;padding:0 0 4px 8px}
+th:first-child,td:first-child{text-align:left;padding-left:0}
+td{padding:5px 0 5px 8px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+td.team{white-space:normal;font-weight:600;min-width:0}
+td small{display:block;color:var(--muted);font-size:.72rem}
+tr.pick td{font-weight:700}
+.leanline{margin:8px 0 0;font-size:.9rem}
+.leanline b{font-weight:700}
+.empty{color:var(--muted);padding:20px 0}
+.banner{max-width:640px;margin:10px auto;padding:10px 12px;border-radius:8px;font-size:.85rem;
+background:var(--warn-bg);color:var(--warn)}
+footer{color:var(--muted);font-size:.78rem;margin-top:26px}
+.filter:has(input:checked) ~ main .game:not(.has-lean){display:none}
+@page{size:4.6in 8.6in;margin:.3in}
+@media print{body{background:#fff;color:#000;padding:0;font-size:13px}.filter,nav.days,details{display:none}
+.game{border-color:#999;background:#fff}.game.has-lean{background:#eef5fd}}
+"""
+
+
+def render_shortlist(
+    df: pd.DataFrame,
+    generated_at: Optional[datetime] = None,
+    books: Optional[list[str]] = None,
+    tz: str = "America/Los_Angeles",
+) -> str:
+    """Render the shortlist as an HTML fragment (title, style, content; no html/head/body)."""
+    esc = html.escape
+    now = pd.Timestamp(generated_at or datetime.now(timezone.utc)).tz_convert(tz)
+    n_leans = int(df["lean_side"].notna().sum()) if not df.empty else 0
+    days = list(dict.fromkeys(df["day"])) if not df.empty else []
+    label = lambda d: pd.to_datetime(d).strftime("%a %b %-d")  # noqa: E731
+
+    parts = [
+        "<title>College Hoops Shortlist</title>",
+        '<meta name="claude:viewport-fit-sides" content="cover">',
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:'
+        'wght@600;700&family=Inter:wght@400;600;700&display=swap">',
+        f"<style>{SHORTLIST_CSS}</style>",
+        '<header class="top"><h1>College Hoops Shortlist</h1>',
+        f'<p class="sub">Prices as of {esc(now.strftime("%a %-I:%M %p"))} PT &middot; '
+        f"{len(df)} games &middot; {n_leans} leans</p>",
+    ]
+    if days:
+        parts.append(
+            '<nav class="days">'
+            + "".join(f'<a href="#day-{esc(d)}">{esc(label(d))}</a>' for d in days)
+            + "</nav>"
+        )
+    parts += [
+        "</header>",
+        '<label class="filter"><input type="checkbox" id="leans-only">Leans only</label>',
+        "<details><summary>How to read this</summary>"
+        "<p><b>Best price</b> is the highest payout across books right now. <b>Fair price</b> is the "
+        "average of the books with the vig removed, so it is what the odds would be with no house "
+        "cut. Compare it to the board: the further your price is below fair, the more you pay.</p>"
+        "<p><b>Elo</b> is Warren Nolan's rating-based win chance. A <b>lean</b> means a 50/50 mix of Elo "
+        "and the market, at the best price, beats the odds by at least 2%. The line shows the "
+        "worst price you would still take.</p>"
+        "<p>Elo gives the listed home team a home-court bonus. At <b>neutral-site</b> games that "
+        "overstates the home team, so those are marked when known.</p></details>",
+    ]
+    if any(pd.to_datetime(d).month == 11 and pd.to_datetime(d).day >= 22 for d in days):
+        parts.append(
+            '<p class="banner">Thanksgiving week: many games are tournament games at neutral sites. '
+            "Elo adds a home bonus to the listed home team, so treat any lean with extra suspicion "
+            "unless the game is marked Neutral site.</p>"
+        )
+    parts.append("<main>")
+    if df.empty:
+        parts.append('<p class="empty">No upcoming games with prices yet. Check back later.</p>')
+    for d in days:
+        sub = df[df["day"] == d]
+        parts.append(
+            f'<section class="day" id="day-{esc(d)}"><h2>{esc(label(d))} '
+            f'<span style="color:var(--muted)">&middot; {len(sub)} games</span></h2>'
+        )
+        for _, r in sub.iterrows():
+            tip = r["tip"].tz_convert(tz).strftime("%-I:%M %p")
+            lean = r["lean_side"]
+            tags = ""
+            if lean:
+                tags += '<span class="tag lean">Lean</span>'
+            if r["venue_flag"] == "neutral":
+                tags += '<span class="tag info">Neutral site</span>'
+            rows = ""
+            for side, team in (("away", r["away"]), ("home", r["home"])):
+                pick = ' class="pick"' if lean == side else ""
+                rows += (
+                    f'<tr{pick}><td class="team">{esc(team)}</td>'
+                    f"<td>{_price(r[f'{side}_best_price'])}"
+                    f"<small>{esc(_book(r[f'{side}_best_book']))}</small></td>"
+                    f"<td>{_price(r[f'{side}_fair_price'])}</td>"
+                    f"<td>{r[f'elo_{side}'] * 100:.0f}%</td></tr>"
+                )
+            leanline = ""
+            if lean:
+                team = r[lean]
+                leanline = (
+                    f'<p class="leanline">Lean: <b>{esc(team)} {_price(r["lean_price"])}</b> at '
+                    f"{esc(_book(r['lean_book']))}. Pass if it is worse than "
+                    f"<b>{_price(r['lean_min_price'])}</b>.</p>"
+                )
+            parts.append(
+                f'<article class="game{" has-lean" if lean else ""}">'
+                f'<div class="meta"><span class="tip">{esc(tip)}</span>{tags}</div>'
+                f"<h3>{esc(r['away'])} <span>at</span> {esc(r['home'])}</h3>"
+                '<div class="tbl"><table><thead><tr><th>Team</th><th>Best</th><th>Fair</th>'
+                f"<th>Elo</th></tr></thead><tbody>{rows}</tbody></table></div>{leanline}</article>"
+            )
+        parts.append("</section>")
+    book_txt = ", ".join(_book(b) for b in sorted(books or []))
+    parts.append(
+        "</main><footer><p>Prices: The Odds API"
+        + (f" ({esc(book_txt)})" if book_txt else "")
+        + ". Ratings: Warren Nolan Elo. Lines move and books differ, so check the board before you "
+        "bet. In our tracking so far, Elo has not beaten the market, so treat leans as "
+        "entertainment, not advice. Bet only what you would spend on a night out.</p></footer>"
+    )
+    return "\n".join(parts)
+
+
+def standalone_html(fragment: str) -> str:
+    """Wrap the fragment as a complete document (for opening locally or printing to PDF)."""
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+        f"</head><body>{fragment}</body></html>"
+    )
+
+
+def html_to_pdf(html_path: str, pdf_path: str) -> bool:
+    """Print an HTML file to PDF with headless Chrome. Returns False if Chrome isn't found."""
+    chrome = shutil.which("google-chrome") or shutil.which("chromium")
+    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    chrome = chrome or (mac if os.path.exists(mac) else None)
+    if not chrome:
+        return False
+    subprocess.run(
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-pdf-header-footer",
+            "--virtual-time-budget=4000",
+            f"--print-to-pdf={pdf_path}",
+            "file://" + os.path.abspath(html_path),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=90,
+    )
+    return os.path.exists(pdf_path)
+
+
+# --------------------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
@@ -865,6 +1218,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=100,
         help="With --snapshot, capture closing lines for ALL games only while at least this many "
         "Odds API credits remain; below it, only logged bets are tracked (default: 100)",
+    )
+    parser.add_argument(
+        "--shortlist",
+        metavar="DIR",
+        help="Write a phone-friendly shortlist of upcoming games (shortlist.html, "
+        "shortlist_artifact.html, and shortlist.pdf with --pdf) into DIR and exit",
+    )
+    parser.add_argument(
+        "--dates", help="Comma-separated game dates for --shortlist (default: --date or today)"
+    )
+    parser.add_argument(
+        "--neutral",
+        help="Comma-separated Warren Nolan team names playing at neutral sites (no home bonus)",
+    )
+    parser.add_argument(
+        "--pdf", action="store_true", help="Also write shortlist.pdf (needs Chrome)"
     )
     parser.add_argument("--settle", metavar="CSV", help="Grade finished bets from final scores")
     parser.add_argument(
@@ -924,6 +1293,42 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     from bigdance.wn_cbb_scraper import Matchups
+
+    if args.shortlist:
+        dates = [d.strip() for d in (args.dates or args.date or "").split(",") if d.strip()]
+        dates = dates or [datetime.now().strftime("%Y-%m-%d")]
+        neutral = {n.strip() for n in (args.neutral or "").split(",") if n.strip()}
+        frames = [
+            build_shortlist(
+                Matchups(d, women=args.women).matchups,
+                odds,
+                game_date=d,
+                model_weight=args.model_weight,
+                min_ev=args.min_ev,
+                max_divergence=args.max_divergence,
+                max_ev=args.max_ev,
+                neutral=neutral,
+            )
+            for d in dates
+        ]
+        frames = [f for f in frames if not f.empty]
+        df = (
+            pd.concat(frames, ignore_index=True)
+            if frames
+            else pd.DataFrame(columns=SHORTLIST_COLUMNS)
+        )
+        fragment = render_shortlist(df, books=sorted(odds["book"].unique()))
+        os.makedirs(args.shortlist, exist_ok=True)
+        page = os.path.join(args.shortlist, "shortlist.html")
+        with open(page, "w") as f:
+            f.write(standalone_html(fragment))
+        with open(os.path.join(args.shortlist, "shortlist_artifact.html"), "w") as f:
+            f.write(fragment)
+        print(f"{len(df)} games, {int(df['lean_side'].notna().sum())} leans -> {page}")
+        if args.pdf:
+            pdf = os.path.join(args.shortlist, "shortlist.pdf")
+            print(f"PDF -> {pdf}" if html_to_pdf(page, pdf) else "No Chrome found; skipped PDF")
+        return 0
 
     date = args.date or datetime.now().strftime("%Y-%m-%d")
     matchups = Matchups(date, women=args.women).matchups

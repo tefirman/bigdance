@@ -10,6 +10,7 @@ from bigdance.betting import (
     american_to_decimal,
     american_to_prob,
     append_snapshot,
+    build_shortlist,
     devig_two_way,
     find_edges,
     game_snapshot,
@@ -19,8 +20,10 @@ from bigdance.betting import (
     parse_odds_response,
     prob_to_american,
     read_quota,
+    render_shortlist,
     settle_snapshots,
     snapshot_games_due,
+    standalone_html,
     update_snapshot_closing,
     write_quota,
 )
@@ -393,3 +396,75 @@ def test_known_name_overrides_resolve_to_warren_nolan_names():
     assert unmatched == []
     assert mapping["NC State Wolfpack"] == "North Carolina State"
     assert mapping["UT-Arlington Mavericks"] == "UTA"
+
+
+def make_elo_matchups(elo_away=1500.0, elo_home=1560.0):
+    from bigdance.wn_cbb_scraper import elo_prob
+
+    p_away = elo_prob(elo_away, elo_home, 1.0, 100.0)
+    return pd.DataFrame(
+        {
+            "team1": ["Michigan St."],
+            "team2": ["Duke"],
+            "elo1": [elo_away],
+            "elo2": [elo_home],
+            "elo_prob1": [p_away],
+            "elo_prob2": [1 - p_away],
+        }
+    )
+
+
+BEFORE_TIP = datetime(2026, 11, 19, 20, 0, tzinfo=timezone.utc)
+
+
+def test_build_shortlist_basics_and_neutral_site():
+    odds = parse_odds_response(make_events())  # market home ~0.64
+    df = build_shortlist(make_elo_matchups(), odds, game_date="2026-11-19", now=BEFORE_TIP)
+    assert len(df) == 1
+    r = df.iloc[0]
+    assert (r["away"], r["home"]) == ("Michigan St.", "Duke")
+    assert r["home_best_book"] == "bookB" and r["away_best_book"] == "bookA"
+    assert r["home_fair_price"] < 0 < r["away_fair_price"]
+    assert r["elo_home"] == pytest.approx(1 - r["elo_away"])
+
+    # Neutral site: Elo drops its home bonus, so the home team's probability falls
+    neutral = build_shortlist(
+        make_elo_matchups(), odds, game_date="2026-11-19", neutral={"Duke"}, now=BEFORE_TIP
+    ).iloc[0]
+    assert neutral["venue_flag"] == "neutral" and neutral["elo_home"] < r["elo_home"]
+
+
+def test_build_shortlist_leans_and_filters():
+    odds = parse_odds_response(make_events())
+    # Elo likes the home team more than the market does, within the sanity cap -> lean on Duke
+    strong = make_elo_matchups(1500.0, 1700.0)
+    r = build_shortlist(strong, odds, now=BEFORE_TIP, max_divergence=1.0, max_ev=10.0).iloc[0]
+    assert r["lean_side"] == "home" and r["lean_book"] == "bookB" and r["lean_ev"] > 0
+    assert r["lean_min_price"] < 0  # break-even price is a favorite price
+    # Same game with a tight divergence cap: still listed, but no lean
+    none = build_shortlist(strong, odds, now=BEFORE_TIP, max_divergence=0.01).iloc[0]
+    assert none["lean_side"] is None or pd.isna(none["lean_side"])
+    # Games that have already started, or are on another date, are dropped
+    after = datetime(2026, 11, 20, 1, 0, tzinfo=timezone.utc)
+    assert build_shortlist(strong, odds, now=after).empty
+    assert build_shortlist(strong, odds, game_date="2026-11-20", now=BEFORE_TIP).empty
+
+
+def test_render_shortlist_html():
+    odds = parse_odds_response(make_events())
+    df = build_shortlist(
+        make_elo_matchups(1500.0, 1700.0), odds, now=BEFORE_TIP, max_divergence=1.0, max_ev=10.0
+    )
+    frag = render_shortlist(df, generated_at=BEFORE_TIP, books=["bookA", "bookB"])
+    assert frag.lstrip().startswith("<title>") and "<html" not in frag
+    assert "Michigan St." in frag and "Duke" in frag and "Lean" in frag and "Leans only" in frag
+    assert "Thanksgiving" not in frag  # banner only for Nov 22-30
+    page = standalone_html(frag)
+    assert page.startswith("<!doctype html>") and "viewport" in page
+    # Names are escaped
+    evil = df.assign(home="<script>x</script>")
+    assert "<script>x</script>" not in render_shortlist(evil, generated_at=BEFORE_TIP)
+    # Empty state and the Thanksgiving-week banner
+    assert "No upcoming games" in render_shortlist(df.iloc[0:0], generated_at=BEFORE_TIP)
+    late = df.assign(day="2026-11-24")
+    assert "Thanksgiving week" in render_shortlist(late, generated_at=BEFORE_TIP)
