@@ -13,7 +13,8 @@ src/bigdance/           # Main package
   espn_tc_scraper.py    # ESPN API client: ESPNApi, GameImportanceAnalyzer
   bracket_analysis.py   # Strategy analysis: BracketAnalysis
   bigdance_integration.py  # Helpers: create_teams_from_standings(), etc.
-  cli.py                # CLI dispatcher (bigdance standings|simulate|espn|analyze)
+  betting.py            # In-season betting: Elo vs sportsbook odds (The Odds API), Kelly sizing, CLV BetLog
+  cli.py                # CLI dispatcher (bigdance standings|simulate|espn|analyze|edges)
 
 app/                    # Streamlit web apps
   app.py                # Main bracket picker + simulator app
